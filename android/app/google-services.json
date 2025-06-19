@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "574290558433",
+    "project_id": "ebook-ai-62c35",
+    "storage_bucket": "ebook-ai-62c35.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:574290558433:android:d24c4fdb073d24bd0066a0",
+        "android_client_info": {
+          "package_name": "com.example.ebook_tutorial_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxfeAdx323-Hv84HNZVw2y-HlSY08ycmk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:574290558433:android:3e2d69d7a033f5530066a0",
+        "android_client_info": {
+          "package_name": "com.example.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxfeAdx323-Hv84HNZVw2y-HlSY08ycmk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

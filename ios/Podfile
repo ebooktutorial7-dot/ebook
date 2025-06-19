@@ -1,0 +1,39 @@
+# ios/Podfile
+platform :ios, '13.0'
+use_frameworks!
+use_modular_headers!
+
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug'   => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+# Flutter SDK 루트를 자동으로 찾는 코드
+def flutter_root
+  generated_xcconfig = File.expand_path('Flutter/Generated.xcconfig', __dir__)
+  unless File.exist?(generated_xcconfig)
+    abort("Generated.xcconfig 파일이 없습니다. 먼저 `flutter pub get` 을 실행하세요.")
+  end
+  File.foreach(generated_xcconfig) do |line|
+    if line =~ /FLUTTER_ROOT=(.*)/
+      return $1.strip
+    end
+  end
+  abort("FLUTTER_ROOT를 Generated.xcconfig에서 찾을 수 없습니다.")
+end
+
+# Flutter 툴셋의 podhelper.rb 로드
+require File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper')
+
+target 'Runner' do
+  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end
