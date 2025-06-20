@@ -1,39 +1,46 @@
-# ios/Podfile
 platform :ios, '13.0'
 use_frameworks!
-use_modular_headers!
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
-  'Debug'   => :debug,
+  'Debug' => :debug,
   'Profile' => :release,
   'Release' => :release,
 }
 
-# Flutter SDK 루트를 자동으로 찾는 코드
 def flutter_root
-  generated_xcconfig = File.expand_path('Flutter/Generated.xcconfig', __dir__)
-  unless File.exist?(generated_xcconfig)
-    abort("Generated.xcconfig 파일이 없습니다. 먼저 `flutter pub get` 을 실행하세요.")
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
   end
-  File.foreach(generated_xcconfig) do |line|
-    if line =~ /FLUTTER_ROOT=(.*)/
-      return $1.strip
-    end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
   end
-  abort("FLUTTER_ROOT를 Generated.xcconfig에서 찾을 수 없습니다.")
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
 end
 
-# Flutter 툴셋의 podhelper.rb 로드
-require File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper')
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
 
 target 'Runner' do
-  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # M1/M2 Mac 문제 방지
+    target.build_configurations.each do |config|
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
   end
 end
