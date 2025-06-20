@@ -30,26 +30,28 @@ class LoginPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('로그인 방법 선택')),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EmailLoginPage()),
-                );
-              },
-              child: const Text('이메일 로그인'),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () => _loginAnonymously(context),
-              child: const Text('비회원 체험'),
-            ),
-          ],
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // 내용 크기에 맞춤
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EmailLoginPage()),
+                  );
+                },
+                child: const Text('이메일 로그인'),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => _loginAnonymously(context),
+                child: const Text('비회원 체험'),
+              ),
+            ],
+          ),
         ),
       ),
     );

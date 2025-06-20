@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_page.dart';
+import 'genre_select_page.dart';
 
 class EbookListPage extends StatelessWidget {
   const EbookListPage({super.key});
@@ -22,6 +23,20 @@ class EbookListPage extends StatelessWidget {
     }
   }
 
+  void _goToGenreSelect(BuildContext context) async {
+    final selectedGenre = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const GenreSelectPage()),
+    );
+
+    if (selectedGenre != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('선택한 장르: $selectedGenre')),
+      );
+      // TODO: 선택한 장르 기반 동작 처리
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -31,9 +46,15 @@ class EbookListPage extends StatelessWidget {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: '장르 선택',
+            onPressed: () => _goToGenreSelect(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: '로그아웃',
             onPressed: () => _logout(context),
-          )
+          ),
         ],
       ),
       body: ListView.builder(
