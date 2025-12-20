@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'ebook-ai-62c35.firebasestorage.app',
     measurementId: 'G-GEPFJ7KK8X',
   );
+
 }

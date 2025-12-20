@@ -9,38 +9,54 @@ PODS:
     - GoogleUtilities/Environment (~> 8.0)
     - GoogleUtilities/UserDefaults (~> 8.0)
     - PromisesObjC (~> 2.4)
-  - Firebase/Auth (11.10.0):
+  - Firebase/Auth (11.11.0):
     - Firebase/CoreOnly
-    - FirebaseAuth (~> 11.10.0)
-  - Firebase/CoreOnly (11.10.0):
-    - FirebaseCore (~> 11.10.0)
-  - firebase_auth (5.5.4):
-    - Firebase/Auth (= 11.10.0)
+    - FirebaseAuth (~> 11.11.0)
+  - Firebase/CoreOnly (11.11.0):
+    - FirebaseCore (~> 11.11.0)
+  - Firebase/Storage (11.11.0):
+    - Firebase/CoreOnly
+    - FirebaseStorage (~> 11.11.0)
+  - firebase_auth (5.7.0):
+    - Firebase/Auth (= 11.11.0)
     - firebase_core
     - Flutter
-  - firebase_core (3.13.1):
-    - Firebase/CoreOnly (= 11.10.0)
+  - firebase_core (3.15.2):
+    - Firebase/CoreOnly (= 11.11.0)
     - Flutter
-  - FirebaseAppCheckInterop (11.14.0)
-  - FirebaseAuth (11.10.0):
+  - firebase_storage (12.4.10):
+    - Firebase/Storage (= 11.11.0)
+    - firebase_core
+    - Flutter
+  - FirebaseAppCheckInterop (11.15.0)
+  - FirebaseAuth (11.11.0):
     - FirebaseAppCheckInterop (~> 11.0)
     - FirebaseAuthInterop (~> 11.0)
-    - FirebaseCore (~> 11.10.0)
-    - FirebaseCoreExtension (~> 11.10.0)
+    - FirebaseCore (~> 11.11.0)
+    - FirebaseCoreExtension (~> 11.11.0)
     - GoogleUtilities/AppDelegateSwizzler (~> 8.0)
     - GoogleUtilities/Environment (~> 8.0)
     - GTMSessionFetcher/Core (< 5.0, >= 3.4)
     - RecaptchaInterop (~> 101.0)
-  - FirebaseAuthInterop (11.14.0)
-  - FirebaseCore (11.10.0):
-    - FirebaseCoreInternal (~> 11.10.0)
+  - FirebaseAuthInterop (11.15.0)
+  - FirebaseCore (11.11.0):
+    - FirebaseCoreInternal (~> 11.11.0)
     - GoogleUtilities/Environment (~> 8.0)
     - GoogleUtilities/Logger (~> 8.0)
-  - FirebaseCoreExtension (11.10.0):
-    - FirebaseCore (~> 11.10.0)
-  - FirebaseCoreInternal (11.10.0):
+  - FirebaseCoreExtension (11.11.0):
+    - FirebaseCore (~> 11.11.0)
+  - FirebaseCoreInternal (11.11.0):
     - "GoogleUtilities/NSData+zlib (~> 8.0)"
+  - FirebaseStorage (11.11.0):
+    - FirebaseAppCheckInterop (~> 11.0)
+    - FirebaseAuthInterop (~> 11.0)
+    - FirebaseCore (~> 11.11.0)
+    - FirebaseCoreExtension (~> 11.11.0)
+    - GoogleUtilities/Environment (~> 8.0)
+    - GTMSessionFetcher/Core (< 5.0, >= 3.4)
   - Flutter (1.0.0)
+  - flutter_keyboard_visibility_temp_fork (0.0.1):
+    - Flutter
   - google_sign_in_ios (0.0.1):
     - AppAuth (>= 1.7.4)
     - Flutter
@@ -84,14 +100,49 @@ PODS:
   - GTMSessionFetcher/Core (3.5.0)
   - GTMSessionFetcher/Full (3.5.0):
     - GTMSessionFetcher/Core
+  - image_picker_ios (0.0.1):
+    - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - pdf_render (0.0.1):
+    - Flutter
+  - printing (1.0.0):
+    - Flutter
   - PromisesObjC (2.4.0)
+  - quill_native_bridge_ios (0.0.1):
+    - Flutter
   - RecaptchaInterop (101.0.0)
+  - share_plus (0.0.1):
+    - Flutter
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - super_keyboard (0.0.1):
+    - Flutter
+  - url_launcher_ios (0.0.1):
+    - Flutter
+  - video_player_avfoundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
 
 DEPENDENCIES:
   - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
+  - firebase_storage (from `.symlinks/plugins/firebase_storage/ios`)
   - Flutter (from `Flutter`)
+  - flutter_keyboard_visibility_temp_fork (from `.symlinks/plugins/flutter_keyboard_visibility_temp_fork/ios`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
+  - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - pdf_render (from `.symlinks/plugins/pdf_render/ios`)
+  - printing (from `.symlinks/plugins/printing/ios`)
+  - quill_native_bridge_ios (from `.symlinks/plugins/quill_native_bridge_ios/ios`)
+  - share_plus (from `.symlinks/plugins/share_plus/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - super_keyboard (from `.symlinks/plugins/super_keyboard/ios`)
+  - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
+  - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
 
 SPEC REPOS:
   trunk:
@@ -104,6 +155,7 @@ SPEC REPOS:
     - FirebaseCore
     - FirebaseCoreExtension
     - FirebaseCoreInternal
+    - FirebaseStorage
     - GoogleSignIn
     - GoogleUtilities
     - GTMAppAuth
@@ -116,32 +168,69 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/firebase_auth/ios"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
+  firebase_storage:
+    :path: ".symlinks/plugins/firebase_storage/ios"
   Flutter:
     :path: Flutter
+  flutter_keyboard_visibility_temp_fork:
+    :path: ".symlinks/plugins/flutter_keyboard_visibility_temp_fork/ios"
   google_sign_in_ios:
     :path: ".symlinks/plugins/google_sign_in_ios/darwin"
+  image_picker_ios:
+    :path: ".symlinks/plugins/image_picker_ios/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  pdf_render:
+    :path: ".symlinks/plugins/pdf_render/ios"
+  printing:
+    :path: ".symlinks/plugins/printing/ios"
+  quill_native_bridge_ios:
+    :path: ".symlinks/plugins/quill_native_bridge_ios/ios"
+  share_plus:
+    :path: ".symlinks/plugins/share_plus/ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+  super_keyboard:
+    :path: ".symlinks/plugins/super_keyboard/ios"
+  url_launcher_ios:
+    :path: ".symlinks/plugins/url_launcher_ios/ios"
+  video_player_avfoundation:
+    :path: ".symlinks/plugins/video_player_avfoundation/darwin"
 
 SPEC CHECKSUMS:
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
-  Firebase: 1fe1c0a7d9aaea32efe01fbea5f0ebd8d70e53a2
-  firebase_auth: 4d9603c196d22f71e80cf518b71939c4f2117088
-  firebase_core: ba71b44041571da878cb624ce0d80250bcbe58ad
-  FirebaseAppCheckInterop: a92ba81d0ee3c4cddb1a2e52c668ea51dc63c3ae
-  FirebaseAuth: c4146bdfdc87329f9962babd24dae89373f49a32
-  FirebaseAuthInterop: e25b58ecb90f3285085fa2118861a3c9dfdc62ad
-  FirebaseCore: 8344daef5e2661eb004b177488d6f9f0f24251b7
-  FirebaseCoreExtension: 6f357679327f3614e995dc7cf3f2d600bdc774ac
-  FirebaseCoreInternal: ef4505d2afb1d0ebbc33162cb3795382904b5679
-  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  Firebase: 6a8f201c61eda24e98f1ce2b44b1b9c2caf525cc
+  firebase_auth: 4b7d1b936cac852ccb90d145b05905bcbb977d10
+  firebase_core: 2405407ea72ad1a1c41c15dedd39ce145735efe8
+  firebase_storage: c7c8d37dfdee36e3ebf198bf5010df6bf616bedc
+  FirebaseAppCheckInterop: 06fe5a3799278ae4667e6c432edd86b1030fa3df
+  FirebaseAuth: 783fa4cc0420b0f6eed580721b12d4f0a5306746
+  FirebaseAuthInterop: 7087d7a4ee4bc4de019b2d0c240974ed5d89e2fd
+  FirebaseCore: 2321536f9c423b1f857e047a82b8a42abc6d9e2c
+  FirebaseCoreExtension: 3a64994969dd05f4bcb7e6896c654eded238e75b
+  FirebaseCoreInternal: 31ee350d87b30a9349e907f84bf49ef8e6791e5a
+  FirebaseStorage: 1c04b0ac8126b6fada8c9a09458f59c31868f2df
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_keyboard_visibility_temp_fork: 95b2d534bacf6ac62e7fcbe5c2a9e2c2a17ce06f
   google_sign_in_ios: b48bb9af78576358a168361173155596c845f0b9
   GoogleSignIn: ce8c89bb9b37fb624b92e7514cc67335d1e277e4
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: f69bd07d68cd3b766125f7e072c45d7340dea0de
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
+  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
+  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
+  pdf_render: 5f9586e5fd49519bf59ea14a6da4851616e91c81
+  printing: 54ff03f28fe9ba3aa93358afb80a8595a071dd07
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  quill_native_bridge_ios: f47af4b14e7757968486641656c5d23250cee521
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  super_keyboard: 016de6ce9ab826f9a0b185608209d6a3b556d577
+  url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
+  video_player_avfoundation: dd410b52df6d2466a42d28550e33e4146928280a
 
-PODFILE CHECKSUM: af587afe18a30fc9e0f4df6f4029a22ad6e25905
+PODFILE CHECKSUM: 89c260850bfd8be309dc163061b4be4ddbf96f0f
 
 COCOAPODS: 1.16.2

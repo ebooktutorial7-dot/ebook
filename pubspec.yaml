@@ -1,40 +1,82 @@
 name: ebook_tutorial_app
 description: A new Flutter project.
+publish_to: "none"
 
-publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase
-  firebase_core: ^3.13.1
-  firebase_auth: ^5.5.4
+  flutter_localizations:
+    sdk: flutter
 
-  # Google Sign-In (충돌 방지 위해 iOS 전용 추가)
-  google_sign_in: ^6.2.1
-  #google_sign_in_ios: ^5.9.0
+  # ===== Editor / Writing =====
+  flutter_quill: ^11.4.1
+  flutter_quill_extensions: ^11.0.0
+  dart_quill_delta: ^10.8.3
+  super_editor: ^0.2.7
 
-  # Apple Sign-In
-  #sign_in_with_apple: ^7.0.1
+  # ===== Firebase =====
+  firebase_core: ^3.11.0
+  firebase_auth: ^5.3.0
+  firebase_storage: ^12.0.0
 
-  # 기본 아이콘
-  cupertino_icons: ^1.0.6
+  # ===== Auth / Storage =====
+  shared_preferences: ^2.2.3
+  google_sign_in: ^6.3.0
 
-  # 상태 관리
-  provider: ^6.1.2
+  # ===== UI =====
+  cupertino_icons: ^1.0.8
+  flutter_spinkit: ^5.2.1
+  provider: ^6.1.5
 
-  # 로딩 애니메이션 (선택)
-  flutter_spinkit: ^5.2.0
+  # ===== PDF =====
+  pdf: ^3.11.0
+  printing: ^5.13.4
+  pdf_render: ^1.4.12
+
+  # ===== Media / Layout =====
+  reorderable_grid_view: ^2.2.8
+  image_picker: ^1.2.0
+
+  # ===== Intl =====
+  intl: ^0.20.2
+
+  # ===== File / Path =====
+  path_provider: ^2.1.0
+  path: ^1.9.0
+
+  # 공유 기능
+  share_plus: ^10.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^3.0.2
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - lib/assets/fonts/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: lib/assets/fonts/Inter/ttf/Inter-Regular.ttf
+
+    # (선택) 앱 UI에서도 Noto를 쓰고 싶으면 등록
+    - family: NotoSansKR
+      fonts:
+        - asset: lib/assets/fonts/NotoSansKR-Regular.ttf
+        - asset: lib/assets/fonts/NotoSansKR-Bold.ttf
+
+    - family: NotoSansJP
+      fonts:
+        - asset: lib/assets/fonts/NotoSansJP-Regular.ttf
+        - asset: lib/assets/fonts/NotoSansJP-Bold.ttf

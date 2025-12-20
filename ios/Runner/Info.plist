@@ -47,5 +47,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- 여기서부터 이미지/카메라 사용 권한 설명 추가 -->
+	<key>NSCameraUsageDescription</key>
+	<string>카메라로 사진을 촬영하여 에디터에 첨부하기 위해 필요합니다.</string>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>앨범에서 사진을 선택하여 에디터에 첨부하기 위해 필요합니다.</string>
+
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>이미지나 콘텐츠를 사진 앨범에 저장하기 위해 필요합니다.</string>
+	<!-- 추가 끝 -->
+
 </dict>
 </plist>

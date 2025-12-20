@@ -1,28 +1,55 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'utils/migrations.dart';
 
-import 'login_page.dart';
-import 'ebook_list_page.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart'
+    show FlutterQuillLocalizations;
+
+import 'package:ebook_tutorial_app/firebase_options.dart';
+import 'package:ebook_tutorial_app/pages/ebook_list_page.dart';
+import 'package:ebook_tutorial_app/pages/login_page.dart';
+import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 🔹 레거시 key 정리
+  await migrateLegacyPrefsV1();
+
+  // 🔹 Firebase 초기화
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    runApp(const MyApp());
   } catch (e) {
-    // Firebase 초기화 실패 시 간단한 오류 화면 표시
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('❗ Firebase 초기화 실패\n$e'),
-        ),
+    runApp(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(body: Center(child: Text('❗ Firebase 초기화 실패\n$e'))),
       ),
-    ));
+    );
+    return;
   }
+
+  // 🔹 Provider 트리 구성
+  runApp(
+    MultiProvider(
+      providers: [
+        /// 전역(Global) WritingSettings
+        ChangeNotifierProvider<WritingSettingsController>(
+          create: (_) {
+            final c = WritingSettingsController(documentId: null);
+            c.load(); // SharedPrefs에서 로드
+            return c;
+          },
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -30,13 +57,38 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 선택 영역 색상 (커스텀)
+    const Color selectionFill = Color(0x55FFF59D);
+    const Color selectionHandle = Color(0xFFFFC107);
+
     return MaterialApp(
       title: '전자책 튜토리얼',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('en'), Locale('ko')],
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFEAF2F8),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF5DADE2)),
+        scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
+        splashFactory: NoSplash.splashFactory,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          foregroundColor: Colors.black,
+          shadowColor: Colors.transparent,
+        ),
+        textSelectionTheme: const TextSelectionThemeData(
+          selectionColor: selectionFill,
+          selectionHandleColor: selectionHandle,
+          cursorColor: Color.fromARGB(255, 156, 189, 218),
+        ),
       ),
       home: const HomePage(),
     );
@@ -51,16 +103,17 @@ class HomePage extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // ✅ Firebase 인증 상태에 따라 자동 로그인 또는 로그인 화면 표시
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
-        } else if (snapshot.hasData) {
-          return const EbookListPage(); // 자동 로그인 성공
-        } else {
-          return const WelcomePage(); // 로그인 필요
         }
+
+        if (snapshot.hasData) {
+          return const EbookListPage();
+        }
+
+        return const WelcomePage();
       },
     );
   }
@@ -71,53 +124,95 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('전자책 튜토리얼'),
-        backgroundColor: const Color(0xFF5DADE2),
-        foregroundColor: Colors.white,
+    const Color pastelBlue = Color(0xFF9AD0F5);
+    const Color border = Color(0xFFE5E7EB);
+
+    final ButtonStyle frameStyle = OutlinedButton.styleFrom(
+      side: const BorderSide(color: border, width: 1),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+      foregroundColor: Colors.black87,
+      textStyle: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: Colors.black87,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.menu_book, size: 100, color: Color(0xFF2874A6)),
-            const SizedBox(height: 20),
-            const Text(
-              '지식을 여는 첫걸음',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2874A6),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'AI 전자책 튜토리얼',
-              style: TextStyle(fontSize: 16, color: Colors.black87),
-            ),
-            const SizedBox(height: 40),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2874A6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          '전자책 튜토리얼',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double topGap = constraints.maxHeight * 0.20;
+            final double bottomGap = constraints.maxHeight * 0.05;
+
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, topGap, 24, bottomGap),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.menu_book, size: 80, color: pastelBlue),
+                      const SizedBox(height: 24),
+                      const Text(
+                        '지식을 여는 첫걸음',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'AI 전자책 튜토리얼',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black54,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 40),
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginPage(),
+                            ),
+                          );
+                        },
+                        style: frameStyle,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('시작하기'),
+                            SizedBox(width: 8),
+                            Icon(
+                              Icons.school_outlined,
+                              size: 22,
+                              color: pastelBlue,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: const Text(
-                '시작하기',
-                style: TextStyle(fontSize: 18, color: Colors.white),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

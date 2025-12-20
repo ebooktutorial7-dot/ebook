@@ -1,32 +1,30 @@
 platform :ios, '13.0'
+$FirebaseSDKVersion = '11.11.0'  # Xcode 15.2 호환 권장 버전
+
 use_frameworks!
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
+# Flutter 기준 설정 ----------------------------------------------------------
 project 'Runner', {
-  'Debug' => :debug,
+  'Debug'   => :debug,
   'Profile' => :release,
   'Release' => :release,
 }
 
 def flutter_root
-  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-  unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
-  end
-
-  File.foreach(generated_xcode_build_settings_path) do |line|
-    matches = line.match(/FLUTTER_ROOT\=(.*)/)
-    return matches[1].strip if matches
-  end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+  generated = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  raise "#{generated} missing – run `flutter pub get` first" unless File.exist?(generated)
+  File.foreach(generated) { |l| return $1.strip if l =~ /FLUTTER_ROOT=(.*)/ }
+  raise 'FLUTTER_ROOT not found – delete Generated.xcconfig then `flutter pub get`'
 end
 
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
-
 flutter_ios_podfile_setup
 
 target 'Runner' do
+  #
+
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
   target 'RunnerTests' do
@@ -35,12 +33,14 @@ target 'Runner' do
 end
 
 post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    flutter_additional_ios_build_settings(target)
-
-    # M1/M2 Mac 문제 방지
-    target.build_configurations.each do |config|
-      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
-    end
+  installer.pods_project.targets.each do |t|
+    flutter_additional_ios_build_settings(t)
+    # Apple Silicon 전용 exclusion 은 Intel 맥에서는 제거했습니다.
+    # 만약 M1/M2 맥에서만 필요하다면, 
+    # 아래 블록을 주석 처리하거나 조건부로 넣으시면 됩니다.
+    #
+    # t.build_configurations.each do |cfg|
+    #   cfg.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    # end
   end
 end
