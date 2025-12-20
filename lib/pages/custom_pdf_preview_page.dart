@@ -56,8 +56,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   final PageController _pageCtrl = PageController();
   final TransformationController _zoomCtrl = TransformationController();
 
-  static const double _cardTopPadding = 75;
-  static const double _controlBottom = 40;
+  static const double _cardTopPadding = 70;
+  static const double _controlBottom = 45;
 
   double _uiScale = 1.0;
   static const double _minUiScale = 1.0;
@@ -556,7 +556,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     try {
       final file = await _writePdfToDocuments(fileNameBase: widget.title);
       if (!mounted) return;
-      AppToast.show(context, '저장 완료: ${p.basename(file.path)}');
+      AppToast.show(context, '앱에 저장 완료: ${p.basename(file.path)}');
     } catch (e) {
       if (!mounted) return;
       AppToast.show(context, '저장 실패: $e');
@@ -613,12 +613,12 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const ui.Color.fromARGB(
-          255,
-          179,
-          210,
-          230,
+          136,
+          135,
+          181,
+          211,
         ).withValues(alpha: 0.70),
-        borderRadius: BorderRadius.circular(50),
+        borderRadius: BorderRadius.circular(25),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
