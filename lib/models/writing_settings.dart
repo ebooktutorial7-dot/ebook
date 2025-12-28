@@ -1,5 +1,4 @@
 // writing_settings.dart
-
 import 'package:flutter/material.dart';
 
 @immutable
@@ -19,6 +18,9 @@ class WritingSettings {
   /// 좌우 여백(px)
   final double horizontalMargin;
 
+  /// 상하 여백(px)  ✅ 추가
+  final double verticalMargin;
+
   /// 기본 글자 크기 (페이지네이션/프리뷰에서 사용)
   final double fontSize;
 
@@ -31,6 +33,7 @@ class WritingSettings {
     required this.lineHeight,
     required this.letterSpacing,
     required this.horizontalMargin,
+    required this.verticalMargin, // ✅ 추가
     required this.fontSize,
     required this.textColor,
   });
@@ -42,6 +45,7 @@ class WritingSettings {
     lineHeight: 1.6,
     letterSpacing: 0.0,
     horizontalMargin: 24.0,
+    verticalMargin: 24.0, // ✅ png.dart 기본(18)과 맞추고 싶으면 여기 값을 18로
     fontSize: 16.0,
     textColor: Color(0xFF222222),
   );
@@ -52,6 +56,7 @@ class WritingSettings {
     double? lineHeight,
     double? letterSpacing,
     double? horizontalMargin,
+    double? verticalMargin, // ✅ 추가
     double? fontSize,
     Color? textColor,
   }) {
@@ -61,6 +66,7 @@ class WritingSettings {
       lineHeight: lineHeight ?? this.lineHeight,
       letterSpacing: letterSpacing ?? this.letterSpacing,
       horizontalMargin: horizontalMargin ?? this.horizontalMargin,
+      verticalMargin: verticalMargin ?? this.verticalMargin, // ✅ 추가
       fontSize: fontSize ?? this.fontSize,
       textColor: textColor ?? this.textColor,
     );
@@ -73,6 +79,7 @@ class WritingSettings {
       'lineHeight': lineHeight,
       'letterSpacing': letterSpacing,
       'horizontalMargin': horizontalMargin,
+      'verticalMargin': verticalMargin, // ✅ 추가
       'fontSize': fontSize,
       // Color는 int value로 저장
       'textColor': textColor.toARGB32(),
@@ -80,12 +87,18 @@ class WritingSettings {
   }
 
   factory WritingSettings.fromJson(Map<String, dynamic> json) {
+    final h = (json['horizontalMargin'] as num?)?.toDouble() ?? 24.0;
+
+    // ✅ verticalMargin이 예전 저장본에 없을 수 있으니 horizontalMargin으로 폴백
+    final v = (json['verticalMargin'] as num?)?.toDouble() ?? h;
+
     return WritingSettings(
       themeId: json['themeId'] as String? ?? 'light',
       fontFamily: json['fontFamily'] as String? ?? 'system',
       lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.6,
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
-      horizontalMargin: (json['horizontalMargin'] as num?)?.toDouble() ?? 24.0,
+      horizontalMargin: h,
+      verticalMargin: v, // ✅ 추가
       fontSize: (json['fontSize'] as num?)?.toDouble() ?? 16.0,
       textColor: _decodeColor(json['textColor']),
     );

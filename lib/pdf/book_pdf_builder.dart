@@ -1,4 +1,4 @@
-// lib/pdf/book_pdf_builder.dart
+// pdf/book_pdf_builder.dart
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,9 +9,47 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:ebook_tutorial_app/pages/book_builder_page.dart'
     show ChapterItem;
 
+String _sanitizeUtf16(String s) {
+  // ✅
+  bool hasSurrogate = false;
+  for (final cu in s.codeUnits) {
+    if (cu >= 0xD800 && cu <= 0xDFFF) {
+      hasSurrogate = true;
+      break;
+    }
+  }
+  if (!hasSurrogate) return s;
+
+  final out = StringBuffer();
+  final units = s.codeUnits;
+  for (int i = 0; i < units.length; i++) {
+    final cu = units[i];
+    if (cu >= 0xD800 && cu <= 0xDBFF) {
+      if (i + 1 < units.length) {
+        final cu2 = units[i + 1];
+        if (cu2 >= 0xDC00 && cu2 <= 0xDFFF) {
+          out.writeCharCode(cu);
+          out.writeCharCode(cu2);
+          i++;
+          continue;
+        }
+      }
+      out.write('\uFFFD');
+      continue;
+    }
+    if (cu >= 0xDC00 && cu <= 0xDFFF) {
+      out.write('\uFFFD');
+      continue;
+    }
+    out.writeCharCode(cu);
+  }
+  return out.toString();
+}
+
 Future<Uint8List> buildBookPdf({
   required List<ChapterItem> chapters,
   bool showChapterTitle = true,
+  bool chapterPerPage = true, // ✅ 항상 회차별 분리(기본값 true)
 }) async {
   final fontKr = pw.Font.ttf(
     await rootBundle.load('lib/assets/fonts/NotoSansKR-Regular.ttf'),
@@ -28,10 +66,81 @@ Future<Uint8List> buildBookPdf({
   );
 
   final doc = pw.Document();
+
+  // ✅ 회차마다 페이지 분리
+  if (chapterPerPage) {
+    if (chapters.isEmpty) {
+      doc.addPage(
+        pw.MultiPage(
+          margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+          theme: pw.ThemeData.withFont(base: fontKr, bold: fontKrBold),
+          build:
+              (_) => [
+                pw.Text(
+                  '(내용 없음)',
+                  style: pw.TextStyle(font: fontKr, fontFallback: [fontJp]),
+                ),
+              ],
+        ),
+      );
+      return doc.save();
+    }
+
+    for (final chapter in chapters) {
+      final pageWidgets = <pw.Widget>[];
+
+      final title = _sanitizeUtf16(chapter.title).trim(); // ✅
+      if (showChapterTitle && title.isNotEmpty) {
+        pageWidgets.add(
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              font: fontKrBold,
+              fontSize: 16,
+              height: 1.3,
+              fontFallback: [fontJpBold],
+            ),
+          ),
+        );
+        pageWidgets.add(pw.SizedBox(height: 12));
+      }
+
+      final bodyWidgets = await _deltaToPdfWidgets(
+        delta: chapter.delta,
+        fontKr: fontKr,
+        fontKrBold: fontKrBold,
+        fontJp: fontJp,
+        fontJpBold: fontJpBold,
+      );
+
+      if (bodyWidgets.isEmpty) {
+        pageWidgets.add(
+          pw.Text(
+            '(내용 없음)',
+            style: pw.TextStyle(font: fontKr, fontFallback: [fontJp]),
+          ),
+        );
+      } else {
+        pageWidgets.addAll(bodyWidgets);
+      }
+
+      doc.addPage(
+        pw.MultiPage(
+          margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+          theme: pw.ThemeData.withFont(base: fontKr, bold: fontKrBold),
+          build: (_) => pageWidgets,
+        ),
+      );
+    }
+
+    return doc.save();
+  }
+
+  // ✅ (예외 옵션) 여러 회차를 하나의 흐름으로
   final widgets = <pw.Widget>[];
 
   for (final chapter in chapters) {
-    final title = chapter.title.trim();
+    final title = _sanitizeUtf16(chapter.title).trim(); // ✅
 
     if (showChapterTitle && title.isNotEmpty) {
       widgets.add(
@@ -191,8 +300,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
   }
 
   pw.TextStyle codeTextStyle() {
-    // 완전한 “모노 폰트+한글”은 별도 TTF가 필요하지만,
-    // 지금은 “코드블록 박스+간격+작은 폰트”로 iOS 메모 느낌을 우선 맞춥니다.
     return pw.TextStyle(
       font: fontKr,
       fontFallback: [fontJp],
@@ -209,7 +316,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
   }) {
     final hasLink = pieces.any((p) => p.hasLink);
 
-    // 링크가 없으면 RichText가 줄바꿈/정렬이 가장 안정적
     if (!hasLink) {
       return pw.RichText(
         textAlign: align,
@@ -222,7 +328,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       );
     }
 
-    // 링크가 있으면 실제 클릭 가능한 링크로 만들기 위해 Wrap + UrlLink 조합
     return pw.Wrap(
       alignment: wrapAlignFromTextAlign(align),
       runSpacing: 0,
@@ -252,7 +357,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
   }
 
   pw.Widget checkBoxMarker({required bool checked}) {
-    // iOS 메모 체크박스 느낌: 둥근 사각형 + 체크
     return pw.Container(
       width: 12.5,
       height: 12.5,
@@ -278,8 +382,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
   }
 
   String bulletForIndent(int indent) {
-    // iOS 메모처럼 들여쓰기 깊이에 따라 느낌만 조금 바꿈
-    // (완전 동일은 iOS 렌더러를 복제해야 해서 “가까운” 수준으로)
     if (indent <= 0) return '•';
     if (indent == 1) return '◦';
     return '▪';
@@ -288,11 +390,8 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
   void flushCodeBlockIfAny() {
     if (codeLinesBuf.isEmpty) return;
 
-    // codeLinesBuf: [ [piece...], [piece...], ... ]
-    // 한 줄씩 _buildInlineLine으로 만들고, 박스 안에 Column으로 쌓기
     final codeWidgets = <pw.Widget>[];
     for (final line in codeLinesBuf) {
-      // 코드블록 내 링크가 있으면 링크도 유지(“완전 지원”)
       codeWidgets.add(
         buildInlineLine(
           pieces: line,
@@ -330,20 +429,16 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     final align = parseAlign(blockAttrs);
     final indentLevel = parseIndent(blockAttrs);
 
-    // code-block이면: “출력하지 말고” codeLinesBuf에 쌓는다
     if (isCodeBlock) {
-      // 빈 줄도 코드블록에서는 유지(줄바꿈)
       codeLinesBuf.add(List<_Piece>.from(linePieces));
       linePieces.clear();
       return;
     }
 
-    // code-block 끝났으면 박스로 묶어서 먼저 출력
     flushCodeBlockIfAny();
 
     final hasText = linePieces.isNotEmpty;
 
-    // 빈 줄 처리(리스트도 아니고 완전 빈 줄이면 간격)
     if (!hasText &&
         listType == null &&
         !isBlockQuote &&
@@ -353,7 +448,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       return;
     }
 
-    // 헤더 스타일
     pw.TextStyle? headerStyle;
     int headerLevel = 0;
     if (headerLevelRaw is int) headerLevel = headerLevelRaw;
@@ -386,7 +480,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
           ),
     );
 
-    // blockquote 느낌(간단)
     if (isBlockQuote) {
       lineWidget = pw.Container(
         padding: const pw.EdgeInsets.only(left: 10, top: 6, bottom: 6),
@@ -399,23 +492,18 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       );
     }
 
-    // 들여쓰기 공통
     final leftPad = indentLevel * 14.0;
 
-    // 리스트 처리
     if (listType != null) {
-      // ordered 번호는 indent별로 따로 유지
       String? orderedMarker;
 
       if (listType == 'ordered') {
-        // 더 깊은 indent 카운터는 초기화
         orderedCounterByIndent.removeWhere((k, _) => k > indentLevel);
         final next = (orderedCounterByIndent[indentLevel] ?? 0) + 1;
         orderedCounterByIndent[indentLevel] = next;
         orderedMarker = '$next.';
       }
 
-      // marker 위젯 구성(체크리스트는 도형으로)
       pw.Widget marker;
       if (listType == 'checked') {
         marker = checkBoxMarker(checked: true);
@@ -432,7 +520,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
           ),
         );
       } else {
-        // bullet
         marker = pw.Text(
           bulletForIndent(indentLevel),
           style: pw.TextStyle(
@@ -444,7 +531,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
         );
       }
 
-      // iOS 메모처럼 marker와 텍스트 baseline 느낌 맞추기
       final markerBoxWidth = (listType == 'ordered') ? 22.0 : 18.0;
 
       lineWidget = pw.Padding(
@@ -473,28 +559,24 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     linePieces.clear();
   }
 
-  // 텍스트를 '\n' 기준으로 줄 단위 flush
   for (final op in delta) {
     final insert = op['insert'];
     final attrs = (op['attributes'] as Map?)?.cast<String, dynamic>();
 
     if (insert is String) {
-      final parts = insert.split('\n');
+      final parts = _sanitizeUtf16(insert).split('\n');
 
       for (int i = 0; i < parts.length; i++) {
         final part = parts[i];
 
         if (part.isNotEmpty) {
           final style = inlineStyle(attrs);
-
-          // 링크 완전 지원: attributes.link가 있으면 piece.link로 저장
           final link = attrs?['link'];
           final linkStr = link is String ? link : null;
 
           linePieces.add(_Piece(text: part, style: style, link: linkStr));
         }
 
-        // 줄 종료: newline 발생
         if (i != parts.length - 1) {
           flushLine(attrs);
         }
@@ -502,13 +584,10 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       continue;
     }
 
-    // embed
     if (insert is Map) {
       if (insert.containsKey('image')) {
-        // 이미지 전에, code-block 버퍼 있으면 먼저 flush
         flushCodeBlockIfAny();
 
-        // 이미지 전 현재 라인 flush(문단으로)
         if (linePieces.isNotEmpty) {
           flushLine(null);
         }
@@ -533,7 +612,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     }
   }
 
-  // 마지막 잔여 처리
   if (linePieces.isNotEmpty) {
     flushLine(null);
   }

@@ -18,10 +18,9 @@ import 'package:ebook_tutorial_app/pages/book_builder_page.dart'
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart' show buildBookPdf;
 
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
-import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 
-const _primaryBlue = ui.Color.fromARGB(255, 79, 164, 255);
+import 'package:ebook_tutorial_app/widgets/pdf/pdf_chapter_picker_dialog.dart';
 
 const _loaderColor = ui.Color.fromARGB(255, 150, 194, 224);
 
@@ -58,7 +57,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   final PageController _pageCtrl = PageController();
   final TransformationController _zoomCtrl = TransformationController();
 
-  static const double _cardTopPadding = 70;
+  static const double _cardTopPadding = 75;
   static const double _controlBottom = 45;
 
   double _uiScale = 1.0;
@@ -250,246 +249,16 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   }
 
   Future<void> _openChapterPickerSameDesign() async {
-    if (widget.chapters.isEmpty) {
-      AppToast.show(context, '목차가 없습니다');
-      return;
-    }
-
-    final tmpSelected = <int>{};
-    var useAll = true;
-
-    final picked = await showDialog<_ChapterPickResult>(
+    final picked = await showPdfChapterPickerDialog(
       context: context,
+      chapters: widget.chapters,
+      glassTheme: _glassTheme,
       barrierColor: Colors.transparent,
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void applyAndClose() {
-              if (!useAll && tmpSelected.isEmpty) {
-                AppToast.show(context, '회차를 선택해 주세요');
-                return;
-              }
-              Navigator.pop(
-                context,
-                _ChapterPickResult(useAll: useAll, selected: tmpSelected),
-              );
-            }
-
-            return Material(
-              type: MaterialType.transparency,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 24,
-                  ),
-                  child: GlassContainer(
-                    theme: _glassTheme,
-                    borderRadius: 20,
-                    padding: const EdgeInsets.only(
-                      top: 16,
-                      left: 10,
-                      right: 10,
-                      bottom: 10,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 230),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'PDF 미리보기',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 18.5,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE7EFF8),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap:
-                                        () =>
-                                            setModalState(() => useAll = true),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 150,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            useAll
-                                                ? Colors.white
-                                                : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '모든 회차',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight:
-                                              useAll
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                          color:
-                                              useAll
-                                                  ? const Color(0xFF1F3A56)
-                                                  : const Color(0xFF607D8B),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap:
-                                        () =>
-                                            setModalState(() => useAll = false),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 150,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            !useAll
-                                                ? Colors.white
-                                                : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '선택 회차',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight:
-                                              !useAll
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                          color:
-                                              !useAll
-                                                  ? const Color(0xFF1F3A56)
-                                                  : const Color(0xFF607D8B),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-
-                          if (!useAll)
-                            SizedBox(
-                              height: 200,
-                              child: ListView.builder(
-                                itemCount: widget.chapters.length,
-                                itemBuilder: (context, i) {
-                                  final c = widget.chapters[i];
-                                  final checked = tmpSelected.contains(i);
-
-                                  return CheckboxListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    value: checked,
-                                    activeColor: _primaryBlue,
-                                    checkColor: Colors.white,
-                                    title: Text(
-                                      c.title,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13.5),
-                                    ),
-                                    onChanged: (v) {
-                                      setModalState(() {
-                                        if (v == true) {
-                                          tmpSelected.add(i);
-                                        } else {
-                                          tmpSelected.remove(i);
-                                        }
-                                      });
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-
-                          const SizedBox(height: 12),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text(
-                                    '닫기',
-                                    style: TextStyle(color: Color(0xFF1F3A56)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const ui.Color.fromARGB(
-                                      255,
-                                      233,
-                                      247,
-                                      255,
-                                    ),
-                                    foregroundColor: const Color(0xFF1F3A56),
-                                    elevation: 0,
-                                    shadowColor: Colors.transparent,
-                                    surfaceTintColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  onPressed: applyAndClose,
-                                  child: const Text('미리보기'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
 
     if (picked == null) return;
 
-    final List<ChapterItem> targetChapters =
+    final targetChapters =
         picked.useAll
             ? widget.chapters
             : picked.selected
@@ -692,9 +461,21 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                             child: InteractiveViewer(
                               transformationController: _zoomCtrl,
                               panEnabled: true,
-                              scaleEnabled: false,
+                              scaleEnabled: true,
                               minScale: _minUiScale,
                               maxScale: _maxUiScale,
+                              onInteractionUpdate: (details) {
+                                // ✅ 핀치로 바뀐 현재 스케일을 UI 상태에 반영(버튼 줌과 표시 동기화용)
+                                _uiScale = _zoomCtrl.value
+                                    .getMaxScaleOnAxis()
+                                    .clamp(_minUiScale, _maxUiScale);
+                              },
+                              onInteractionEnd: (_) {
+                                // ✅ 끝났을 때 한 번 더 정리(필요시)
+                                _uiScale = _zoomCtrl.value
+                                    .getMaxScaleOnAxis()
+                                    .clamp(_minUiScale, _maxUiScale);
+                              },
                               child: SizedBox(
                                 width: maxCardWidth,
                                 height: cardHeight,
@@ -757,7 +538,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                 IconButton(
                   onPressed: _isLoading ? null : _onDownloadTap,
                   icon: const Icon(
-                    Icons.file_download_outlined,
+                    Icons.download_outlined,
                     color: _topIconColor,
                     size: 25,
                   ),
@@ -768,7 +549,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                   icon: const Icon(
                     Icons.ios_share,
                     color: _topIconColor,
-                    size: 25,
+                    size: 23,
                   ),
                 ),
               ],
@@ -835,10 +616,4 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       ),
     );
   }
-}
-
-class _ChapterPickResult {
-  const _ChapterPickResult({required this.useAll, required this.selected});
-  final bool useAll;
-  final Set<int> selected;
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'utils/migrations.dart';
 
+import 'package:flutter/cupertino.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -26,9 +28,9 @@ void main() async {
     );
   } catch (e) {
     runApp(
-      MaterialApp(
+      const MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: Scaffold(body: Center(child: Text('❗ Firebase 초기화 실패\n$e'))),
+        home: Scaffold(body: Center(child: Text('❗ Firebase 초기화 실패'))),
       ),
     );
     return;
@@ -38,11 +40,10 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        /// 전역(Global) WritingSettings
         ChangeNotifierProvider<WritingSettingsController>(
           create: (_) {
             final c = WritingSettingsController(documentId: null);
-            c.load(); // SharedPrefs에서 로드
+            c.load();
             return c;
           },
         ),
@@ -57,13 +58,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 선택 영역 색상 (커스텀)
+    // 선택 영역 색상
     const Color selectionFill = Color(0x55FFF59D);
     const Color selectionHandle = Color(0xFFFFC107);
 
     return MaterialApp(
       title: '전자책 튜토리얼',
       debugShowCheckedModeBanner: false,
+
+      // 🌍 Localization
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -71,10 +74,27 @@ class MyApp extends StatelessWidget {
         FlutterQuillLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en'), Locale('ko')],
+
+      // =========================
+      // ✅ 전역 테마 (BLACK 고정)
+      // =========================
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
+
+        // 🔑 Material primary 확정
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.black,
+          brightness: Brightness.light,
+        ).copyWith(primary: Colors.black, secondary: Colors.black),
+
+        // 🔑 iOS tint 확정 (리스트 번호/불릿 포함)
+        cupertinoOverrideTheme: const CupertinoThemeData(
+          primaryColor: Colors.black,
+        ),
+
+        scaffoldBackgroundColor: Colors.white,
         splashFactory: NoSplash.splashFactory,
+
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           elevation: 0,
@@ -84,12 +104,37 @@ class MyApp extends StatelessWidget {
           foregroundColor: Colors.black,
           shadowColor: Colors.transparent,
         ),
+
         textSelectionTheme: const TextSelectionThemeData(
           selectionColor: selectionFill,
           selectionHandleColor: selectionHandle,
           cursorColor: Color.fromARGB(255, 156, 189, 218),
         ),
+
+        // 🔹 Tooltip 디자인
+        tooltipTheme: TooltipThemeData(
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(233, 0, 0, 0).withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(70),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.3),
+              width: 0.9,
+            ),
+          ),
+          textStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 12.2,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          waitDuration: const Duration(milliseconds: 420),
+          showDuration: const Duration(milliseconds: 1100),
+          verticalOffset: 12,
+          triggerMode: TooltipTriggerMode.longPress,
+        ),
       ),
+
       home: const HomePage(),
     );
   }
@@ -132,11 +177,7 @@ class WelcomePage extends StatelessWidget {
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
       foregroundColor: Colors.black87,
-      textStyle: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-        color: Colors.black87,
-      ),
+      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
     );
 
     return Scaffold(

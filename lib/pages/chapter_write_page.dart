@@ -11,11 +11,17 @@ import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
+import 'package:flutter/cupertino.dart';
+
+import 'package:ebook_tutorial_app/quill/custom_leading.dart';
+
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/widgets/mini_flat_toolbar.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/models/writing_settings.dart';
+
+import 'package:ebook_tutorial_app/pages/png.dart';
 
 class ChapterWritePage extends StatefulWidget {
   final String chapterTitle;
@@ -46,7 +52,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   int _pageCount = 1;
   int _currentPage = 1;
-  double _a4PageHeightPx = 1000;
+  int _pngRevision = 0; // ✅ PNG 강제 리빌드 트리거
+
+  static const double _a4VerticalMargin = 18.0;
+  double _a4PageStridePx = 1000;
+  double _pngLikeContentHeightPx = 1000; // ✅ 현재 레이아웃 기준 contentHeight
 
   // ---- Persist/restore state ----
   double? _restoredOffset;
@@ -101,18 +111,25 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    final safeInitialDelta = widget.initialDeltaJson
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: true);
+
     _controller = quill.QuillController(
-      document: quill.Document.fromJson(widget.initialDeltaJson),
+      document: quill.Document.fromJson(safeInitialDelta),
       selection: const TextSelection.collapsed(offset: 0),
     );
+
     _titleCtrl.text = widget.chapterTitle;
 
     _initReduceTransparency();
 
     _controller.changes.listen((_) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _recomputePagination(),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // 스크롤 포지션 기준으로 pageCount 업데이트
+        // (contentHeight는 LayoutBuilder에서 항상 최신값 유지)
+        _recomputePaginationFromStoredHeight();
+      });
       if (mounted) setState(() {});
       _saveSelectionDebounced();
 
@@ -128,9 +145,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     _loadSavedPosition();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _recomputePagination();
+      _recomputePaginationFromStoredHeight();
       _attemptRestoreScroll();
-      _attemptRestoreSelection();
     });
 
     _applySystemUi();
@@ -164,6 +180,65 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       default:
         return Colors.black87;
     }
+  }
+
+  Widget _wrapEditorTheme({
+    required BuildContext context,
+    required Color primaryColor,
+    required Widget child,
+  }) {
+    final base = Theme.of(context);
+    final cupertino = CupertinoTheme.of(context);
+
+    return CupertinoTheme(
+      data: cupertino.copyWith(
+        primaryColor: primaryColor, // ✅ iOS tint(리스트 마커 포함) 고정
+      ),
+      child: Theme(
+        data: base.copyWith(
+          primaryColor: primaryColor,
+          colorScheme: base.colorScheme.copyWith(
+            primary: primaryColor,
+            secondary: primaryColor,
+          ),
+
+          // ✅ Tooltip
+          tooltipTheme: const TooltipThemeData(
+            preferBelow: true,
+            verticalOffset: 12,
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            margin: EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Color.fromARGB(213, 158, 217, 246),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
+            textStyle: TextStyle(
+              color: Colors.white,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              height: 1.15,
+            ),
+            waitDuration: Duration(milliseconds: 350),
+            showDuration: Duration(milliseconds: 1200),
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  void _recomputePaginationFromStoredHeight() {
+    if (!_scrollCtrl.hasClients) return;
+    final pos = _scrollCtrl.position;
+
+    final contentHeight = _pngLikeContentHeightPx;
+    final pages = _calcPageCountLikePng(pos, contentHeight);
+    final current = _calcCurrentPageLikePng(pos, pages, contentHeight);
+
+    setState(() {
+      _pageCount = pages;
+      _currentPage = current;
+    });
   }
 
   @override
@@ -237,8 +312,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _restoreTried = true;
   }
 
-  void _attemptRestoreSelection() {}
-
   void _saveScrollDebounced() {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 350), _persistScroll);
@@ -265,11 +338,14 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   void _save() {
-    // 여기서는 "결과 데이터 만들어서 pop" 만 담당
-    final result = {
-      'title': _titleCtrl.text.trim(),
-      'delta': _controller.document.toDelta().toJson(),
-    };
+    final delta = _controller.document.toDelta().toJson();
+
+    // ✅ 결과도 복사해서 넘기면 다음 페이지에서 add/수정해도 안전
+    final safeDeltaJson = List<Map<String, dynamic>>.from(
+      delta.map((e) => Map<String, dynamic>.from(e as Map)),
+    );
+
+    final result = {'title': _titleCtrl.text.trim(), 'delta': safeDeltaJson};
 
     Navigator.of(context).pop(result);
   }
@@ -444,6 +520,42 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
   }
 
+  // ✅ flutter_quill 11.5.0 호환: HorizontalSpacing/VerticalSpacing는 positional 2개만 받음
+  quill.DefaultTextBlockStyle _headerBlockStyle({
+    required quill.DefaultTextBlockStyle base,
+    required WritingSettings settings,
+    required String? fontFamily,
+
+    // 제목 크기/굵기
+    required double fontSize,
+    required FontWeight fontWeight,
+
+    // 여백/들여쓰기(간접 구현)
+    required double vTop,
+    required double vBottom,
+    required double hMargin, // 좌/우 여백
+    required double leftIndent, // 블록 전체 왼쪽으로 더 밀기(=left spacing에 더함)
+  }) {
+    return quill.DefaultTextBlockStyle(
+      base.style.copyWith(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        height: settings.lineHeight,
+        letterSpacing: settings.letterSpacing,
+        fontFamily: fontFamily,
+        color: null, // ✅ 테마 색상 상속
+        decorationStyle: TextDecorationStyle.solid,
+        decorationColor: _textColorFromSettings(settings), // ✅ 헤더에서도 방지
+      ),
+      // ✅ HorizontalSpacing(left, right)
+      quill.HorizontalSpacing(hMargin + leftIndent, hMargin),
+      // ✅ VerticalSpacing(top, bottom)
+      quill.VerticalSpacing(vTop, vBottom),
+      base.lineSpacing,
+      base.decoration,
+    );
+  }
+
   void _toggleFocusWriting() {
     if (_isFocusWriting) {
       _exitFocusWritingMode();
@@ -471,33 +583,36 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _applySystemUi();
   }
 
-  // ---- Pagination/scroll ----
-  double _calcA4HeightPx(BoxConstraints constraints, WritingSettings s) {
-    final contentWidth = constraints.maxWidth - (s.horizontalMargin * 2);
-    return contentWidth * 297 / 210;
+  double _calcPngLikeContentHeightPx(BoxConstraints constraints) {
+    final pageWidth = constraints.maxWidth * 0.95; // ✅ PNG와 동일
+    final pageHeight = pageWidth * 297 / 210;
+    return pageHeight - (_a4VerticalMargin * 2); // ✅ verticalMargin=18과 일치
   }
 
-  int _calcPageCount(ScrollPosition pos) {
-    final totalContentHeight = pos.maxScrollExtent + pos.viewportDimension;
-    return math.max(1, (totalContentHeight / _a4PageHeightPx).ceil());
+  // ✅ PNG처럼 contentHeight로 페이지 수 계산
+  int _calcPageCountLikePng(ScrollPosition pos, double contentHeight) {
+    final total = pos.maxScrollExtent + pos.viewportDimension;
+    return math.max(1, (total / contentHeight).ceil());
   }
 
-  int _calcCurrentPage(ScrollPosition pos, int pages) {
-    final double window = math.min(pos.viewportDimension, _a4PageHeightPx);
-    final double end = pos.pixels + window;
-    const double eps = 1e-6;
-    final int current = (((end - eps) / _a4PageHeightPx).floor() + 1).clamp(
-      1,
-      pages,
-    );
-    return current;
+  int _calcCurrentPageLikePng(
+    ScrollPosition pos,
+    int pages,
+    double contentHeight,
+  ) {
+    final window = math.min(pos.viewportDimension, contentHeight);
+    final end = pos.pixels + window;
+    const eps = 1e-6;
+    return (((end - eps) / contentHeight).floor() + 1).clamp(1, pages);
   }
 
   void _handleScroll() {
     if (!_scrollCtrl.hasClients) return;
     final pos = _scrollCtrl.position;
-    final pages = _calcPageCount(pos);
-    final newCurrentPage = _calcCurrentPage(pos, pages);
+
+    final contentHeight = _pngLikeContentHeightPx;
+    final pages = _calcPageCountLikePng(pos, contentHeight);
+    final newCurrentPage = _calcCurrentPageLikePng(pos, pages, contentHeight);
 
     if (newCurrentPage != _currentPage || pages != _pageCount) {
       setState(() {
@@ -508,22 +623,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _saveScrollDebounced();
   }
 
-  void _recomputePagination() {
-    if (!_scrollCtrl.hasClients) return;
-    final pos = _scrollCtrl.position;
-    final pages = _calcPageCount(pos);
-    final current = _calcCurrentPage(pos, pages);
-    setState(() {
-      _pageCount = pages;
-      _currentPage = current;
-    });
-  }
-
   Future<void> _jumpToPage(int page) async {
     if (!_scrollCtrl.hasClients) return;
     final pos = _scrollCtrl.position;
     final int clampedPage = page.clamp(1, _pageCount);
-    final double desired = _a4PageHeightPx * (clampedPage - 1);
+    final double desired = _a4PageStridePx * (clampedPage - 1);
     final double target = desired.clamp(0.0, pos.maxScrollExtent);
 
     await _scrollCtrl.animateTo(
@@ -544,6 +648,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     // Provider 에서 설정 읽기
     final settings = context.watch<WritingSettingsController>().settings;
+    final primary = _textColorFromSettings(settings);
+    final textColor = primary;
+
     final bool isSpaceTheme = settings.themeId == 'space';
     final bool isLightSkyTheme = settings.themeId == 'lightSky';
     final Color pageBg = _backgroundColorFromSettings(settings);
@@ -551,19 +658,25 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     // 🔹 Quill 기본 스타일 가져오기
     final baseStyles = quill.DefaultStyles.getInstance(context);
     final paragraph = baseStyles.paragraph;
+    final baseLists = baseStyles.lists;
 
     final defaultEmbeds = FlutterQuillEmbeds.editorBuilders();
     final safeEmbeds = defaultEmbeds.where((b) => b.key != 'image').toList();
 
-    // 🔹 줄 간격/글 간격/폰트/색 적용
+    // 🔹 customStyles
+    final fontFamily = _resolveFontFamily(settings.fontFamily);
+
+    // 본문(Paragraph)
     final customParagraph = quill.DefaultTextBlockStyle(
       (paragraph?.style ?? const TextStyle()).copyWith(
         fontSize: 15.0,
         height: settings.lineHeight,
         letterSpacing: settings.letterSpacing,
-        fontFamily: _resolveFontFamily(settings.fontFamily),
+        fontFamily: fontFamily,
         fontWeight: FontWeight.w400,
         color: _textColorFromSettings(settings),
+        decorationStyle: TextDecorationStyle.solid,
+        decorationColor: textColor,
       ),
       paragraph?.horizontalSpacing ?? baseStyles.paragraph!.horizontalSpacing,
       paragraph?.verticalSpacing ?? baseStyles.paragraph!.verticalSpacing,
@@ -571,398 +684,529 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       paragraph?.decoration,
     );
 
-    // 🔹 customStyles
-    final customStyles = baseStyles.merge(
-      quill.DefaultStyles(paragraph: customParagraph),
+    // 리스트(Lists)
+    final customLists = (baseLists ?? baseStyles.lists!).copyWith(
+      style: (baseLists?.style ?? const TextStyle()).copyWith(
+        fontSize: 15.0,
+        height: settings.lineHeight,
+        letterSpacing: settings.letterSpacing,
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w400,
+        color: _textColorFromSettings(settings),
+        decorationStyle: TextDecorationStyle.solid,
+        decorationColor: textColor,
+      ),
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _a4PageHeightPx = _calcA4HeightPx(constraints, settings);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _recomputePagination();
-          _attemptRestoreScroll();
-        });
+    final customH1 = _headerBlockStyle(
+      base: baseStyles.h1!,
+      settings: settings,
+      fontFamily: fontFamily,
+      fontSize: 30,
+      fontWeight: FontWeight.w800,
+      vTop: 30,
+      vBottom: 14,
+      hMargin: 0,
+      leftIndent: 0,
+    );
 
-        final bool isKeyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
+    final customH2 = _headerBlockStyle(
+      base: baseStyles.h2!,
+      settings: settings,
+      fontFamily: fontFamily,
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      vTop: 18,
+      vBottom: 10,
+      hMargin: 0,
+      leftIndent: 6,
+    );
 
-        return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) {
-            if (didPop) return;
+    final customH3 = _headerBlockStyle(
+      base: baseStyles.h3!,
+      settings: settings,
+      fontFamily: fontFamily,
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+      vTop: 12,
+      vBottom: 8,
+      hMargin: 0,
+      leftIndent: 10,
+    );
 
-            _save(); // ✅ 시스템 뒤로가기 / 제스처 / 안드로이드 백
-          },
-          child: Scaffold(
-            backgroundColor: Colors.white,
-            extendBody: true,
-            extendBodyBehindAppBar: true,
-            resizeToAvoidBottomInset: true,
-            appBar:
-                _chromeVisible
-                    ? AppBar(
-                      toolbarHeight: 52,
-                      leadingWidth: 64,
-                      leading: IconButton(
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new,
-                          size: 18,
-                          color: Colors.black87,
+    final customStyles = baseStyles.merge(
+      quill.DefaultStyles(
+        paragraph: customParagraph,
+        lists: customLists,
+        h1: customH1,
+        h2: customH2,
+        h3: customH3,
+      ),
+    );
+
+    // ✅ 테마 래핑은 딱 1번만!
+    return _wrapEditorTheme(
+      context: context,
+      primaryColor: primary, // ✅ iOS tint / list marker 기준
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _pngLikeContentHeightPx = _calcPngLikeContentHeightPx(constraints);
+          _a4PageStridePx = _pngLikeContentHeightPx;
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _recomputePaginationFromStoredHeight();
+            _attemptRestoreScroll();
+          });
+
+          final bool isKeyboardUp =
+              MediaQuery.of(context).viewInsets.bottom > 0;
+
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) return;
+              _save();
+            },
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              extendBody: true,
+              extendBodyBehindAppBar: true,
+              resizeToAvoidBottomInset: true,
+              appBar:
+                  _chromeVisible
+                      ? AppBar(
+                        toolbarHeight: 52,
+                        leadingWidth: 64,
+                        leading: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new,
+                            size: 18,
+                            color: Colors.black87,
+                          ),
+                          onPressed: () {
+                            _persistScroll();
+                            _persistSelection();
+                            _persistFocus();
+                            _save();
+                          },
                         ),
-                        onPressed: () {
-                          _persistScroll();
-                          _persistSelection();
-                          _persistFocus();
-                          _save(); // ✅ 저장하고 pop
-                        },
-                      ),
-                      titleSpacing: 0,
-                      title: TextField(
-                        controller: _titleCtrl,
-                        textAlign: TextAlign.start,
-                        textInputAction: TextInputAction.done,
-                        maxLines: 1,
-                        decoration: const InputDecoration(
-                          hintText: '회차 제목 입력',
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                          hintStyle: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0x8C000000),
+                        titleSpacing: 0,
+                        title: TextField(
+                          controller: _titleCtrl,
+                          textAlign: TextAlign.start,
+                          textInputAction: TextInputAction.done,
+                          maxLines: 1,
+                          decoration: const InputDecoration(
+                            hintText: '회차 제목 입력',
+                            border: InputBorder.none,
+                            isCollapsed: true,
+                            hintStyle: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0x8C000000),
+                            ),
+                          ),
+                          style: const TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                            height: 1.2,
                           ),
                         ),
-                        style: const TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                          height: 1.2,
-                        ),
-                      ),
-                      centerTitle: false,
-                      backgroundColor: Colors.white,
-                      elevation: 0,
-                      actions: [
-                        Semantics(
-                          label: '집중 글쓰기 모드 토글',
-                          button: true,
-                          child: IconButton(
-                            tooltip: _isFocusWriting ? '집중 모드 해제' : '집중 글쓰기 모드',
-                            onPressed: _toggleFocusWriting,
-                            icon: Icon(
-                              Icons.fullscreen,
-                              color:
-                                  _isFocusWriting
-                                      ? Colors.blueAccent
-                                      : Colors.black87,
+                        centerTitle: false,
+                        backgroundColor: Colors.white,
+                        elevation: 0,
+                        actions: [
+                          Semantics(
+                            label: '집중 글쓰기 모드 토글',
+                            button: true,
+                            child: IconButton(
+                              tooltip:
+                                  _isFocusWriting ? '집중 모드 해제' : '집중 글쓰기 모드',
+                              onPressed: _toggleFocusWriting,
+                              icon: Icon(
+                                Icons.fullscreen,
+                                color:
+                                    _isFocusWriting
+                                        ? Colors.blueAccent
+                                        : Colors.black87,
+                              ),
+                              splashColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                            ),
+                          ),
+                          Semantics(
+                            label: 'PNG 변환',
+                            button: true,
+                            child: IconButton(
+                              tooltip: 'PNG',
+                              onPressed: () {
+                                final delta =
+                                    _controller.document.toDelta().toJson();
+                                final deltaJson =
+                                    List<Map<String, dynamic>>.from(
+                                      delta.map(
+                                        (e) =>
+                                            Map<String, dynamic>.from(e as Map),
+                                      ),
+                                    );
+
+                                final ep = _titleCtrl.text.trim();
+
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => PngPage(
+                                          title: ep.isEmpty ? 'PNG 미리보기' : ep,
+                                          episodeTitle: ep.isEmpty ? null : ep,
+                                          deltaJson: deltaJson,
+                                          revision: _pngRevision,
+                                          horizontalMargin:
+                                              settings.horizontalMargin,
+                                          verticalMargin: 18,
+                                          baseFontSize: 15,
+                                          lineHeight: settings.lineHeight,
+                                          letterSpacing: settings.letterSpacing,
+                                          fontFamily: _resolveFontFamily(
+                                            settings.fontFamily,
+                                          ),
+                                          pageBackgroundColor:
+                                              _backgroundColorFromSettings(
+                                                settings,
+                                              ),
+                                          defaultTextColor:
+                                              _textColorFromSettings(settings),
+                                          renderScale: 2.8,
+                                        ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.layers_outlined,
+                                size: 22,
+                                color: Colors.black87,
+                              ),
+                              splashColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _save,
+                            icon: const Icon(
+                              Icons.check,
+                              color: Colors.black87,
                             ),
                             splashColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                           ),
-                        ),
-                        IconButton(
-                          onPressed: _save,
-                          icon: const Icon(Icons.check, color: Colors.black87),
-                          splashColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
-                        ),
-                      ],
-                    )
-                    : null,
-            body: SafeArea(
-              top: !isImmersive,
-              bottom: !isImmersive ? true : isKeyboardUp,
-              child: Stack(
-                children: [
-                  // 본문 에디터
-                  Positioned.fill(
-                    child:
-                        isSpaceTheme
-                            // 🌌 우주 테마: 그라데이션 + 별 + 별똥별 + 에디터
-                            ? Stack(
-                              children: [
-                                // 1) 그라데이션 배경
-                                const Positioned.fill(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Color.fromARGB(255, 6, 10, 38),
-                                          Color.fromARGB(255, 20, 27, 69),
-                                          Color.fromARGB(246, 33, 23, 38),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                // 2) 별 (랜덤 반짝임 포함)
-                                const Positioned.fill(
-                                  child: _AnimatedStarField(starCount: 260),
-                                ),
-
-                                // 3) 랜덤 별 레이어
-                                const Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: _ShootingStarLayer(),
-                                  ),
-                                ),
-                                // 4) 에디터
-                                Container(
-                                  color: Colors.transparent,
-                                  child: Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                      settings.horizontalMargin,
-                                      (_chromeVisible ? 56 : 0),
-                                      settings.horizontalMargin,
-                                      _chromeVisible ? 64 : 0,
-                                    ),
-                                    child: DefaultTextStyle.merge(
-                                      style: TextStyle(
-                                        fontSize: 15.0,
-                                        height: settings.lineHeight,
-                                        letterSpacing: settings.letterSpacing,
-                                        fontFamily: _resolveFontFamily(
-                                          settings.fontFamily,
-                                        ),
-                                        color: _textColorFromSettings(settings),
-                                      ),
-
-                                      child: quill.QuillEditor(
-                                        controller: _controller,
-                                        focusNode: _focusNode,
-                                        scrollController: _scrollCtrl,
-                                        config: quill.QuillEditorConfig(
-                                          scrollable: true,
-                                          padding: EdgeInsets.zero,
-                                          expands: true,
-                                          embedBuilders: [
-                                            _SafeImageEmbedBuilder(),
-
-                                            _HrSolidEmbedBuilder(),
-                                            _HrEmbedBuilder(),
-                                            ...safeEmbeds,
+                        ],
+                      )
+                      : null,
+              body: SafeArea(
+                top: !isImmersive,
+                bottom: !isImmersive ? true : isKeyboardUp,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child:
+                          isSpaceTheme
+                              ? Stack(
+                                children: [
+                                  const Positioned.fill(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            Color.fromARGB(255, 6, 10, 38),
+                                            Color.fromARGB(255, 20, 27, 69),
+                                            Color.fromARGB(246, 33, 23, 38),
                                           ],
-                                          customStyles: customStyles,
-                                          onTapDown: (details, pos) {
-                                            final wasDouble =
-                                                _handleDoubleTapForToolbar(
-                                                  details,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const Positioned.fill(
+                                    child: _AnimatedStarField(starCount: 260),
+                                  ),
+                                  const Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: _ShootingStarLayer(),
+                                    ),
+                                  ),
+                                  Container(
+                                    color: Colors.transparent,
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        settings.horizontalMargin,
+                                        (_chromeVisible ? 56 : 0) +
+                                            _a4VerticalMargin,
+                                        settings.horizontalMargin,
+                                        (_chromeVisible ? 64 : 0) +
+                                            _a4VerticalMargin,
+                                      ),
+                                      child: DefaultTextStyle.merge(
+                                        style: TextStyle(
+                                          fontSize: 15.0,
+                                          height: settings.lineHeight,
+                                          letterSpacing: settings.letterSpacing,
+                                          fontFamily: _resolveFontFamily(
+                                            settings.fontFamily,
+                                          ),
+                                          color: _textColorFromSettings(
+                                            settings,
+                                          ),
+                                        ),
+                                        child: quill.QuillEditor(
+                                          controller: _controller,
+                                          focusNode: _focusNode,
+                                          scrollController: _scrollCtrl,
+                                          config: quill.QuillEditorConfig(
+                                            scrollable: true,
+                                            padding: EdgeInsets.zero,
+                                            expands: true,
+                                            customLeadingBlockBuilder:
+                                                buildCustomLeading,
+                                            embedBuilders: [
+                                              _SafeImageEmbedBuilder(),
+                                              _HrSolidEmbedBuilder(),
+                                              _HrEmbedBuilder(),
+                                              ...safeEmbeds,
+                                            ],
+                                            customStyles: customStyles,
+                                            onTapDown: (details, pos) {
+                                              final wasDouble =
+                                                  _handleDoubleTapForToolbar(
+                                                    details,
+                                                  );
+                                              if (!wasDouble &&
+                                                  _toolbarLocked) {
+                                                setState(
+                                                  () => _toolbarLocked = false,
                                                 );
-                                            if (!wasDouble && _toolbarLocked) {
-                                              setState(
-                                                () => _toolbarLocked = false,
-                                              );
-                                            }
-                                            return false;
-                                          },
+                                              }
+                                              return false;
+                                            },
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            )
-                            : isLightSkyTheme
-                            ? Stack(
-                              children: [
-                                //  하늘 그라데이션
-                                const Positioned.fill(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Color.fromARGB(
-                                            255,
-                                            238,
-                                            248,
-                                            255,
-                                          ), // 연한 하늘색
-                                          Color(0xFFBBDEFB),
-                                          Color.fromARGB(255, 241, 249, 255),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                // 햇살 페인터
-                                const Positioned.fill(
-                                  child: CustomPaint(painter: _SunRayPainter()),
-                                ),
-                                // 본문 에디터
-                                Container(
-                                  color: Colors.transparent,
-                                  child: Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                      settings.horizontalMargin,
-                                      (_chromeVisible ? 56 : 0),
-                                      settings.horizontalMargin,
-                                      _chromeVisible ? 64 : 0,
-                                    ),
-                                    child: DefaultTextStyle.merge(
-                                      style: TextStyle(
-                                        fontSize: 15.0,
-                                        height: settings.lineHeight,
-                                        letterSpacing: settings.letterSpacing,
-                                        fontFamily: _resolveFontFamily(
-                                          settings.fontFamily,
-                                        ),
-                                        color: _textColorFromSettings(settings),
-                                      ),
-                                      child: quill.QuillEditor(
-                                        controller: _controller,
-                                        focusNode: _focusNode,
-                                        scrollController: _scrollCtrl,
-                                        config: quill.QuillEditorConfig(
-                                          scrollable: true,
-                                          padding: EdgeInsets.zero,
-                                          expands: true,
-                                          embedBuilders: [
-                                            _SafeImageEmbedBuilder(),
-
-                                            _HrSolidEmbedBuilder(),
-                                            _HrEmbedBuilder(),
-                                            ...safeEmbeds,
+                                ],
+                              )
+                              : isLightSkyTheme
+                              ? Stack(
+                                children: [
+                                  const Positioned.fill(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            Color.fromARGB(255, 238, 248, 255),
+                                            Color(0xFFBBDEFB),
+                                            Color.fromARGB(255, 241, 249, 255),
                                           ],
-                                          customStyles: customStyles,
-                                          onTapDown: (details, pos) {
-                                            final wasDouble =
-                                                _handleDoubleTapForToolbar(
-                                                  details,
-                                                );
-                                            if (!wasDouble && _toolbarLocked) {
-                                              setState(
-                                                () => _toolbarLocked = false,
-                                              );
-                                            }
-                                            return false;
-                                          },
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            )
-                            // 기존 테마(화이트/다크/다크그린)
-                            : Container(
-                              color: pageBg,
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  settings.horizontalMargin,
-                                  (_chromeVisible ? 56 : 0),
-                                  settings.horizontalMargin,
-                                  _chromeVisible ? 64 : 0,
-                                ),
-                                child: DefaultTextStyle.merge(
-                                  style: TextStyle(
-                                    fontSize: 15.0,
-                                    height: settings.lineHeight,
-                                    letterSpacing: settings.letterSpacing,
-                                    fontFamily: _resolveFontFamily(
-                                      settings.fontFamily,
+                                  const Positioned.fill(
+                                    child: CustomPaint(
+                                      painter: _SunRayPainter(),
                                     ),
-                                    color: _textColorFromSettings(settings),
                                   ),
-                                  child: quill.QuillEditor(
-                                    controller: _controller,
-                                    focusNode: _focusNode,
-                                    scrollController: _scrollCtrl,
-                                    config: quill.QuillEditorConfig(
-                                      scrollable: true,
-                                      padding: EdgeInsets.zero,
-                                      expands: true,
-                                      embedBuilders: [
-                                        _SafeImageEmbedBuilder(),
-
-                                        _HrSolidEmbedBuilder(),
-                                        _HrEmbedBuilder(),
-                                        ...safeEmbeds,
-                                      ],
-                                      customStyles: customStyles,
-                                      onTapDown: (details, pos) {
-                                        final wasDouble =
-                                            _handleDoubleTapForToolbar(details);
-                                        if (!wasDouble && _toolbarLocked) {
-                                          setState(
-                                            () => _toolbarLocked = false,
-                                          );
-                                        }
-                                        return false;
-                                      },
+                                  Container(
+                                    color: Colors.transparent,
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        settings.horizontalMargin,
+                                        (_chromeVisible ? 56 : 0) +
+                                            _a4VerticalMargin,
+                                        settings.horizontalMargin,
+                                        (_chromeVisible ? 64 : 0) +
+                                            _a4VerticalMargin,
+                                      ),
+                                      child: DefaultTextStyle.merge(
+                                        style: TextStyle(
+                                          fontSize: 15.0,
+                                          height: settings.lineHeight,
+                                          letterSpacing: settings.letterSpacing,
+                                          fontFamily: _resolveFontFamily(
+                                            settings.fontFamily,
+                                          ),
+                                          color: _textColorFromSettings(
+                                            settings,
+                                          ),
+                                        ),
+                                        child: quill.QuillEditor(
+                                          controller: _controller,
+                                          focusNode: _focusNode,
+                                          scrollController: _scrollCtrl,
+                                          config: quill.QuillEditorConfig(
+                                            scrollable: true,
+                                            padding: EdgeInsets.zero,
+                                            expands: true,
+                                            customLeadingBlockBuilder:
+                                                buildCustomLeading,
+                                            embedBuilders: [
+                                              _SafeImageEmbedBuilder(),
+                                              _HrSolidEmbedBuilder(),
+                                              _HrEmbedBuilder(),
+                                              ...safeEmbeds,
+                                            ],
+                                            customStyles: customStyles,
+                                            onTapDown: (details, pos) {
+                                              final wasDouble =
+                                                  _handleDoubleTapForToolbar(
+                                                    details,
+                                                  );
+                                              if (!wasDouble &&
+                                                  _toolbarLocked) {
+                                                setState(
+                                                  () => _toolbarLocked = false,
+                                                );
+                                              }
+                                              return false;
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                              : Container(
+                                color: pageBg,
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    settings.horizontalMargin,
+                                    (_chromeVisible ? 56 : 0) +
+                                        _a4VerticalMargin,
+                                    settings.horizontalMargin,
+                                    (_chromeVisible ? 64 : 0) +
+                                        _a4VerticalMargin,
+                                  ),
+                                  child: DefaultTextStyle.merge(
+                                    style: TextStyle(
+                                      fontSize: 15.0,
+                                      height: settings.lineHeight,
+                                      letterSpacing: settings.letterSpacing,
+                                      fontFamily: _resolveFontFamily(
+                                        settings.fontFamily,
+                                      ),
+                                      color: _textColorFromSettings(settings),
+                                    ),
+                                    child: quill.QuillEditor(
+                                      controller: _controller,
+                                      focusNode: _focusNode,
+                                      scrollController: _scrollCtrl,
+                                      config: quill.QuillEditorConfig(
+                                        scrollable: true,
+                                        padding: EdgeInsets.zero,
+                                        expands: true,
+                                        customLeadingBlockBuilder:
+                                            buildCustomLeading,
+                                        embedBuilders: [
+                                          _SafeImageEmbedBuilder(),
+                                          _HrSolidEmbedBuilder(),
+                                          _HrEmbedBuilder(),
+                                          ...safeEmbeds,
+                                        ],
+                                        customStyles: customStyles,
+                                        onTapDown: (details, pos) {
+                                          final wasDouble =
+                                              _handleDoubleTapForToolbar(
+                                                details,
+                                              );
+                                          if (!wasDouble && _toolbarLocked) {
+                                            setState(
+                                              () => _toolbarLocked = false,
+                                            );
+                                          }
+                                          return false;
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                  ),
+                    ),
 
-                  // 상단 툴바
-                  if (_chromeVisible)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
+                    if (_chromeVisible)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          color: Colors.white,
+                          child: MiniFlatToolbar(
+                            controller: _controller,
+                            theme: _glassTheme,
+                            onLayoutChanged: () {
+                              if (!mounted) return;
+
+                              // ✅ PNG 페이지 강제 리빌드 트리거
+                              setState(() {
+                                _pngRevision++;
+                              });
+
+                              // ✅ 페이지바도 즉시 갱신 (postFrame 없이도 보통 충분)
+                              _recomputePaginationFromStoredHeight();
+                            },
+                          ),
                         ),
-                        color: Colors.white,
-                        child: MiniFlatToolbar(
-                          controller: _controller,
-                          theme: _glassTheme,
+                      ),
+
+                    if (_chromeVisible)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _PageJumpBar(
+                          currentPage: _currentPage,
+                          pageCount: _pageCount,
+                          charCount: _getCharCount(),
+                          onPageChanged: (p) => _jumpToPage(p),
+                          backgroundColor: Colors.white,
                         ),
                       ),
-                    ),
 
-                  // 하단 페이지 점프 바
-                  if (_chromeVisible)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: _PageJumpBar(
-                        currentPage: _currentPage,
-                        pageCount: _pageCount,
-                        charCount: _getCharCount(),
-                        onPageChanged: (p) => _jumpToPage(p),
-                        backgroundColor: Colors.white,
+                    if (!_chromeVisible) ...[
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: _tapRevealZone,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _onTapRevealZone,
+                        ),
                       ),
-                    ),
-
-                  // 크롬 숨김 상태 복원 영역
-                  if (!_chromeVisible) ...[
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: _tapRevealZone,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: _onTapRevealZone,
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: _tapRevealZone,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _onTapRevealZone,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: _tapRevealZone,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: _onTapRevealZone,
-                      ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
