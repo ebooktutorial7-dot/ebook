@@ -16,6 +16,23 @@ import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'dart:collection';
+import 'dart:isolate';
+
+extension Matrix4ScaleCompat on Matrix4 {
+  Matrix4 scaleByDouble(double x, double y, double z, double w) {
+    // this = this * S (S는 scale matrix)
+    final s =
+        Matrix4.identity()
+          ..setEntry(0, 0, x)
+          ..setEntry(1, 1, y)
+          ..setEntry(2, 2, z);
+    multiply(s);
+    return this;
+  }
+}
+
 enum ShareFormat { pdf, png, jpg }
 
 enum ShareRangeMode { current, all, range }
@@ -45,10 +62,10 @@ Future<SharePickResult?> showShareOptionsDialog({
   String confirmLabel = '공유',
 }) async {
   ShareFormat format = ShareFormat.png;
-  ShareRangeMode rangeMode = ShareRangeMode.current;
+  ShareRangeMode rangeMode = ShareRangeMode.all; // ✅ 기본: 전체
 
-  int start = currentPage;
-  int end = currentPage;
+  int start = 1; // ✅ 기본: 전체
+  int end = pagesCount; // ✅ 기본: 전체
 
   final startCtrl = TextEditingController(text: '$start');
   final endCtrl = TextEditingController(text: '$end');
@@ -383,7 +400,7 @@ Future<SharePickResult?> showShareOptionsDialog({
 
                               const SizedBox(height: 6),
                               Text(
-                                rangeInvalid ? '1~$pagesCount' : '$start~$end',
+                                '1~$pagesCount',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 11.5,
@@ -488,6 +505,136 @@ Future<SharePickResult?> showShareOptionsDialog({
   return result;
 }
 
+class LruCache<K, V extends Object> {
+  LruCache({required this.maxEntries}) : assert(maxEntries > 0);
+
+  int maxEntries;
+  final LinkedHashMap<K, V> _map = LinkedHashMap<K, V>();
+
+  V? get(K key) {
+    final v = _map.remove(key);
+    if (v == null) return null;
+    _map[key] = v;
+    return v;
+  }
+
+  bool containsKey(K key) => _map.containsKey(key);
+
+  void put(K key, V value, {void Function(K key, V value)? onEvict}) {
+    _map.remove(key);
+    _map[key] = value;
+
+    while (_map.length > maxEntries) {
+      final oldestKey = _map.keys.first;
+
+      // ✅ '!' 제거 + null 체크로 안전하게
+      final oldestVal = _map.remove(oldestKey);
+      if (oldestVal != null) {
+        onEvict?.call(oldestKey, oldestVal);
+      }
+    }
+  }
+
+  void remove(K key) => _map.remove(key);
+
+  void clear({void Function(K key, V value)? onEvict}) {
+    if (onEvict != null) {
+      for (final e in _map.entries) {
+        onEvict(e.key, e.value);
+      }
+    }
+    _map.clear();
+  }
+
+  int get length => _map.length;
+  Iterable<K> get keys => _map.keys;
+}
+
+class ByteLruCache<K, V extends Object> {
+  ByteLruCache({required this.maxBytes}) : assert(maxBytes > 0);
+
+  int maxBytes;
+
+  final LinkedHashMap<K, _ByteEntry<V>> _map =
+      LinkedHashMap<K, _ByteEntry<V>>();
+  int _totalBytes = 0;
+
+  int get totalBytes => _totalBytes;
+
+  V? get(K key) {
+    final entry = _map.remove(key);
+    if (entry == null) return null;
+    _map[key] = entry; // LRU 갱신(맨 뒤로)
+    return entry.value;
+  }
+
+  bool containsKey(K key) => _map.containsKey(key);
+
+  void put(
+    K key,
+    V value, {
+    required int bytesWeight,
+    void Function(K key, V value, int bytesWeight)? onEvict,
+  }) {
+    if (bytesWeight <= 0) return;
+
+    // 이미 있던 항목이면 먼저 제거(바이트 회수)
+    final prev = _map.remove(key);
+    if (prev != null) {
+      _totalBytes -= prev.bytesWeight;
+      if (_totalBytes < 0) _totalBytes = 0;
+    }
+
+    // 한 항목이 예산보다 큰 경우: 캐시하지 않는 편이 안전
+    if (bytesWeight > maxBytes) {
+      return;
+    }
+
+    _map[key] = _ByteEntry(value: value, bytesWeight: bytesWeight);
+    _totalBytes += bytesWeight;
+
+    while (_totalBytes > maxBytes && _map.isNotEmpty) {
+      final oldestKey = _map.keys.first;
+      final oldest = _map.remove(oldestKey);
+      if (oldest != null) {
+        _totalBytes -= oldest.bytesWeight;
+        if (_totalBytes < 0) _totalBytes = 0;
+        onEvict?.call(oldestKey, oldest.value, oldest.bytesWeight);
+      }
+    }
+  }
+
+  void remove(
+    K key, {
+    void Function(K key, V value, int bytesWeight)? onEvict,
+  }) {
+    final e = _map.remove(key);
+    if (e == null) return;
+    _totalBytes -= e.bytesWeight;
+    if (_totalBytes < 0) _totalBytes = 0;
+    onEvict?.call(key, e.value, e.bytesWeight);
+  }
+
+  void clear({void Function(K key, V value, int bytesWeight)? onEvict}) {
+    if (onEvict != null) {
+      for (final e in _map.entries) {
+        onEvict(e.key, e.value.value, e.value.bytesWeight);
+      }
+    }
+    _map.clear();
+    _totalBytes = 0;
+  }
+
+  int get length => _map.length;
+  Iterable<K> get keys => _map.keys;
+}
+
+class _ByteEntry<V> {
+  final V value;
+  final int bytesWeight;
+  const _ByteEntry({required this.value, required this.bytesWeight});
+}
+
 const _loaderColor = ui.Color.fromARGB(255, 198, 232, 255);
 const _topIconColor = ui.Color.fromARGB(255, 71, 95, 121);
 
@@ -544,6 +691,8 @@ class PngPage extends StatefulWidget {
 }
 
 class _PngPageState extends State<PngPage> {
+  final Map<int, Future<Uint8List>> _exportInFlight =
+      <int, Future<Uint8List>>{};
   int _page = 1;
   int _pagesCount = 1;
 
@@ -553,8 +702,8 @@ class _PngPageState extends State<PngPage> {
   // 이미지 원본 사이즈 캐시 (src -> Size(w,h))
   final Map<String, Size> _imageSizeCache = <String, Size>{};
 
-  static const double _cardTopPadding = 75;
-  static const double _controlBottom = 45;
+  static const double _cardTopPadding = 70;
+  static const double _controlBottom = 30;
 
   double _uiScale = 1.0;
   static const double _minUiScale = 1.0;
@@ -574,10 +723,40 @@ class _PngPageState extends State<PngPage> {
   int _deltaSig = 0; // delta 내용 해시 시그니처
   bool _paginateScheduled = false; // postFrame 중복 호출 방지
 
+  // ===== Render scale split =====
+  double _previewRenderScale = 2.0; // build()에서 DPR 기반으로 갱신
+  static const double _exportRenderScale = 2.8; // 저장/공유 고정(원하면 위젯 파라미터로)
+
   // settings 연속 변경 폭주 방지: 디바운스 + 취소(epoch)
   Timer? _paginateDebounce;
   int _paginateEpoch = 0;
   bool _paginating = false;
+
+  // ===== Slider state =====
+  double? _sliderDragValue; // null이면 드래그 중 아님
+
+  bool get _isSliderDragging => _sliderDragValue != null;
+
+  int _lastPreviewPage = 1;
+
+  int _sliderValueToPage(double v) {
+    final pc = math.max(1, _pagesCount);
+    return v.round().clamp(1, pc);
+  }
+
+  void _jumpToPage(int page) {
+    final pc = math.max(1, _pagesCount);
+    final p = page.clamp(1, pc);
+
+    if (!_pageCtrl.hasClients) return;
+    _pageCtrl.jumpToPage(p - 1);
+
+    // onPageChanged가 알아서 _page setState를 해주지만,
+    // 드래그 종료 직후 즉시 반영 원하면 여기도 업데이트 가능
+    setState(() => _page = p);
+
+    _enqueuePrefetchNear(p, [p - 1, p, p + 1, p + 2]);
+  }
 
   List<Map<String, dynamic>> _withEpisodeTitleDelta(
     List<Map<String, dynamic>> delta,
@@ -666,6 +845,201 @@ class _PngPageState extends State<PngPage> {
     return h;
   }
 
+  Widget _pageSliderBar({
+    required double maxCardWidth,
+    required double cardHeight,
+  }) {
+    final int pageCount = math.max(1, _pagesCount);
+
+    final double currentDouble =
+        ((_sliderDragValue ?? _page.toDouble()).clamp(
+          1.0,
+          pageCount.toDouble(),
+        )).toDouble();
+
+    final Color active = Colors.black87.withValues(alpha: 0.72);
+    final Color inactive = Colors.black87.withValues(alpha: 0.18);
+    final Color thumb = Colors.black87.withValues(alpha: 0.72);
+
+    const double thumbW = 84;
+    const double thumbH = 118;
+    const double bubbleTopGap = 8;
+
+    // ✅ DPR에 맞춰 "딱 1 physical px" 테두리
+    final double onePx = 1.0 / MediaQuery.of(context).devicePixelRatio;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      decoration: BoxDecoration(
+        color: widget.pageBackgroundColor.withValues(alpha: 0.0),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 30 + thumbH + bubbleTopGap + 7,
+          child: LayoutBuilder(
+            builder: (context, row) {
+              const double sidePad = 15.0;
+
+              final double usableW = (row.maxWidth - (sidePad * 2)).clamp(
+                80.0,
+                row.maxWidth,
+              );
+
+              final double t =
+                  (pageCount <= 1)
+                      ? 0.0
+                      : ((currentDouble - 1.0) / (pageCount - 1));
+              final double thumbX = sidePad + (usableW * t);
+
+              final int previewPage = _sliderValueToPage(currentDouble);
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // ===== Slider row =====
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      height: 30,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          const SizedBox(width: sidePad),
+                          SizedBox(
+                            width: usableW,
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 0.35,
+                                overlayShape: SliderComponentShape.noOverlay,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 4,
+                                ),
+                                inactiveTrackColor: inactive,
+                                activeTrackColor: active,
+                                thumbColor: thumb,
+                              ),
+                              child: Slider(
+                                min: 1.0,
+                                max: pageCount.toDouble(),
+                                divisions: pageCount > 1 ? pageCount - 1 : null,
+                                value: currentDouble,
+                                onChanged: (v) {
+                                  final pg = _sliderValueToPage(v);
+
+                                  setState(() {
+                                    _sliderDragValue = v;
+                                    _page = pg;
+                                  });
+
+                                  _enqueuePrefetchNear(pg, [
+                                    pg - 1,
+                                    pg,
+                                    pg + 1,
+                                    pg + 2,
+                                  ]);
+
+                                  if (pg != _lastPreviewPage) {
+                                    _lastPreviewPage = pg;
+                                    if (_pageCtrl.hasClients) {
+                                      _pageCtrl.jumpToPage(pg - 1);
+                                    }
+                                  }
+                                },
+                                onChangeEnd: (v) {
+                                  final pg = _sliderValueToPage(v);
+                                  setState(() => _sliderDragValue = null);
+                                  _jumpToPage(pg);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: sidePad),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // ===== Drag thumbnail (드래그 중에만 표시) =====
+                  if (_isSliderDragging && _pages.isNotEmpty)
+                    Positioned(
+                      left: (thumbX - (thumbW / 2)).clamp(
+                        0.0,
+                        row.maxWidth - thumbW,
+                      ),
+                      bottom: 30 + bubbleTopGap + 7,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          // ✅ 선을 맨 위 레이어로 + 1px 고정
+                          foregroundDecoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const ui.Color.fromARGB(
+                                255,
+                                121,
+                                147,
+                                164,
+                              ).withValues(alpha: 0.4),
+                              width: onePx,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: thumbW,
+                                  height: thumbH,
+                                  child: FutureBuilder<Uint8List>(
+                                    future: _ensureThumbForPage(previewPage),
+                                    builder: (context, snap) {
+                                      final bytes = snap.data;
+                                      if (bytes == null || bytes.isEmpty) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Image.memory(
+                                        bytes,
+                                        fit: BoxFit.contain,
+                                        filterQuality: FilterQuality.low,
+                                        cacheWidth: 240,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 15),
+                                Text(
+                                  '$previewPage / $_pagesCount',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    color: const ui.Color.fromARGB(
+                                      255,
+                                      115,
+                                      142,
+                                      160,
+                                    ).withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   void _schedulePaginate({Duration delay = const Duration(milliseconds: 120)}) {
     _paginateDebounce?.cancel();
     final epoch = _paginateEpoch;
@@ -676,10 +1050,79 @@ class _PngPageState extends State<PngPage> {
   }
 
   void _disposeImages() {
-    for (final img in _imageCache.values) {
-      img.dispose();
+    _imageCache.clear(onEvict: (k, v) => v.dispose());
+  }
+
+  void _clearPrefetchQueue() {
+    _prefetchQueue.clear();
+    _prefetchQueued.clear();
+  }
+
+  void _enqueuePrefetchNear(int center, Iterable<int> pages) {
+    if (_pages.isEmpty) return;
+
+    final unique =
+        pages.toSet().toList()
+          ..sort((a, b) => (a - center).abs().compareTo((b - center).abs()));
+
+    for (final raw in unique) {
+      final pg = raw.clamp(1, _pagesCount);
+
+      if (_pngCacheLru.containsKey(pg)) continue;
+      if (_pngInFlight.containsKey(pg)) continue;
+      if (_prefetchQueued.contains(pg)) continue;
+
+      _prefetchQueued.add(pg);
+      _prefetchQueue.add(pg);
     }
-    _imageCache.clear();
+
+    _pumpPrefetch();
+  }
+
+  void _pumpPrefetch() {
+    if (_prefetchRunning >= _prefetchConcurrency) return;
+
+    while (_prefetchRunning < _prefetchConcurrency &&
+        _prefetchQueue.isNotEmpty) {
+      final pg = _prefetchQueue.removeAt(0);
+      _prefetchQueued.remove(pg);
+
+      _prefetchRunning++;
+      _ensurePngForPage(pg).whenComplete(() {
+        if (!mounted) return;
+        _prefetchRunning = math.max(0, _prefetchRunning - 1);
+        _pumpPrefetch();
+      });
+    }
+  }
+
+  Future<List<T>> _runWithConcurrency<T>({
+    required List<Future<T> Function()> tasks,
+    int concurrency = 2,
+  }) async {
+    if (tasks.isEmpty) return <T>[];
+
+    final results = List<T?>.filled(tasks.length, null);
+    int nextIndex = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        final i = nextIndex++;
+        if (i >= tasks.length) return;
+
+        try {
+          results[i] = await tasks[i]();
+        } catch (_) {
+          // ✅ 개별 실패는 null로 두고 계속
+        }
+      }
+    }
+
+    final runners = List.generate(math.max(1, concurrency), (_) => worker());
+    await Future.wait(runners);
+
+    // null이 남아있을 수 있으니 cast 대신 필터/기본값 처리 필요
+    return results.whereType<T>().toList();
   }
 
   void _resetPaginationAndCaches({bool notify = true}) {
@@ -688,8 +1131,20 @@ class _PngPageState extends State<PngPage> {
     _paginating = false;
 
     _pages = const [];
-    _pngCache.clear();
+    _clearPrefetchQueue();
+    _pngInFlight.clear();
+
+    _thumbInFlight.clear();
+    _pngCacheLru.clear();
+    _thumbCacheLru.clear();
+
+    _exportPngCacheLru.clear();
+
+    _exportInFlight.clear();
+
     _imageSizeCache.clear();
+    _fileBytesCache.clear();
+
     _disposeImages();
 
     _page = 1;
@@ -707,9 +1162,56 @@ class _PngPageState extends State<PngPage> {
   late List<_Block> _blocks;
   List<_PagePlan> _pages = const [];
 
-  // 캐시
-  final Map<int, Uint8List> _pngCache = <int, Uint8List>{}; // 1-based page
-  final Map<String, ui.Image> _imageCache = <String, ui.Image>{};
+  static const int _maxImageCacheEntries = 60; // 40~80 사이 추천
+  late final LruCache<String, ui.Image> _imageCache =
+      LruCache<String, ui.Image>(maxEntries: _maxImageCacheEntries);
+
+  // ===== THUMB PNG cache (저해상도) =====
+
+  final Map<int, Future<Uint8List>> _thumbInFlight = <int, Future<Uint8List>>{};
+  static const int _maxThumbCachePages = 32;
+  late final LruCache<int, Uint8List> _thumbCacheLru = LruCache<int, Uint8List>(
+    maxEntries: _maxThumbCachePages,
+  );
+
+  // thumb 전용 렌더 스케일(필요하면 조절)
+  static const double _thumbRenderScale = 0.9;
+
+  // ===== PNG render in-flight (중복 렌더 방지) =====
+  final Map<int, Future<Uint8List>> _pngInFlight = <int, Future<Uint8List>>{};
+
+  // ===== File bytes cache (disk IO 줄이기) =====
+  static const int _fileBytesCacheBudgetBytes = 60 * 1024 * 1024; // 60MB
+  late final ByteLruCache<String, Uint8List> _fileBytesCache =
+      ByteLruCache<String, Uint8List>(maxBytes: _fileBytesCacheBudgetBytes);
+
+  Future<Uint8List?> _readFileBytesCached(String path) async {
+    final cached = _fileBytesCache.get(path);
+    if (cached != null) return cached;
+
+    final f = File(path);
+    if (!await f.exists()) return null;
+
+    final bytes = await f.readAsBytes();
+    if (bytes.isEmpty) return null;
+
+    _fileBytesCache.put(path, bytes, bytesWeight: bytes.length);
+    return bytes;
+  }
+
+  // ===== LRU (바이트 예산) =====
+  static const int _pngCacheBudgetBytes = 120 * 1024 * 1024; // 120MB
+  late final ByteLruCache<int, Uint8List> _pngCacheLru =
+      ByteLruCache<int, Uint8List>(maxBytes: _pngCacheBudgetBytes);
+
+  // ===== Prefetch queue (동시성 제한) =====
+  final List<int> _prefetchQueue = <int>[];
+  final Set<int> _prefetchQueued = <int>{};
+  int _prefetchRunning = 0;
+  static const int _prefetchConcurrency = 2;
+
+  // PageView 방향 추정(옵션)
+  int _lastPageForDirection = 1;
 
   @override
   void initState() {
@@ -761,6 +1263,9 @@ class _PngPageState extends State<PngPage> {
     _paginateDebounce?.cancel();
     _zoomCtrl.dispose();
     _pageCtrl.dispose();
+    _exportInFlight.clear();
+    _exportPngCacheLru.clear();
+    _fileBytesCache.clear();
     _disposeImages();
     super.dispose();
   }
@@ -844,7 +1349,7 @@ class _PngPageState extends State<PngPage> {
         if (epoch != _paginateEpoch) return;
         if (b is _ImageBlock) {
           if (_imageSizeCache.containsKey(b.src)) continue;
-          final img = await _loadImage(b.src);
+          final img = await _loadImage(b.src, targetWidthPx: 256);
           if (epoch != _paginateEpoch) return;
           if (img != null) {
             _imageSizeCache[b.src] = Size(
@@ -863,9 +1368,16 @@ class _PngPageState extends State<PngPage> {
           height: widget.lineHeight,
           letterSpacing: widget.letterSpacing,
           fontFamily: widget.fontFamily,
+          fontFamilyFallback: const [
+            'Apple SD Gothic Neo', // iOS 한글
+            'Noto Sans KR',
+            'Roboto',
+            'sans-serif',
+          ],
           color: widget.defaultTextColor,
           fontWeight: FontWeight.w400,
         ),
+
         contentWidth: contentW,
         contentHeight: contentH,
         imageSizes: _imageSizeCache,
@@ -884,11 +1396,7 @@ class _PngPageState extends State<PngPage> {
 
       // UX: 첫/다음 페이지를 미리 렌더 캐시
       await _ensurePngForPage(1);
-      if (epoch != _paginateEpoch) return;
-      if (_pagesCount >= 2) {
-        // ignore: unawaited_futures
-        _ensurePngForPage(2);
-      }
+      _enqueuePrefetchNear(1, [2, 3, 4]); // 초기 진입 체감 개선
     } finally {
       if (mounted && epoch == _paginateEpoch) {
         _paginating = false;
@@ -898,29 +1406,40 @@ class _PngPageState extends State<PngPage> {
   }
 
   // ---------------------------
-  // 이미지 로딩(로컬/네트워크)
+  // 이미지 로딩(로컬/네트워크) - 다운스케일 디코드 지원
   // ---------------------------
-  Future<ui.Image?> _loadImage(String src) async {
-    final cached = _imageCache[src];
+
+  // 기존: LruCache<String, ui.Image> _imageCache 유지
+  // 단, key를 src@wNNN로 나눠서 캐시 충돌 방지
+  String _imgKey(String src, int? w) => w == null ? src : '$src@w$w';
+
+  Future<ui.Image?> _loadImage(String src, {int? targetWidthPx}) async {
+    final key = _imgKey(src, targetWidthPx);
+
+    final cached = _imageCache.get(key);
     if (cached != null) return cached;
 
     try {
       Uint8List bytes;
 
       if (src.startsWith('http://') || src.startsWith('https://')) {
-        // 네트워크는 여기서 직접 요청하지 않습니다.
-        return null;
+        return null; // 현재 정책 유지
       } else {
-        final f = File(src);
-        if (!await f.exists()) return null;
-        bytes = await f.readAsBytes();
+        final b = await _readFileBytesCached(src);
+        if (b == null) return null;
+        bytes = b;
       }
 
-      final completer = Completer<ui.Image>();
-      ui.decodeImageFromList(bytes, (img) => completer.complete(img));
-      final img = await completer.future;
-      _imageCache[src] = img;
-      return img;
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: targetWidthPx,
+      );
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+
+      final imgObj = frame.image;
+      _imageCache.put(key, imgObj, onEvict: (k, v) => v.dispose());
+      return imgObj;
     } catch (_) {
       return null;
     }
@@ -929,16 +1448,148 @@ class _PngPageState extends State<PngPage> {
   // ---------------------------
   // 페이지 렌더 -> PNG bytes
   // ---------------------------
-  Future<Uint8List> _ensurePngForPage(int pageNumber) async {
-    final cached = _pngCache[pageNumber];
-    if (cached != null) return cached;
+
+  Future<Uint8List> _ensurePngForPage(int pageNumber) {
+    if (_pages.isEmpty) return Future.value(Uint8List(0));
+    final cached = _pngCacheLru.get(pageNumber);
+    if (cached != null) {
+      return Future.value(cached);
+    }
+
+    final inflight = _pngInFlight[pageNumber];
+    if (inflight != null) return inflight;
+
+    final fut = _renderPngForPage(pageNumber).whenComplete(() {
+      _pngInFlight.remove(pageNumber);
+    });
+
+    _pngInFlight[pageNumber] = fut;
+    return fut;
+  }
+
+  Future<Uint8List> _renderPngForPage(int pageNumber) async {
+    final int epoch = _paginateEpoch; // ✅ 렌더 시작 시점
+
+    final bytes = await _renderPngForPageWithScale(
+      pageNumber,
+      _previewRenderScale,
+    );
+
+    if (bytes.isEmpty) return bytes;
+
+    // ✅ 리셋/스타일 변경 이후라면 결과 버림
+    if (!mounted || epoch != _paginateEpoch) {
+      return Uint8List(0);
+    }
+
+    _pngCacheLru.put(pageNumber, bytes, bytesWeight: bytes.length);
+
+    return bytes;
+  }
+
+  // ===== EXPORT PNG cache (고해상도 공유/저장용) =====
+  static const int _exportPngCacheBudgetBytes = 90 * 1024 * 1024; // 90MB
+  late final ByteLruCache<int, Uint8List> _exportPngCacheLru =
+      ByteLruCache<int, Uint8List>(maxBytes: _exportPngCacheBudgetBytes);
+
+  Future<Uint8List> _renderExportPngForPage(int pageNumber) {
+    if (_pages.isEmpty) return Future.value(Uint8List(0));
+
+    // ✅ 1) export 캐시 먼저 조회
+    final cached = _exportPngCacheLru.get(pageNumber);
+    if (cached != null) return Future.value(cached);
+
+    // ✅ 2) inflight 재사용
+    final inflight = _exportInFlight[pageNumber];
+    if (inflight != null) return inflight;
+
+    final int epoch = _paginateEpoch;
+
+    final fut = _renderPngForPageWithScale(pageNumber, _exportRenderScale)
+        .then((bytes) {
+          // ✅ 리셋/스타일 변경 이후 결과는 버림
+          if (!mounted || epoch != _paginateEpoch) return Uint8List(0);
+          if (bytes.isEmpty) return bytes;
+
+          // ✅ 3) export 캐시에 저장
+          _exportPngCacheLru.put(pageNumber, bytes, bytesWeight: bytes.length);
+
+          return bytes;
+        })
+        .whenComplete(() {
+          _exportInFlight.remove(pageNumber);
+        });
+
+    _exportInFlight[pageNumber] = fut;
+    return fut;
+  }
+
+  Future<Uint8List> _ensureThumbForPage(int pageNumber) {
+    final cached = _thumbCacheLru.get(pageNumber);
+    if (cached != null) {
+      return Future.value(cached);
+    }
+
+    final inflight = _thumbInFlight[pageNumber];
+    if (inflight != null) return inflight;
+
+    final fut = _renderPngForPageWithScale(pageNumber, _thumbRenderScale)
+        .then((bytes) {
+          // ✅ 빈 결과는 캐시하지 않음
+          if (bytes.isNotEmpty) {
+            _thumbCacheLru.put(pageNumber, bytes);
+          }
+          return bytes;
+        })
+        .whenComplete(() {
+          _thumbInFlight.remove(pageNumber);
+        });
+
+    _thumbInFlight[pageNumber] = fut;
+    return fut;
+  }
+
+  Set<String> _collectImageSrcsFromPlan(_PagePlan plan) {
+    final srcs = <String>{};
+    for (final cmd in plan.commands) {
+      if (cmd is _ImageDrawCommand) {
+        srcs.add(cmd.src);
+      }
+    }
+    return srcs;
+  }
+
+  Future<void> _preloadImagesForPlan(_PagePlan plan, double scale) async {
+    final srcs = _collectImageSrcsFromPlan(plan);
+    if (srcs.isEmpty) return;
+
+    final double contentW = _pageWidthPx - widget.horizontalMargin * 2;
+    final int targetPx = (contentW * scale).round().clamp(64, 4096);
+
+    final tasks = <Future<void> Function()>[
+      for (final src in srcs)
+        () async {
+          await _loadImage(src, targetWidthPx: targetPx);
+        },
+    ];
+
+    // ✅ 페이지 내부 프리로드는 2 정도가 안전(메모리 피크 억제)
+    await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
+  }
+
+  Future<Uint8List> _renderPngForPageWithScale(
+    int pageNumber,
+    double scale,
+  ) async {
     if (_pages.isEmpty) return Uint8List(0);
 
     final idx = (pageNumber - 1).clamp(0, _pages.length - 1);
     final plan = _pages[idx];
 
-    final int outW = (_pageWidthPx * widget.renderScale).round();
-    final int outH = (_pageHeightPx * widget.renderScale).round();
+    await _preloadImagesForPlan(plan, scale);
+
+    final int outW = (_pageWidthPx * scale).round();
+    final int outH = (_pageHeightPx * scale).round();
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -950,20 +1601,19 @@ class _PngPageState extends State<PngPage> {
       bgPaint,
     );
 
-    // 캔버스 스케일 다운(아래는 논리 px 기준)
-    canvas.scale(widget.renderScale, widget.renderScale);
+    canvas.scale(scale, scale);
 
     final origin = Offset(widget.horizontalMargin, widget.verticalMargin);
 
-    // 각 드로우 커맨드 실행
     for (final cmd in plan.commands) {
       await cmd.paint(
         canvas: canvas,
         origin: origin,
-        loadImage: _loadImage,
+        loadImage: _loadImage, // ✅ 새 시그니처
         maxImageHeight:
             (_pageHeightPx - widget.verticalMargin * 2) *
             widget.maxImageHeightRatio,
+        renderScale: scale, // ✅ 추가
       );
     }
 
@@ -974,26 +1624,32 @@ class _PngPageState extends State<PngPage> {
     }
 
     final img = await picture.toImage(outW, outH);
-
+    picture.dispose();
     final bd = await img.toByteData(format: ui.ImageByteFormat.png);
     img.dispose();
 
-    final bytes = bd?.buffer.asUint8List() ?? Uint8List(0);
-    _pngCache[pageNumber] = bytes;
-    return bytes;
+    return bd?.buffer.asUint8List() ?? Uint8List(0);
   }
 
-  Uint8List _pngToJpg(Uint8List pngBytes, {int quality = 92}) {
+  static Uint8List _pngToJpgSync(Uint8List pngBytes, int quality) {
     final decoded = img.decodeImage(pngBytes);
     if (decoded == null) return Uint8List(0);
     return Uint8List.fromList(img.encodeJpg(decoded, quality: quality));
+  }
+
+  Future<Uint8List> _pngToJpgInIsolate(
+    Uint8List pngBytes, {
+    int quality = 92,
+  }) async {
+    if (pngBytes.isEmpty) return Uint8List(0);
+    return Isolate.run(() => _pngToJpgSync(pngBytes, quality));
   }
 
   Future<Uint8List> _buildPdfFromPages(List<int> pages) async {
     final doc = pw.Document();
 
     for (final pg in pages) {
-      final pngBytes = await _ensurePngForPage(pg);
+      final pngBytes = await _renderExportPngForPage(pg);
       if (pngBytes.isEmpty) continue;
 
       doc.addPage(
@@ -1039,23 +1695,34 @@ class _PngPageState extends State<PngPage> {
     _incLoading();
     try {
       final base = _safeFileName(widget.title);
-
       final docs = await getApplicationDocumentsDirectory();
       final folder = Directory(p.join(docs.path, '${base}_png'));
       if (!await folder.exists()) {
         await folder.create(recursive: true);
       }
 
+      final tasks = <Future<void> Function()>[];
+
       for (int i = 1; i <= _pagesCount; i++) {
-        final bytes = await _ensurePngForPage(i);
-        final name = '${base}_${i.toString().padLeft(3, '0')}.png';
-        final file = File(p.join(folder.path, name));
-        await file.writeAsBytes(bytes, flush: true);
+        final pg = i; // ✅ 캡처 고정
+        tasks.add(() async {
+          final bytes = await _renderExportPngForPage(pg);
+          if (bytes.isEmpty) return;
+
+          final name = '${base}_${i.toString().padLeft(3, '0')}.png';
+          final file = File(p.join(folder.path, name));
+          await file.writeAsBytes(bytes, flush: true);
+        });
       }
 
+      // ✅ 동시성 2 추천 (메모리 안정적)
+      await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
+
       if (!mounted) return;
-    } catch (e) {
+      AppToast.show(context, '저장 완료\n${folder.path}');
+    } catch (_) {
       if (!mounted) return;
+      AppToast.show(context, '저장 실패');
     } finally {
       _decLoading();
     }
@@ -1065,7 +1732,6 @@ class _PngPageState extends State<PngPage> {
     if (_isLoading) return;
     if (_pages.isEmpty) return;
 
-    // ✅ async gap 전에 sharePositionOrigin을 확보해서 경고 제거
     final box = context.findRenderObject() as RenderBox?;
     final shareOrigin =
         box == null ? null : (box.localToGlobal(Offset.zero) & box.size);
@@ -1080,16 +1746,29 @@ class _PngPageState extends State<PngPage> {
     if (pick == null) return;
     if (!mounted) return;
 
-    List<int> pages = [];
-    for (int i = pick.startPage; i <= pick.endPage; i++) {
-      pages.add(i);
-    }
+    final pages = <int>[for (int i = pick.startPage; i <= pick.endPage; i++) i];
 
     _incLoading();
     try {
       final base = _safeFileName(widget.title);
 
+      // 포맷별 토스트 문구
+      final String formatLabel;
+      switch (pick.format) {
+        case ShareFormat.pdf:
+          formatLabel = 'PDF 공유 완료';
+          break;
+        case ShareFormat.png:
+          formatLabel = 'PNG 공유 완료';
+          break;
+        case ShareFormat.jpg:
+          formatLabel = 'JPG 공유 완료';
+          break;
+      }
+
+      // =========================
       // PDF
+      // =========================
       if (pick.format == ShareFormat.pdf) {
         final pdfBytes = await _buildPdfFromPages(pages);
         final file = await _writeBytesToTemp(
@@ -1109,43 +1788,75 @@ class _PngPageState extends State<PngPage> {
           text: widget.title,
           sharePositionOrigin: shareOrigin,
         );
+
+        if (!mounted) return;
+        AppToast.show(context, formatLabel);
         return;
       }
 
-      // PNG / JPG (여러 장이면 여러 파일로 공유)
-      final files = <XFile>[];
+      // =========================
+      // PNG / JPG
+      // =========================
+      final tasks = <Future<XFile?> Function()>[];
+
       for (final pg in pages) {
-        final pngBytes = await _ensurePngForPage(pg);
-        if (pngBytes.isEmpty) continue;
+        tasks.add(() async {
+          final pngBytes = await _renderExportPngForPage(pg);
+          if (pngBytes.isEmpty) return null;
 
-        if (pick.format == ShareFormat.png) {
-          final name = '${base}_${pg.toString().padLeft(3, '0')}.png';
-          final f = await _writeBytesToTemp(bytes: pngBytes, fileName: name);
-          files.add(
-            XFile(f.path, mimeType: 'image/png', name: p.basename(f.path)),
-          );
-        } else {
-          final jpgBytes = _pngToJpg(pngBytes);
-          if (jpgBytes.isEmpty) continue;
+          if (pick.format == ShareFormat.png) {
+            final name = '${base}_${pg.toString().padLeft(3, '0')}.png';
+            final f = await _writeBytesToTemp(bytes: pngBytes, fileName: name);
+            return XFile(
+              f.path,
+              mimeType: 'image/png',
+              name: p.basename(f.path),
+            );
+          } else {
+            final jpgBytes = await _pngToJpgInIsolate(pngBytes); // ✅ isolate
+            if (jpgBytes.isEmpty) return null;
 
-          final name = '${base}_${pg.toString().padLeft(3, '0')}.jpg';
-          final f = await _writeBytesToTemp(bytes: jpgBytes, fileName: name);
-          files.add(
-            XFile(f.path, mimeType: 'image/jpeg', name: p.basename(f.path)),
-          );
-        }
+            final name = '${base}_${pg.toString().padLeft(3, '0')}.jpg';
+            final f = await _writeBytesToTemp(bytes: jpgBytes, fileName: name);
+            return XFile(
+              f.path,
+              mimeType: 'image/jpeg',
+              name: p.basename(f.path),
+            );
+          }
+        });
       }
 
+      // ✅ JPG는 CPU/메모리 부담 → 2가 안전, PNG만이면 3도 가능
+      final concurrency = (pick.format == ShareFormat.jpg) ? 2 : 3;
+
+      final xfiles = await _runWithConcurrency<XFile?>(
+        tasks: tasks,
+        concurrency: concurrency,
+      );
+
+      final files = <XFile>[
+        for (final xf in xfiles)
+          if (xf != null) xf,
+      ];
+
       if (!mounted) return;
-      if (files.isEmpty) return;
+      if (files.isEmpty) {
+        AppToast.show(context, '공유할 파일이 없습니다');
+        return;
+      }
 
       await Share.shareXFiles(
         files,
         text: widget.title,
         sharePositionOrigin: shareOrigin,
       );
+
+      if (!mounted) return;
+      AppToast.show(context, formatLabel);
     } catch (_) {
-      // 필요하면 AppToast
+      if (!mounted) return;
+      AppToast.show(context, '공유 실패');
     } finally {
       _decLoading();
     }
@@ -1203,6 +1914,9 @@ class _PngPageState extends State<PngPage> {
         _pageWidthPx = maxCardWidth;
         _pageHeightPx = maxCardWidth * 297 / 210; // A4 ratio
 
+        final dpr = MediaQuery.of(context).devicePixelRatio;
+        _previewRenderScale = (dpr * 1.1).clamp(1.2, 3.5);
+
         // 폭 변화 감지
         final prevW = _lastLayoutWidth;
         _lastLayoutWidth = maxCardWidth;
@@ -1232,16 +1946,39 @@ class _PngPageState extends State<PngPage> {
             children: [
               PageView.builder(
                 controller: _pageCtrl,
+
+                physics:
+                    _isSliderDragging
+                        ? const NeverScrollableScrollPhysics()
+                        : const BouncingScrollPhysics(),
+
                 itemCount: _pagesCount,
                 onPageChanged: (index) {
                   _resetZoom();
-                  setState(() => _page = index + 1);
-                  final next = index + 2;
-                  if (next <= _pagesCount) {
-                    // ignore: unawaited_futures
-                    _ensurePngForPage(next);
-                  }
+                  final newPage = index + 1;
+
+                  setState(() {
+                    _page = newPage;
+
+                    // ✅ 드래그 중이면 슬라이더 표시값도 같이 맞춤
+                    if (_isSliderDragging) {
+                      _lastPreviewPage = newPage;
+                      _sliderDragValue = newPage.toDouble();
+                    }
+                  });
+
+                  final dir = (newPage - _lastPageForDirection).sign;
+                  _lastPageForDirection = newPage;
+
+                  final pages = <int>[newPage - 1, newPage + 1];
+
+                  // 옵션: 방향이 있으면 +2까지
+                  if (dir > 0) pages.add(newPage + 2);
+                  if (dir < 0) pages.add(newPage - 2);
+
+                  _enqueuePrefetchNear(newPage, pages);
                 },
+
                 itemBuilder: (context, index) {
                   final pageNumber = index + 1;
 
@@ -1359,6 +2096,22 @@ class _PngPageState extends State<PngPage> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              // ===== 슬라이더 바(하단 pill 바 바로 위) =====
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: _controlBottom + 60, // pill 바 위로 살짝 띄움(필요시 조절)
+                child: IgnorePointer(
+                  ignoring: _isLoading || _pages.isEmpty, // 로딩/빈페이지면 입력 막기
+                  child: Opacity(
+                    opacity: (_isLoading || _pages.isEmpty) ? 0.35 : 1.0,
+                    child: _pageSliderBar(
+                      maxCardWidth: maxCardWidth,
+                      cardHeight: cardHeight,
+                    ),
+                  ),
                 ),
               ),
 
@@ -1809,13 +2562,214 @@ class _CanvasLayoutEngine {
   final Map<String, Size> imageSizes;
   final double maxImageHeight;
 
+  // ===== Measure cache (pagination) =====
+  final Map<int, double> _sliceHeightCache = <int, double>{};
+
+  // ===== Soft-wrap helpers (ZWSP) =====
+  static const String _zwsp = '\u200B';
+
+  // URL/영단어에서 자연스러운 분기점이 될만한 문자들 뒤에 ZWSP 삽입
+  static const String _urlBreakAfterChars = r'/:?&=#._-~%+@';
+
+  // "공백이 전혀 없는" 토큰이 너무 길면, N grapheme마다 ZWSP 삽입
+  static const int _hardTokenGraphemeThreshold = 28;
+  static const int _hardTokenInsertEvery = 8;
+
+  bool _isWhitespaceChar(String ch) => RegExp(r'\s').hasMatch(ch);
+
+  // 이미 ZWSP가 들어있으면 중복 삽입 방지 위해 먼저 제거
+  String _stripZwsp(String s) => s.replaceAll(_zwsp, '');
+
+  bool _looksLikeUrl(String token) {
+    final t = token.toLowerCase();
+    return t.startsWith('http://') ||
+        t.startsWith('https://') ||
+        t.startsWith('www.') ||
+        t.contains('://');
+  }
+
+  int _sliceMeasureKey(_LineSlice s, TextStyle baseStyle, double innerW) {
+    int h = Object.hash(
+      baseStyle.fontSize,
+      baseStyle.height,
+      baseStyle.letterSpacing,
+      baseStyle.fontFamily,
+      baseStyle.fontWeight,
+      s.align,
+      innerW.round(), // 폭이 바뀌면 재측정 필요
+    );
+
+    for (final r in s.runs) {
+      h = Object.hash(
+        h,
+        r.text,
+        r.inline.bold,
+        r.inline.italic,
+        r.inline.underline,
+        r.inline.strike,
+        r.inline.color?.toARGB32(),
+        r.inline.background?.toARGB32(),
+        r.inline.sizePt,
+      );
+    }
+    return h;
+  }
+
+  /// token 내부에 줄바꿈 힌트(ZWSP)를 삽입한 문자열을 반환
+  String _softWrapToken(String token) {
+    token = _stripZwsp(token);
+    if (token.isEmpty) return token;
+
+    final chars = token.characters;
+    final gCount = chars.length;
+
+    // 1) URL-ish: '/', '?', '&', '=', '.', '_' 등 뒤에 ZWSP 삽입
+    if (_looksLikeUrl(token)) {
+      final out = StringBuffer();
+      for (final g in chars) {
+        out.write(g);
+        if (g.length == 1 && _urlBreakAfterChars.contains(g)) {
+          out.write(_zwsp);
+        }
+      }
+      return out.toString();
+    }
+
+    // 2) 공백/구두점이 거의 없는 긴 토큰: 일정 간격으로 ZWSP 삽입
+    // (이모지도 characters 단위로 안전)
+    if (gCount >= _hardTokenGraphemeThreshold) {
+      final out = StringBuffer();
+      int i = 0;
+      for (final g in chars) {
+        out.write(g);
+        i++;
+
+        // CamelCase/숫자 전환도 분기점으로 쓰면 보기 좋음 (옵션)
+        // 여기서는 최소한의 규칙만: 일정 간격
+        if (i % _hardTokenInsertEvery == 0) {
+          out.write(_zwsp);
+        }
+      }
+      return out.toString();
+    }
+
+    return token;
+  }
+
+  /// runs 전체에서 "공백 없는 긴 토큰"에 ZWSP를 삽입한 runs를 반환
+  List<_Run> _softWrapRuns(List<_Run> runs) {
+    final out = <_Run>[];
+
+    for (final r in runs) {
+      final raw = _stripZwsp(r.text);
+
+      // 빠른 탈출: 길이가 짧으면 그대로
+      if (raw.length < _hardTokenGraphemeThreshold) {
+        out.add(r.text == raw ? r : _Run(text: raw, inline: r.inline));
+        continue;
+      }
+
+      // 공백을 보존하면서 토큰 단위로 처리
+      final buf = StringBuffer();
+      final sb = StringBuffer();
+
+      void flushToken() {
+        if (sb.isEmpty) return;
+        final token = sb.toString();
+        sb.clear();
+        buf.write(_softWrapToken(token));
+      }
+
+      for (final g in raw.characters) {
+        if (_isWhitespaceChar(g)) {
+          flushToken();
+          buf.write(g); // 공백은 그대로
+        } else {
+          sb.write(g);
+        }
+      }
+      flushToken();
+
+      final cooked = buf.toString();
+      out.add(cooked == r.text ? r : _Run(text: cooked, inline: r.inline));
+    }
+
+    return out;
+  }
+
+  /// cutOffset(UTF-16 index)을 기준으로, 뒤로 탐색해서 "공백/구두점" 경계로 컷을 이동
+  /// - 공백류: 그 공백 "앞"에서 끊음(다음 페이지 선행 공백 제거)
+  /// - 구두점류: 구두점 "뒤"에서 끊음
+  int _snapCutToNiceBoundary(
+    String text,
+    int cutOffset, {
+    int lookBack = 48, // 너무 많이 뒤로 당기면 페이지 낭비 -> 적당히
+  }) {
+    if (cutOffset <= 0) return 0;
+    if (text.isEmpty) return cutOffset;
+    if (cutOffset > text.length) cutOffset = text.length;
+
+    bool isWhitespace(String ch) => RegExp(r'\s').hasMatch(ch) || ch == _zwsp;
+
+    bool isPunct(String ch) {
+      // 라틴 + 한글 문장부호 + 괄호/따옴표 일부
+      const punct =
+          '.,!?;:…·。！？、'
+          ')]}’”"\''
+          '—–-';
+      return punct.contains(ch);
+    }
+
+    final start = math.max(0, cutOffset - lookBack);
+    for (int i = cutOffset - 1; i >= start; i--) {
+      final ch = text[i];
+
+      if (isWhitespace(ch)) {
+        // 공백 바로 앞에서 끊기(공백은 다음 페이지에서 제거할 예정)
+        return i;
+      }
+      if (isPunct(ch)) {
+        // 구두점 뒤에서 끊기
+        return i + 1;
+      }
+    }
+
+    return cutOffset; // 못 찾으면 원래 컷 유지
+  }
+
+  List<_Run> _trimLeadingWhitespaceRuns(List<_Run> runs) {
+    final out = <_Run>[];
+    bool trimming = true;
+
+    for (final r in runs) {
+      if (!trimming) {
+        out.add(r);
+        continue;
+      }
+
+      // ✅ 선행 공백 + 선행 ZWSP 제거
+      final s = r.text;
+      final trimmed = s.replaceFirst(RegExp(r'^[\s\u200B]+'), '');
+
+      if (trimmed.isEmpty) {
+        continue;
+      }
+
+      out.add(_Run(text: trimmed, inline: r.inline));
+      trimming = false;
+    }
+
+    return out;
+  }
+
   List<_LineSlice> _buildSlicesFromBlock(_ParagraphBlock b) {
-    // 각 _Line은 이미 style.align을 가지고 있으므로 그걸 그대로 사용
     final out = <_LineSlice>[];
 
     for (final line in b.lines) {
-      // 빈 줄도 "한 줄"로 유지해야 마지막 줄 정렬만 바꾸는 케이스가 정확히 재현됨
-      out.add(_LineSlice(runs: line.runs, align: line.style.align));
+      // ✅ 여기서 긴 토큰 soft wrap(ZWSP) 적용
+      final cookedRuns = _softWrapRuns(line.runs);
+
+      out.add(_LineSlice(runs: cookedRuns, align: line.style.align));
     }
     return out;
   }
@@ -1839,17 +2793,24 @@ class _CanvasLayoutEngine {
   }
 
   double _measureSliceHeight(_LineSlice s, TextStyle baseStyle, double innerW) {
+    final key = _sliceMeasureKey(s, baseStyle, innerW);
+    final cached = _sliceHeightCache[key];
+    if (cached != null) return cached;
+
     final tp = _buildTextPainterForRuns(s.runs, baseStyle, s.align);
     tp.layout(maxWidth: innerW);
 
-    // ✅ 완전 빈 줄도 높이를 0으로 만들면 “중간 빈 줄”이 사라져서 레이아웃이 달라짐
-    // 최소 높이를 한 줄(lineHeight 반영)로 잡아줌
-    if (tp.height <= 0.1) {
+    double h = tp.height;
+
+    // 빈 줄 높이 보정(기존 로직 유지)
+    if (h <= 0.1) {
       final fs = baseStyle.fontSize ?? 15.0;
       final lh = (baseStyle.height ?? 1.0);
-      return (fs * lh);
+      h = (fs * lh);
     }
-    return tp.height;
+
+    _sliceHeightCache[key] = h;
+    return h;
   }
 
   bool _isEmptyParagraphBlock(_ParagraphBlock b) {
@@ -1866,6 +2827,7 @@ class _CanvasLayoutEngine {
   }
 
   Future<List<_PagePlan>> paginate(List<_Block> blocks) async {
+    _sliceHeightCache.clear();
     final pages = <_PagePlan>[];
     var current = _PagePlan(commands: []);
     double y = 0;
@@ -2010,9 +2972,14 @@ class _CanvasLayoutEngine {
             int cut = _cutOffsetByLineMetrics(tp, canUse, innerW);
             if (cut <= 0) cut = 1;
 
+            // ✅ 자연스러운 경계로 컷 보정(공백/구두점 뒤로 탐색)
+            final flatText = s.runs.map((e) => e.text).join();
+            cut = _snapCutToNiceBoundary(flatText, cut, lookBack: 32);
+            if (cut <= 0) cut = 1;
+
             final split = _RunSplitter.split(s.runs, cut);
             final headRuns = split.$1;
-            final tailRuns = split.$2;
+            final tailRuns = _trimLeadingWhitespaceRuns(split.$2);
 
             current.commands.add(
               _ParagraphDrawCommand(
@@ -2133,8 +3100,23 @@ sealed class _DrawCommand {
   Future<void> paint({
     required Canvas canvas,
     required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
+    required Future<ui.Image?> Function(String src, {int? targetWidthPx})
+    loadImage,
     required double maxImageHeight,
+    required double renderScale, // ✅ 추가
+  });
+}
+
+class _PreparedLine {
+  final TextPainter tp;
+  final double height;
+  final bool visible;
+  final TextAlign align;
+  const _PreparedLine({
+    required this.tp,
+    required this.height,
+    required this.visible,
+    required this.align,
   });
 }
 
@@ -2159,65 +3141,33 @@ class _ParagraphDrawCommand extends _DrawCommand {
   final String? markerText;
   final bool isListContinuation;
 
-  double _firstVisibleFontSize(List<_LineSlice> lines, TextStyle baseStyle) {
-    for (final line in lines) {
-      for (final r in line.runs) {
-        final s = r.text;
-        final trimmed = s.replaceAll('\n', '').trim();
-        if (trimmed.isEmpty) continue;
+  // ===== Cached layout =====
+  List<_PreparedLine>? _prepared;
+  double? _totalHCache;
+  double? _firstVisibleFontSizeCache;
 
-        final applied = r.inline.applyTo(baseStyle);
-        final fs = applied.fontSize;
-        if (fs != null && fs.isFinite && fs > 0) return fs;
-      }
-    }
-    return (baseStyle.fontSize ?? 15.0);
-  }
+  // ------------------------
+  // Prepare (TextPainter / Span 생성 1회)
+  // ------------------------
+  void _prepareIfNeeded() {
+    if (_prepared != null) return;
 
-  double _markerFontSizeForBlock({
-    required double textFontSize,
-    required _BlockStyle blockStyle,
-  }) {
-    double scale = 0.95;
-
-    // 헤더는 텍스트가 커서 마커가 과하게 커지지 않게 살짝 줄임
-    if (blockStyle.header >= 1) scale = 0.80;
-
-    // 코드블록은 너무 작아지지 않게
-    if (blockStyle.codeBlock) scale = 0.92;
-
-    return (textFontSize * scale).clamp(10.0, 42.0);
-  }
-
-  @override
-  Future<void> paint({
-    required Canvas canvas,
-    required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
-    required double maxImageHeight,
-  }) async {
-    final isList = blockStyle.listType != _ListType.none;
-
-    final y0 = origin.dy + y + padding.topDecoration;
-    final contentW = width + padding.left + padding.right;
-
-    // ✅ 전체 높이 계산 (데코 rect용)
+    final prepared = <_PreparedLine>[];
     double totalH = 0;
-    final tps = <TextPainter>[];
-    final heights = <double>[];
-    final hasVisibleLine = <bool>[];
 
     for (final line in lines) {
+      final span = TextSpan(
+        children: [
+          for (final r in line.runs)
+            TextSpan(
+              text: _sanitizeUtf16(r.text),
+              style: r.inline.applyTo(baseStyle),
+            ),
+        ],
+      );
+
       final tp = TextPainter(
-        text: TextSpan(
-          children: [
-            for (final r in line.runs)
-              TextSpan(
-                text: _sanitizeUtf16(r.text),
-                style: r.inline.applyTo(baseStyle),
-              ),
-          ],
-        ),
+        text: span,
         textAlign: line.align,
         textDirection: TextDirection.ltr,
         textWidthBasis: TextWidthBasis.parent,
@@ -2228,19 +3178,70 @@ class _ParagraphDrawCommand extends _DrawCommand {
         (r) => r.text.replaceAll('\n', '').trim().isNotEmpty,
       );
 
-      // ✅ 빈 줄 높이 보정(빈 줄이 사라지면 에디터랑 달라짐)
+      // 빈 줄 높이 보정
       if (h <= 0.1) {
         final fs = baseStyle.fontSize ?? 15.0;
         final lh = (baseStyle.height ?? 1.0);
-        h = (fs * lh);
+        h = fs * lh;
       }
 
-      tps.add(tp);
-      heights.add(h);
-      hasVisibleLine.add(visible);
+      prepared.add(
+        _PreparedLine(tp: tp, height: h, visible: visible, align: line.align),
+      );
+
       totalH += h;
     }
 
+    _prepared = prepared;
+    _totalHCache = totalH;
+    _firstVisibleFontSizeCache = _computeFirstVisibleFontSize();
+  }
+
+  double _computeFirstVisibleFontSize() {
+    for (final line in lines) {
+      for (final r in line.runs) {
+        final trimmed = r.text.replaceAll('\n', '').trim();
+        if (trimmed.isEmpty) continue;
+
+        final fs = r.inline.applyTo(baseStyle).fontSize;
+        if (fs != null && fs.isFinite && fs > 0) return fs;
+      }
+    }
+    return baseStyle.fontSize ?? 15.0;
+  }
+
+  double _markerFontSizeForBlock({
+    required double textFontSize,
+    required _BlockStyle blockStyle,
+  }) {
+    double scale = 0.95;
+    if (blockStyle.header >= 1) scale = 0.80;
+    if (blockStyle.codeBlock) scale = 0.92;
+    return (textFontSize * scale).clamp(10.0, 42.0);
+  }
+
+  // ------------------------
+  // Paint
+  // ------------------------
+  @override
+  Future<void> paint({
+    required Canvas canvas,
+    required Offset origin,
+    required Future<ui.Image?> Function(String src, {int? targetWidthPx})
+    loadImage,
+    required double maxImageHeight,
+    required double renderScale,
+  }) async {
+    _prepareIfNeeded();
+    final prepared = _prepared!;
+    final totalH = _totalHCache ?? 0.0;
+
+    final isList = blockStyle.listType != _ListType.none;
+
+    final y0 = origin.dy + y + padding.topDecoration;
+    final contentW = width + padding.left + padding.right;
+
+    // ---- decoration rect ----
     final paraRect = Rect.fromLTWH(
       origin.dx,
       origin.dy + y,
@@ -2249,29 +3250,28 @@ class _ParagraphDrawCommand extends _DrawCommand {
     );
     padding.paintDecoration(canvas, paraRect);
 
-    // ✅ 마커는 “첫 번째로 내용이 있는 줄” 기준(없으면 마커 없음)
+    // ---- list marker ----
     if (isList && !isListContinuation) {
       final marker =
-          (blockStyle.listType == _ListType.bullet) ? '•' : (markerText ?? '');
+          blockStyle.listType == _ListType.bullet ? '•' : (markerText ?? '');
 
       if (marker.isNotEmpty) {
         final markerX = origin.dx + padding.listMarkerX;
-
-        final baseFs = _firstVisibleFontSize(lines, baseStyle);
+        final baseFs =
+            _firstVisibleFontSizeCache ?? (baseStyle.fontSize ?? 15.0);
         final markerFs = _markerFontSizeForBlock(
           textFontSize: baseFs,
           blockStyle: blockStyle,
         );
 
-        // 첫 유효 줄의 y 위치 계산
         double lineTop = y0;
         int firstVisibleIdx = -1;
-        for (int i = 0; i < lines.length; i++) {
-          if (hasVisibleLine[i]) {
+        for (int i = 0; i < prepared.length; i++) {
+          if (prepared[i].visible) {
             firstVisibleIdx = i;
             break;
           }
-          lineTop += heights[i];
+          lineTop += prepared[i].height;
         }
 
         if (firstVisibleIdx != -1) {
@@ -2294,28 +3294,24 @@ class _ParagraphDrawCommand extends _DrawCommand {
       }
     }
 
-    // ✅ 텍스트는 줄마다 align에 맞춰 x를 계산해서 paint
+    // ---- text lines ----
     double dy = y0;
     final xBase = origin.dx + padding.left;
 
-    for (int i = 0; i < tps.length; i++) {
-      final tp = tps[i];
-      final align = lines[i].align;
+    for (int i = 0; i < prepared.length; i++) {
+      final tp = prepared[i].tp;
+      final align = prepared[i].align;
 
       double x = xBase;
-
       if (align == TextAlign.center) {
         x = xBase + (width - tp.width) / 2;
       } else if (align == TextAlign.right || align == TextAlign.end) {
         x = xBase + (width - tp.width);
-      } else {
-        // left/start/justify는 xBase
-        x = xBase;
       }
 
       if (!x.isFinite) x = xBase;
       tp.paint(canvas, Offset(x, dy));
-      dy += heights[i];
+      dy += prepared[i].height;
     }
   }
 }
@@ -2330,8 +3326,10 @@ class _HrDrawCommand extends _DrawCommand {
   Future<void> paint({
     required Canvas canvas,
     required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
+    required Future<ui.Image?> Function(String src, {int? targetWidthPx})
+    loadImage,
     required double maxImageHeight,
+    required double renderScale,
   }) async {
     final paint =
         Paint()
@@ -2367,51 +3365,36 @@ class _ImageDrawCommand extends _DrawCommand {
   Future<void> paint({
     required Canvas canvas,
     required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
+    required Future<ui.Image?> Function(String src, {int? targetWidthPx})
+    loadImage,
     required double maxImageHeight,
+    required double renderScale,
   }) async {
-    final img = await loadImage(src);
-    if (img == null) {
-      final r = Rect.fromLTWH(origin.dx, origin.dy + y, width, 140);
-      final border =
-          Paint()
-            ..color = const Color(0xFFBDBDBD)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1;
-      canvas.drawRect(r, border);
+    // ✅ 한 번만 로드: 실제 그려질 폭 * renderScale 기준
+    final int targetPx = (width * renderScale).round().clamp(64, 4096);
 
-      final tp = TextPainter(
-        text: const TextSpan(
-          text: '이미지를 불러올 수 없습니다',
-          style: TextStyle(fontSize: 13, color: Color(0xFF777777)),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: width - 20);
+    final ui.Image? img = await loadImage(src, targetWidthPx: targetPx);
+    if (img == null) return;
 
-      tp.paint(canvas, Offset(r.left + 10, r.top + 10));
-      return;
-    }
-
-    final iw = img.width.toDouble();
-    final ih = img.height.toDouble();
+    final double iw = img.width.toDouble();
+    final double ih = img.height.toDouble();
 
     // 폭은 content width에 맞추고, 높이는 비율 유지
-    final scale = width / iw;
-    double drawH = ih * scale;
     double drawW = width;
+    double drawH = ih * (width / iw);
 
-    // 너무 크면 최대 높이로 축소
+    // 최대 높이 제한
     if (drawH > maxImageHeight) {
-      final s2 = maxImageHeight / drawH;
+      final double s = maxImageHeight / drawH;
       drawH = maxImageHeight;
-      drawW = drawW * s2;
+      drawW = drawW * s;
     }
 
-    final dx = origin.dx + (width - drawW) / 2;
-    final dy = origin.dy + y;
+    final double dx = origin.dx + (width - drawW) / 2;
+    final double dy = origin.dy + y;
 
-    final dst = Rect.fromLTWH(dx, dy, drawW, drawH);
-    final srcRect = Rect.fromLTWH(0, 0, iw, ih);
+    final Rect dst = Rect.fromLTWH(dx, dy, drawW, drawH);
+    final Rect srcRect = Rect.fromLTWH(0, 0, iw, ih);
 
     final paint = Paint()..filterQuality = FilterQuality.high;
     canvas.drawImageRect(img, srcRect, dst, paint);
@@ -2561,6 +3544,17 @@ class _BlockTextStyle {
       fontSize: size,
       fontWeight: (s.header > 0) ? weight : base.fontWeight,
       fontFamily: isCode ? (base.fontFamily ?? 'monospace') : base.fontFamily,
+      fontFamilyFallback:
+          isCode
+              ? const [
+                // iOS
+                'SF Mono',
+                'Menlo',
+                'Courier New',
+                'Roboto Mono',
+                'monospace',
+              ]
+              : base.fontFamilyFallback,
       height: base.height,
     );
   }

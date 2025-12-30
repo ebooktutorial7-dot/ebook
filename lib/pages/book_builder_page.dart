@@ -22,7 +22,7 @@ import 'package:intl/intl.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ebook_tutorial_app/pages/custom_pdf_preview_page.dart';
+import 'package:ebook_tutorial_app/pages/pdf_preview_page.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart';
 import 'package:provider/provider.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
@@ -38,6 +38,10 @@ enum ChapterSort { oldestFirst, newestFirst }
 
 const double kCoverBaseRadius = 13.0;
 const double kCoverBaseWidth = 150.0;
+
+final Color kDialogBarrierColor = const Color(
+  0xFF0F2238,
+).withValues(alpha: 0.13);
 
 double scaledCoverRadius(double width) {
   if (width <= 0) return kCoverBaseRadius;
@@ -890,12 +894,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
     showDialog(
       context: context,
-      barrierColor: const Color.fromARGB(
-        0,
-        81,
-        93,
-        104,
-      ).withValues(alpha: 0.85),
+      barrierColor: kDialogBarrierColor,
       builder: (_) {
         return GestureDetector(
           onTap: () => Navigator.pop(context),
@@ -1535,7 +1534,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     final theme = _glassTheme;
     showDialog(
       context: context,
-      barrierColor: Colors.black12,
+      barrierColor: kDialogBarrierColor,
       builder:
           (_) => Dialog(
             backgroundColor: Colors.transparent,
@@ -2262,7 +2261,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     var useAll = _previewAllChapters;
     showDialog(
       context: context,
-      barrierColor: Colors.black12,
+      barrierColor: kDialogBarrierColor,
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -3659,7 +3658,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       context: context,
       barrierLabel: 'pdf_popup',
       barrierDismissible: true,
-      barrierColor: Colors.black12,
+      barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
+
       transitionDuration: const Duration(milliseconds: 120),
       pageBuilder: (_, __, ___) {
         return SafeArea(

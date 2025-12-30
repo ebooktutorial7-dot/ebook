@@ -11,7 +11,7 @@ import firebase_core
 import firebase_storage
 import google_sign_in_ios
 import path_provider_foundation
-import pdf_render
+import pdf_render_maintained
 import printing
 import quill_native_bridge_macos
 import share_plus

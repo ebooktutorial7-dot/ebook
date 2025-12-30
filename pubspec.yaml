@@ -38,7 +38,7 @@ dependencies:
   # ===== PDF =====
   pdf: ^3.11.0
   printing: ^5.13.4
-  pdf_render: ^1.4.12
+  pdf_render_maintained: ^1.6.1
   image: ^4.2.0
 
   # ===== Media / Layout =====

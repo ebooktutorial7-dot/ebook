@@ -695,7 +695,7 @@ class _ColorButton extends StatelessWidget {
           backgroundColor: Colors.white,
           showDragHandle: true,
 
-          barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.21),
+          barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
 
           builder: (ctx) {
             return SafeArea(
@@ -1096,7 +1096,7 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
   const double popupH = (pad * 2) + (itemH * 2) + gap; // 버튼 2개 + 간격
 
   const Color kPngDimColor = Color(0xFF0F2238);
-  const double kPngDimAlpha = 0.21;
+  const double kPngDimAlpha = 0.16;
 
   late OverlayEntry entry;
 

@@ -119,7 +119,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
     final theme = GlassTheme.fromFlags(reduceTransparency: false);
     showDialog(
       context: context,
-      barrierColor: Colors.black12,
+      barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
       builder:
           (_) => Dialog(
             backgroundColor: Colors.transparent,

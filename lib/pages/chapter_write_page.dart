@@ -227,6 +227,24 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
   }
 
+  Timer? _previewThrottle;
+
+  void _jumpToPagePreview(int page) {
+    if (!_scrollCtrl.hasClients) return;
+
+    _previewThrottle?.cancel();
+    _previewThrottle = Timer(const Duration(milliseconds: 40), () {
+      if (!_scrollCtrl.hasClients) return;
+      final pos = _scrollCtrl.position;
+
+      final int clampedPage = page.clamp(1, _pageCount);
+      final double desired = _a4PageStridePx * (clampedPage - 1);
+      final double target = desired.clamp(0.0, pos.maxScrollExtent);
+
+      _scrollCtrl.jumpTo(target);
+    });
+  }
+
   void _recomputePaginationFromStoredHeight() {
     if (!_scrollCtrl.hasClients) return;
     final pos = _scrollCtrl.position;
@@ -1173,7 +1191,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                           currentPage: _currentPage,
                           pageCount: _pageCount,
                           charCount: _getCharCount(),
-                          onPageChanged: (p) => _jumpToPage(p),
+                          onPageChanged: (p) => _jumpToPage(p), // 끝났을 때 animate
+                          onPagePreviewChanged:
+                              (p) => _jumpToPagePreview(p), // ✅ 드래그 중 jump
                           backgroundColor: Colors.white,
                         ),
                       ),
@@ -1218,6 +1238,7 @@ class _PageJumpBar extends StatefulWidget {
   final int pageCount;
   final int charCount;
   final ValueChanged<int> onPageChanged;
+  final ValueChanged<int>? onPagePreviewChanged;
   final Color backgroundColor;
 
   const _PageJumpBar({
@@ -1225,6 +1246,7 @@ class _PageJumpBar extends StatefulWidget {
     required this.pageCount,
     required this.charCount,
     required this.onPageChanged,
+    this.onPagePreviewChanged,
     required this.backgroundColor,
   });
 
@@ -1284,7 +1306,14 @@ class _PageJumpBarState extends State<_PageJumpBar> {
                             max: pageCount.toDouble(),
                             divisions: pageCount > 1 ? pageCount - 1 : null,
                             value: currentDouble,
-                            onChanged: (v) => setState(() => _dragValue = v),
+                            onChanged: (v) {
+                              final pg = v.round().clamp(1, pageCount);
+
+                              setState(() => _dragValue = v);
+
+                              // ✅ 드래그 중에도 스크롤 이동(미리보기)
+                              widget.onPagePreviewChanged?.call(pg);
+                            },
                             onChangeEnd: (v) {
                               setState(() => _dragValue = null);
                               widget.onPageChanged(v.round());

@@ -13,7 +13,9 @@ class GlassTheme {
   // ✅ 추가: 컬러 관련 속성
   final Color accentColor; // 주요 포인트 (버튼, 체크박스 등)
   final Color textColor; // 일반 텍스트 색
-  final Color cancelColor; // 취소, 닫기 버튼용 보조색
+  final Color cancelColor;
+
+  Color get barrierColor => const Color(0xFF0F2238).withValues(alpha: 0.13);
 
   const GlassTheme({
     required this.reduceTransparency,
@@ -26,7 +28,7 @@ class GlassTheme {
     required this.innerEdgeOpacity,
     this.accentColor = const Color(0xFF64B5F6),
     this.textColor = Colors.black87,
-    this.cancelColor = const Color(0xFF9E9E9E),
+    this.cancelColor = const Color.fromARGB(255, 78, 98, 120),
   });
 
   GlassTheme copyWith({
