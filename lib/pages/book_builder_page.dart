@@ -268,10 +268,13 @@ class _PdfPopupItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final double fontSize;
+
   const _PdfPopupItem({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.fontSize = 14.5,
   });
   @override
   Widget build(BuildContext context) {
@@ -286,10 +289,10 @@ class _PdfPopupItem extends StatelessWidget {
             const SizedBox(width: 10),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 14.5,
+              style: TextStyle(
+                fontSize: fontSize,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1F3A56),
+                color: const Color(0xFF1F3A56),
               ),
             ),
           ],
@@ -309,7 +312,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   final LayerLink _pdfPreviewLink = LayerLink();
   OverlayEntry? _pdfSubmenuEntry;
 
-  OverlayEntry? _pdfExportSubmenuEntry;
   final ValueNotifier<bool> _pdfExportSubmenuOpenVN = ValueNotifier(false);
 
   OverlayEntry? _cloudSubmenuEntry;
@@ -1918,97 +1920,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     overlay.insert(_epubSubmenuEntry!);
   }
 
-  void _hidePdfExportSubmenu() {
-    _pdfExportSubmenuEntry?.remove();
-    _pdfExportSubmenuEntry = null;
-    _pdfExportSubmenuOpenVN.value = false;
-  }
-
   void _hidePdfSubmenu() {
     _pdfSubmenuEntry?.remove();
     _pdfSubmenuEntry = null;
     _measuredSubmenuHeight = null;
     _pdfSubmenuOpenVN.value = false;
-  }
-
-  Future<void> _exportAllEpisodesAsPdf() async {
-    if (_chapters.isEmpty) {
-      if (!mounted) return;
-      AppToast.show(context, '회차가 없습니다');
-      return;
-    }
-    String safeFileName(String name) {
-      final trimmed = name.trim().isEmpty ? 'document' : name.trim();
-      final sanitized = trimmed.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
-    }
-
-    final baseTitle =
-        _titleCtrl.text.trim().isEmpty ? '책' : _titleCtrl.text.trim();
-    final fileName = '${safeFileName('${baseTitle}_전체')}.pdf';
-    try {
-      final bytes = await buildBookPdf(
-        chapters: _chapters,
-        showChapterTitle: true,
-      );
-      if (!mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: fileName);
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(context, 'PDF 내보내기 실패: $e');
-    }
-  }
-
-  Future<void> _exportSelectedEpisodesAsPdf() async {
-    if (_chapters.isEmpty) {
-      if (!mounted) return;
-      AppToast.show(context, '먼저 회차를 추가해 주세요');
-      return;
-    }
-    String safeFileName(String name) {
-      final trimmed = name.trim().isEmpty ? 'document' : name.trim();
-      final sanitized = trimmed.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
-    }
-
-    final allChapters = _chapters;
-    final picked = await showPdfChapterPickerDialog(
-      context: context,
-      chapters: allChapters,
-      glassTheme: GlassTheme.fromFlags(
-        reduceTransparency: _reduceTransparencyFlag,
-      ),
-      barrierColor: Colors.transparent,
-      dialogTitle: 'PDF 내보내기',
-      confirmLabel: '내보내기',
-    );
-    if (picked == null) return;
-    final List<ChapterItem> targetChapters =
-        picked.useAll
-            ? allChapters
-            : picked.selected
-                .map((i) => allChapters[i])
-                .toList(growable: false);
-    if (targetChapters.isEmpty) {
-      if (!mounted) return;
-      AppToast.show(context, '선택된 회차가 없습니다');
-      return;
-    }
-    final baseTitle =
-        _titleCtrl.text.trim().isEmpty ? '책' : _titleCtrl.text.trim();
-    final suffix = picked.useAll ? '_전체' : '_선택';
-    final fileName = '${safeFileName('$baseTitle$suffix')}.pdf';
-    try {
-      final bytes = await buildBookPdf(
-        chapters: targetChapters,
-        showChapterTitle: true,
-      );
-      if (!mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: fileName);
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(context, 'PDF 내보내기 실패: $e');
-    }
   }
 
   static const double _previewPopupWidth = 165;
@@ -2128,7 +2044,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                             const SizedBox(height: 10),
                             _PdfPopupItem(
                               icon: Icons.menu_book_outlined,
-                              label: '전체 회차 미리보기',
+                              label: '전체 회차',
+                              fontSize: 15.5,
                               onTap: () async {
                                 setState(() {
                                   _previewAllChapters = true;
@@ -2145,7 +2062,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                   MaterialPageRoute(
                                     builder:
                                         (_) => CustomPdfPreviewPage(
-                                          title: '전체 회차 미리보기',
+                                          title: '전체 회차',
                                           pdfBytes: bytes,
                                           chapters: _chapters,
                                           reduceTransparency:
@@ -2158,7 +2075,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                             const SizedBox(height: 6),
                             _PdfPopupItem(
                               icon: Icons.checklist_outlined,
-                              label: '선택 회차 미리보기',
+                              label: '선택 회차',
+                              fontSize: 15.5,
                               onTap: () async {
                                 _hidePdfSubmenu();
                                 final allChapters = _chapters;
@@ -2193,7 +2111,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                     MaterialPageRoute(
                                       builder:
                                           (_) => CustomPdfPreviewPage(
-                                            title: '선택 회차 미리보기',
+                                            title: '선택 회차',
                                             pdfBytes: bytes,
                                             chapters: allChapters,
                                             reduceTransparency:
@@ -2205,35 +2123,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                   if (!mounted) return;
                                   AppToast.show(context, 'PDF 생성 실패: $e');
                                 }
-                              },
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 0.5,
-                              width: double.infinity,
-                              color: const ui.Color.fromARGB(
-                                255,
-                                175,
-                                198,
-                                216,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            _PdfPopupItem(
-                              icon: Icons.all_inbox_outlined,
-                              label: '전체 회차 내보내기',
-                              onTap: () async {
-                                _hidePdfExportSubmenu();
-                                await _exportAllEpisodesAsPdf();
-                              },
-                            ),
-                            const SizedBox(height: 6),
-                            _PdfPopupItem(
-                              icon: Icons.checklist_outlined,
-                              label: '선택 회차 내보내기',
-                              onTap: () async {
-                                _hidePdfSubmenu();
-                                await _exportSelectedEpisodesAsPdf();
                               },
                             ),
                           ],
@@ -3630,13 +3519,15 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                           const SizedBox(height: 10),
                           _PdfPopupItem(
                             icon: Icons.image_outlined,
-                            label: 'JPG',
+                            label: '전체 회차',
+                            fontSize: 15.5,
                             onTap: () {},
                           ),
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.image_outlined,
-                            label: 'PNG',
+                            label: '선택 회차',
+                            fontSize: 15.5,
                             onTap: () {},
                           ),
                         ],

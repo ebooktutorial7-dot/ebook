@@ -1910,7 +1910,6 @@ class _PngPageState extends State<PngPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxCardWidth = constraints.maxWidth * 0.95;
-
         _pageWidthPx = maxCardWidth;
         _pageHeightPx = maxCardWidth * 297 / 210; // A4 ratio
 
@@ -2245,14 +2244,12 @@ class _DeltaParser {
     for (final l in lines) {
       if (l.kind == _LineKind.image) {
         current = null;
-
         blocks.add(_ImageBlock(l.imageSource!));
         continue;
       }
 
       if (l.kind == _LineKind.hr) {
         current = null;
-
         blocks.add(_HrBlock(solid: l.hrSolid ?? false));
         continue;
       }
@@ -2260,27 +2257,19 @@ class _DeltaParser {
       final isListLine = l.style.listType != _ListType.none;
 
       if (isListLine) {
-        final key = l.style.groupKeyWithoutAlign();
-
-        // ✅ 같은 리스트(ul/ol) + 같은 indent/header/blockquote/code는 한 블록으로 합치기
-        // (align은 제외되므로, 같은 아이템 내부에서 줄마다 align이 달라도 하나로 유지)
-        if (current == null ||
-            current.style.listType == _ListType.none ||
-            current.style.groupKeyWithoutAlign() != key) {
-          current = _ParagraphBlock(style: l.style);
-          blocks.add(current);
-        }
-
+        // ✅ 리스트는 "한 줄 = 한 아이템" (절대 합치지 않음)
+        current = _ParagraphBlock(style: l.style);
         current.addLine(l);
-      } else {
-        // ✅ 일반 문단은 기존대로 "스타일 완전 동일"일 때만 합치기
-        if (current == null || current.style != l.style) {
-          current = _ParagraphBlock(style: l.style);
-          blocks.add(current);
-        }
-
-        current.addLine(l);
+        blocks.add(current);
+        continue;
       }
+
+      // ✅ 일반 문단은 기존대로 합치기
+      if (current == null || current.style != l.style) {
+        current = _ParagraphBlock(style: l.style);
+        blocks.add(current);
+      }
+      current.addLine(l);
     }
 
     if (blocks.isEmpty) {
@@ -2474,12 +2463,6 @@ class _BlockStyle {
   @override
   int get hashCode =>
       Object.hash(header, align, indent, listType, blockQuote, codeBlock);
-}
-
-extension _BlockStyleGroupKey on _BlockStyle {
-  // ✅ align 제외: 같은 리스트 아이템 덩어리로 묶기 위한 키
-  Object groupKeyWithoutAlign() =>
-      Object.hash(header, indent, listType, blockQuote, codeBlock);
 }
 
 enum _ListType { none, bullet, ordered }
@@ -2845,18 +2828,32 @@ class _CanvasLayoutEngine {
 
     for (final b in blocks) {
       // ---------------- HR ----------------
+      // ---------------- HR ----------------
       if (b is _HrBlock) {
-        // HR은 리스트를 끊는 게 자연스러움
         inOrderedList = false;
         orderedCounter = 0;
 
-        const h = 18.0;
-        if (y + h > contentHeight && y > 0) newPage();
+        const double padV = 2.0;
+
+        const double solidBoxH = 7.0;
+        const double dashedBoxH = 7.0;
+        final double boxH = b.solid ? solidBoxH : dashedBoxH;
+        final double blockH = padV + boxH + padV;
+
+        // ✅ 선은 박스 정중앙에
+        final double lineYInsideBox = boxH / 2.0;
+
+        if (y + blockH > contentHeight && y > 0) newPage();
 
         current.commands.add(
-          _HrDrawCommand(y: y + 8, solid: b.solid, width: contentWidth),
+          _HrDrawCommand(
+            y: y + padV + lineYInsideBox,
+            solid: b.solid,
+            width: contentWidth,
+          ),
         );
-        y += h;
+
+        y += blockH;
         continue;
       }
 
@@ -3334,7 +3331,7 @@ class _HrDrawCommand extends _DrawCommand {
     final paint =
         Paint()
           ..color = const Color.fromARGB(255, 129, 147, 182)
-          ..strokeWidth = solid ? 1.0 : 0.6
+          ..strokeWidth = solid ? 0.5 : 0.35
           ..style = PaintingStyle.stroke;
 
     final start = Offset(origin.dx, origin.dy + y);
@@ -3343,8 +3340,8 @@ class _HrDrawCommand extends _DrawCommand {
     if (solid) {
       canvas.drawLine(start, end, paint);
     } else {
-      const dashW = 5.0;
-      const dashS = 5.0;
+      const dashW = 4.0;
+      const dashS = 3.0;
       double x = start.dx;
       while (x < end.dx) {
         final x2 = math.min(x + dashW, end.dx);

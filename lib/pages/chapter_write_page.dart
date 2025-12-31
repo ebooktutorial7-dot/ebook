@@ -150,6 +150,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     });
 
     _applySystemUi();
+    // ✅ 추가: 하드웨어 Enter 감지(빈 리스트면 종료)
+    HardwareKeyboard.instance.addHandler(_handleHardwareEnterToExitList);
   }
 
   Color _backgroundColorFromSettings(WritingSettings s) {
@@ -270,6 +272,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _persistScroll();
     _persistSelection();
     _persistFocus();
+
+    HardwareKeyboard.instance.removeHandler(_handleHardwareEnterToExitList);
 
     _controller.dispose();
     _titleCtrl.dispose();
@@ -660,6 +664,61 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     return plain.replaceAll(RegExp(r'\s+'), '').length;
   }
 
+  // ✅ 빈 리스트 항목에서 Enter 한번 더 누르면 리스트 종료 (메모 앱처럼)
+  bool _handleHardwareEnterToExitList(KeyEvent event) {
+    if (!_focusNode.hasFocus) return false;
+
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.enter) return false;
+
+    if (_isInListAtCursor(_controller) && _isCurrentLineEmpty(_controller)) {
+      _exitListLikeMemo(_controller);
+      return true; // Enter 기본 동작(새 줄 생성) 막기
+    }
+    return false;
+  }
+
+  bool _isInListAtCursor(quill.QuillController c) {
+    final attrs = c.getSelectionStyle().attributes;
+    final v = attrs[quill.Attribute.list.key]?.value;
+    return v == 'bullet' ||
+        v == 'ordered' ||
+        v == 'checked' ||
+        v == 'unchecked';
+  }
+
+  // ✅ queryLine 없이 "현재 줄" 텍스트를 뽑아서 비었는지 확인
+  bool _isCurrentLineEmpty(quill.QuillController c) {
+    final sel = c.selection;
+    if (!sel.isCollapsed) return false;
+
+    final text = c.document.toPlainText();
+    if (text.isEmpty) return true;
+
+    int o = sel.baseOffset;
+    if (o < 0) o = 0;
+    if (o > text.length) o = text.length;
+
+    final before = (o - 1).clamp(0, text.length);
+    final startIdx = text.lastIndexOf('\n', before);
+    final start = (startIdx == -1) ? 0 : startIdx + 1;
+    final endIdx = text.indexOf('\n', o);
+    final end = (endIdx == -1) ? text.length : endIdx;
+
+    final line = text.substring(start, end).trim();
+    return line.isEmpty;
+  }
+
+  void _exitListLikeMemo(quill.QuillController c) {
+    // ✅ flutter_quill 11.x : unset 대신 fromKeyValue(key, null)로 해제
+    c.formatSelection(
+      quill.Attribute.fromKeyValue(quill.Attribute.list.key, null),
+    );
+    c.formatSelection(
+      quill.Attribute.fromKeyValue(quill.Attribute.indent.key, null),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isImmersive = _isFocusWriting;
@@ -976,6 +1035,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                             settings,
                                           ),
                                         ),
+
                                         child: quill.QuillEditor(
                                           controller: _controller,
                                           focusNode: _focusNode,
@@ -990,7 +1050,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                               _SafeImageEmbedBuilder(),
                                               _HrSolidEmbedBuilder(),
                                               _HrEmbedBuilder(),
-                                              ...safeEmbeds,
+                                              ...safeEmbeds, // 원래 쓰시던 그대로 유지
                                             ],
                                             customStyles: customStyles,
                                             onTapDown: (details, pos) {
@@ -1059,6 +1119,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                             settings,
                                           ),
                                         ),
+
                                         child: quill.QuillEditor(
                                           controller: _controller,
                                           focusNode: _focusNode,
@@ -1073,7 +1134,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                               _SafeImageEmbedBuilder(),
                                               _HrSolidEmbedBuilder(),
                                               _HrEmbedBuilder(),
-                                              ...safeEmbeds,
+                                              ...safeEmbeds, // 원래 쓰시던 그대로 유지
                                             ],
                                             customStyles: customStyles,
                                             onTapDown: (details, pos) {
@@ -1117,6 +1178,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                       ),
                                       color: _textColorFromSettings(settings),
                                     ),
+
                                     child: quill.QuillEditor(
                                       controller: _controller,
                                       focusNode: _focusNode,
@@ -1131,7 +1193,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                           _SafeImageEmbedBuilder(),
                                           _HrSolidEmbedBuilder(),
                                           _HrEmbedBuilder(),
-                                          ...safeEmbeds,
+                                          ...safeEmbeds, // 원래 쓰시던 그대로 유지
                                         ],
                                         customStyles: customStyles,
                                         onTapDown: (details, pos) {
@@ -1387,7 +1449,7 @@ class _HrSolidEmbedBuilder extends quill.EmbedBuilder {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 8),
       child: Divider(
-        thickness: 1,
+        thickness: 0.5,
         height: 17,
         color: Color.fromARGB(255, 129, 147, 182),
       ),
@@ -1412,26 +1474,26 @@ class _HrEmbedBuilder extends quill.EmbedBuilder {
 }
 
 class _DashedDivider extends StatelessWidget {
+  const _DashedDivider({
+    this.thickness = 0.6,
+    this.dashWidth = 5,
+    this.dashSpace = 5,
+    this.color = const Color.fromARGB(255, 129, 147, 182),
+    this.padding = const EdgeInsets.symmetric(vertical: 8),
+  });
+
   final double thickness;
   final double dashWidth;
   final double dashSpace;
   final Color color;
   final EdgeInsetsGeometry padding;
 
-  const _DashedDivider({
-    this.thickness = 0.5,
-    this.dashWidth = 5,
-    this.dashSpace = 5,
-    this.color = const Color(0xFFBDBDBD),
-    this.padding = const EdgeInsets.symmetric(vertical: 8),
-  });
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: padding,
       child: SizedBox(
-        height: thickness,
+        height: 18, // ✅ PNG와 동일
         width: double.infinity,
         child: CustomPaint(
           painter: _DashedLinePainter(
@@ -1452,7 +1514,7 @@ class _DashedLinePainter extends CustomPainter {
   final double dashSpace;
   final Color color;
 
-  _DashedLinePainter({
+  const _DashedLinePainter({
     required this.thickness,
     required this.dashWidth,
     required this.dashSpace,
@@ -1468,10 +1530,11 @@ class _DashedLinePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.square;
 
+    const y = 8.0; // ✅ PNG와 동일한 기준선
+
     double x = 0;
-    final y = size.height / 2;
     while (x < size.width) {
-      final x2 = (x + dashWidth).clamp(0, size.width).toDouble();
+      final x2 = math.min(x + dashWidth, size.width);
       canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
       x += dashWidth + dashSpace;
     }
