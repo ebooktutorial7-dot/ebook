@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import 'package:flutter/cupertino.dart';
-
 import 'package:ebook_tutorial_app/quill/custom_leading.dart';
 
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
@@ -52,11 +52,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   int _pageCount = 1;
   int _currentPage = 1;
-  int _pngRevision = 0; // ✅ PNG 강제 리빌드 트리거
+  int _pngRevision = 0;
 
   static const double _a4VerticalMargin = 18.0;
   double _a4PageStridePx = 1000;
-  double _pngLikeContentHeightPx = 1000; // ✅ 현재 레이아웃 기준 contentHeight
+  double _pngLikeContentHeightPx = 1000;
 
   // ---- Persist/restore state ----
   double? _restoredOffset;
@@ -74,10 +74,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       case 'batang':
         return 'Apple SD 산돌고딕 Neo';
       case 'inter':
-        return 'inter';
+        return 'Inter';
       case 'system':
       default:
-        return null; // 시스템 기본
+        return 'Inter';
     }
   }
 
@@ -947,12 +947,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                           fontFamily: _resolveFontFamily(
                                             settings.fontFamily,
                                           ),
-                                          pageBackgroundColor:
-                                              _backgroundColorFromSettings(
-                                                settings,
-                                              ),
-                                          defaultTextColor:
-                                              _textColorFromSettings(settings),
                                           renderScale: 2.8,
                                         ),
                                   ),
@@ -1044,16 +1038,38 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                             scrollable: true,
                                             padding: EdgeInsets.zero,
                                             expands: true,
+
                                             customLeadingBlockBuilder:
-                                                buildCustomLeading,
+                                                buildCustomLeadingWithColor(
+                                                  (settings.themeId ==
+                                                          'default')
+                                                      ? null
+                                                      : _textColorFromSettings(
+                                                        settings,
+                                                      ),
+                                                ),
                                             embedBuilders: [
                                               _SafeImageEmbedBuilder(),
                                               _HrSolidEmbedBuilder(),
                                               _HrEmbedBuilder(),
-                                              ...safeEmbeds, // 원래 쓰시던 그대로 유지
+                                              ...safeEmbeds,
                                             ],
                                             customStyles: customStyles,
                                             onTapDown: (details, pos) {
+                                              if (!_controller
+                                                  .selection
+                                                  .isCollapsed) {
+                                                final o =
+                                                    _controller
+                                                        .selection
+                                                        .extentOffset;
+                                                _controller.updateSelection(
+                                                  TextSelection.collapsed(
+                                                    offset: o,
+                                                  ),
+                                                  quill.ChangeSource.local,
+                                                );
+                                              }
                                               final wasDouble =
                                                   _handleDoubleTapForToolbar(
                                                     details,
@@ -1128,16 +1144,38 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                             scrollable: true,
                                             padding: EdgeInsets.zero,
                                             expands: true,
+
                                             customLeadingBlockBuilder:
-                                                buildCustomLeading,
+                                                buildCustomLeadingWithColor(
+                                                  (settings.themeId ==
+                                                          'default')
+                                                      ? null
+                                                      : _textColorFromSettings(
+                                                        settings,
+                                                      ),
+                                                ),
                                             embedBuilders: [
                                               _SafeImageEmbedBuilder(),
                                               _HrSolidEmbedBuilder(),
                                               _HrEmbedBuilder(),
-                                              ...safeEmbeds, // 원래 쓰시던 그대로 유지
+                                              ...safeEmbeds,
                                             ],
                                             customStyles: customStyles,
                                             onTapDown: (details, pos) {
+                                              if (!_controller
+                                                  .selection
+                                                  .isCollapsed) {
+                                                final o =
+                                                    _controller
+                                                        .selection
+                                                        .extentOffset;
+                                                _controller.updateSelection(
+                                                  TextSelection.collapsed(
+                                                    offset: o,
+                                                  ),
+                                                  quill.ChangeSource.local,
+                                                );
+                                              }
                                               final wasDouble =
                                                   _handleDoubleTapForToolbar(
                                                     details,
@@ -1187,16 +1225,37 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                         scrollable: true,
                                         padding: EdgeInsets.zero,
                                         expands: true,
+
                                         customLeadingBlockBuilder:
-                                            buildCustomLeading,
+                                            buildCustomLeadingWithColor(
+                                              (settings.themeId == 'default')
+                                                  ? null
+                                                  : _textColorFromSettings(
+                                                    settings,
+                                                  ),
+                                            ),
                                         embedBuilders: [
                                           _SafeImageEmbedBuilder(),
                                           _HrSolidEmbedBuilder(),
                                           _HrEmbedBuilder(),
-                                          ...safeEmbeds, // 원래 쓰시던 그대로 유지
+                                          ...safeEmbeds,
                                         ],
                                         customStyles: customStyles,
                                         onTapDown: (details, pos) {
+                                          if (!_controller
+                                              .selection
+                                              .isCollapsed) {
+                                            final o =
+                                                _controller
+                                                    .selection
+                                                    .extentOffset;
+                                            _controller.updateSelection(
+                                              TextSelection.collapsed(
+                                                offset: o,
+                                              ),
+                                              quill.ChangeSource.local,
+                                            );
+                                          }
                                           final wasDouble =
                                               _handleDoubleTapForToolbar(
                                                 details,
@@ -1548,53 +1607,382 @@ class _DashedLinePainter extends CustomPainter {
       old.dashSpace != dashSpace;
 }
 
-/// ===== 안전한 이미지 임베드 빌더 =====
+/// ===== 드래그 리사이즈 가능한 이미지 임베드 빌더 =====
 class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
   @override
-  String get key => 'image'; // flutter_quill 의 기본 image key와 동일
+  String get key => 'image';
+
+  // 리사이즈 범위(원하시면 조절)
+  static const double _minWidth = 90.0;
+
+  bool _isImageEmbedAt(quill.QuillController c, int offset) {
+    try {
+      final leaf = c.document.querySegmentLeafNode(offset).leaf;
+      final data = leaf?.value;
+      if (data is quill.Embed) {
+        return data.value.type == 'image';
+      }
+    } catch (_) {}
+    return false;
+  }
 
   @override
   Widget build(BuildContext context, quill.EmbedContext embedContext) {
     final dynamic data = embedContext.node.value.data;
 
-    // flutter_quill 11.x에서 image 데이터는 보통 String (경로 또는 URL)
     String? source;
+    double? savedW;
+
     if (data is String) {
-      source = data;
-    } else if (data is Map && data['source'] is String) {
-      // 혹시 Map 형태면 이렇게 한 번 더 방어
-      source = data['source'] as String;
+      final s = data.trimLeft();
+      if (s.startsWith('{')) {
+        try {
+          final m = jsonDecode(s) as Map<String, dynamic>;
+          final src = m['source'];
+          if (src is String) source = src;
+
+          final w = m['w'];
+          if (w is num) savedW = w.toDouble();
+        } catch (_) {
+          source = data;
+        }
+      } else {
+        source = data;
+      }
+    } else if (data is Map) {
+      final s = data['source'];
+      if (s is String) source = s;
+
+      final w = data['w'];
+      if (w is num) savedW = w.toDouble();
     }
 
     if (source == null || source.isEmpty) {
       return const SizedBox.shrink();
     }
+    final String src = source;
 
-    // 1) http/https 이면 네트워크 이미지
-    if (source.startsWith('http://') || source.startsWith('https://')) {
-      return Image.network(
-        source,
+    Widget image;
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      image = Image.network(
+        src,
         fit: BoxFit.contain,
-        errorBuilder: (context, error, stack) {
-          return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
-        },
+        errorBuilder:
+            (_, __, ___) =>
+                const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+      );
+    } else {
+      final file = File(src);
+      if (!file.existsSync()) return const SizedBox.shrink();
+      image = Image.file(
+        file,
+        fit: BoxFit.contain,
+        errorBuilder:
+            (_, __, ___) =>
+                const Icon(Icons.broken_image, size: 32, color: Colors.grey),
       );
     }
 
-    // 2) 로컬 파일 경로인 경우
-    final file = File(source);
+    final int? offset = _tryGetEmbedOffset(embedContext);
 
-    // 예전에 저장된 /tmp/image_picker_... 처럼 이미 사라진 파일이면 그냥 안 그린다
-    if (!file.existsSync()) {
-      return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, c) {
+        final double maxW = (c.maxWidth.isFinite ? c.maxWidth : 600.0) * 0.98;
+        final double initialW = (savedW ?? 260.0).clamp(_minWidth, maxW);
+
+        return Center(
+          child: _ResizableImageBox(
+            controller: embedContext.controller,
+            offset: offset,
+            width: initialW,
+            maxWidth: maxW,
+
+            child: image,
+            onResize: (newW) {
+              if (offset == null) {
+                return;
+              }
+              if (!_isImageEmbedAt(embedContext.controller, offset)) {
+                return; // ✅ 추가
+              }
+              final Map<String, dynamic> newData = <String, dynamic>{
+                'source': src,
+                'w': newW,
+              };
+              _replaceEmbedData(
+                controller: embedContext.controller,
+                offset: offset,
+                data: newData,
+              );
+            },
+            onDelete: () {
+              final off = offset;
+              if (off == null) return;
+              _deleteEmbedAt(controller: embedContext.controller, offset: off);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  int? _tryGetEmbedOffset(quill.EmbedContext ctx) {
+    try {
+      return ctx.node.offset;
+    } catch (_) {}
+
+    try {
+      final dynamic d = ctx;
+
+      final o1 = d.offset;
+      if (o1 is int) return o1;
+
+      final o2 = d.nodeOffset;
+      if (o2 is int) return o2;
+
+      final o3 = d.offsetInParent;
+      if (o3 is int) return o3;
+    } catch (_) {}
+
+    return null;
+  }
+
+  void _deleteEmbedAt({
+    required quill.QuillController controller,
+    required int offset,
+  }) {
+    // 이미지 embed는 길이 1
+    controller.replaceText(offset, 1, '', null);
+    // 커서를 삭제 위치로 이동
+    controller.updateSelection(
+      TextSelection.collapsed(offset: offset),
+      quill.ChangeSource.local,
+    );
+  }
+
+  void _replaceEmbedData({
+    required quill.QuillController controller,
+    required int offset,
+    required Map<String, dynamic> data,
+  }) {
+    final payload = jsonEncode(data);
+
+    final embed = quill.BlockEmbed.custom(
+      quill.CustomBlockEmbed('image', payload),
+    );
+
+    // ✅ 현재 버전: replaceText(index, len, data, selection) 4개만 지원
+    controller.replaceText(offset, 1, embed, null);
+  }
+}
+
+/// 실제 리사이즈 UI(핸들 드래그) 박스
+class _ResizableImageBox extends StatefulWidget {
+  const _ResizableImageBox({
+    required this.controller,
+    required this.offset,
+    required this.width,
+    required this.maxWidth,
+
+    required this.child,
+    required this.onResize,
+    required this.onDelete,
+  });
+
+  final quill.QuillController controller;
+  final int? offset;
+
+  final double width;
+  final double maxWidth;
+
+  final Widget child;
+  final ValueChanged<double> onResize;
+  final VoidCallback onDelete;
+
+  @override
+  State<_ResizableImageBox> createState() => _ResizableImageBoxState();
+}
+
+class _ResizableImageBoxState extends State<_ResizableImageBox> {
+  late double _w;
+
+  bool _selected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _w = widget.width;
+
+    widget.controller.addListener(_syncSelectedFromController);
+    _syncSelectedFromController();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncSelectedFromController);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ResizableImageBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // width 동기화
+    if ((oldWidget.width - widget.width).abs() > 0.5) {
+      _w = widget.width;
     }
 
-    return Image.file(
-      file,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stack) {
-        return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
-      },
+    // controller가 바뀌면 리스너 재연결
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_syncSelectedFromController);
+      widget.controller.addListener(_syncSelectedFromController);
+      _syncSelectedFromController();
+    }
+  }
+
+  void _syncSelectedFromController() {
+    final off = widget.offset;
+    if (off == null) {
+      if (_selected) setState(() => _selected = false);
+      return;
+    }
+
+    final sel = widget.controller.selection;
+
+    // embed는 길이 1이므로 [off, off+1] 범위를 점유한다고 보고 판단
+    final int s = sel.start;
+    final int e = sel.end;
+
+    final bool hitRange = (s <= off && e >= off + 1);
+    final bool hitCollapsed =
+        sel.isCollapsed && (sel.baseOffset == off || sel.baseOffset == off + 1);
+
+    final bool nextSelected = hitRange || hitCollapsed;
+
+    if (nextSelected != _selected) {
+      setState(() => _selected = nextSelected);
+    }
+  }
+
+  void _requestCursorNearEmbed() {
+    final off = widget.offset;
+    if (off == null) return;
+
+    // 보통 embed 뒤로 커서를 두면 편합니다.
+    widget.controller.updateSelection(
+      TextSelection.collapsed(offset: off + 1),
+      quill.ChangeSource.local,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = _w.clamp(_SafeImageEmbedBuilder._minWidth, widget.maxWidth);
+
+    return SizedBox(
+      width: w,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // ✅ 이미지 영역: 탭은 선택(커서 이동), 드래그/롱프레스는 여기서 소모
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _requestCursorNearEmbed,
+
+            // ❌ GestureDetector 만으로는 데스크톱 드래그 못 막음
+            onPanDown: (_) {},
+            onPanStart: (_) {},
+            onPanUpdate: (_) {},
+            onPanEnd: (_) {},
+
+            child: Listener(
+              behavior: HitTestBehavior.opaque, // ✅ 추가
+              onPointerDown: (_) {},
+              onPointerMove: (_) {
+                // ✅ 선택 여부 상관없이 이미지 위 드래그 자체를 무력화
+                final off = widget.offset;
+                if (off == null) return;
+                widget.controller.updateSelection(
+                  TextSelection.collapsed(offset: off + 1),
+                  quill.ChangeSource.local,
+                );
+              },
+
+              onPointerUp: (_) {},
+              onPointerSignal: (_) {},
+
+              child: AbsorbPointer(absorbing: true, child: widget.child),
+            ),
+          ),
+
+          // ✅ 하단 가운데 + / − (Stack 영역 "안쪽"으로)
+          if (_selected)
+            Positioned(
+              bottom: 6, // ❗️ -28 같은 음수 금지 (탭 안 잡힘)
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 6),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ResizeButton(
+                        icon: Icons.remove,
+                        onTap: () {
+                          final newW = (_w - 24).clamp(
+                            _SafeImageEmbedBuilder._minWidth,
+                            widget.maxWidth,
+                          );
+                          setState(() => _w = newW);
+                          widget.onResize(newW);
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _ResizeButton(
+                        icon: Icons.add,
+                        onTap: () {
+                          final newW = (_w + 24).clamp(
+                            _SafeImageEmbedBuilder._minWidth,
+                            widget.maxWidth,
+                          );
+                          setState(() => _w = newW);
+                          widget.onResize(newW);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResizeButton extends StatelessWidget {
+  const _ResizeButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Icon(icon, size: 18, color: Colors.black87),
     );
   }
 }

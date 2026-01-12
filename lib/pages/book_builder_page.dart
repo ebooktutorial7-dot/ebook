@@ -2,14 +2,13 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
-import 'package:pdf/pdf.dart';
+
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:ebook_tutorial_app/widgets/pdf/pdf_chapter_picker_dialog.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart' show buildBookPdf;
-import 'package:printing/printing.dart';
-import 'package:super_editor/super_editor.dart';
+
 import 'package:dart_quill_delta/dart_quill_delta.dart' as dq;
 import 'dart:math' as math;
 import 'dart:convert';
@@ -24,6 +23,7 @@ import 'package:ebook_tutorial_app/pages/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ebook_tutorial_app/pages/pdf_preview_page.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart';
+import 'package:ebook_tutorial_app/pages/canvas_doc_engine.dart';
 import 'package:provider/provider.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
@@ -49,61 +49,24 @@ double scaledCoverRadius(double width) {
   return kCoverBaseRadius * ratio;
 }
 
-class PdfPreviewPage extends StatelessWidget {
-  const PdfPreviewPage({
-    super.key,
-    required this.title,
-    required this.buildBytes,
-  });
-  final String title;
-
-  final Future<Uint8List> Function(PdfPageFormat format) buildBytes;
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: PdfPreview(
-        build: buildBytes,
-        allowPrinting: false,
-        canChangeOrientation: true,
-        canChangePageFormat: true,
-      ),
-    );
-  }
-}
-
-class TextRun {
-  final String text;
-  final TextStyle style;
-  final bool isEmbed;
-  TextRun(this.text, this.style, {this.isEmbed = false});
-}
-
-extension WritingSettingsPreviewExt on WritingSettings {
-  double get fontSize {
-    return 16.0;
-  }
-
-  Color get textColor {
-    switch (themeId) {
-      case 'dark':
-      case 'darkGreen':
-      case 'space':
-        return Colors.white.withValues(alpha: 0.96);
-      case 'lightSky':
-        return const Color(0xFF1E293B);
-      default:
-        return const Color(0xFF222222);
-    }
+String? resolveFontFamily(String key) {
+  switch (key) {
+    case 'batang':
+      return 'Apple SD 산돌고딕 Neo';
+    case 'inter':
+      return 'Inter';
+    case 'system':
+    default:
+      return 'Inter';
   }
 }
 
 class A4Page extends StatelessWidget {
   final EdgeInsetsGeometry margins;
   final Widget child;
-
   final double widthFactor;
   final double heightFactor;
+
   const A4Page({
     super.key,
     required this.child,
@@ -111,36 +74,91 @@ class A4Page extends StatelessWidget {
     this.widthFactor = 0.95,
     this.heightFactor = 0.90,
   });
+
+  static const double _a4 = 210 / 297;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final w = c.maxWidth * widthFactor;
-        final desiredH = w * 297 / 210;
-        final maxH = c.maxHeight * heightFactor;
-        final h = desiredH > maxH ? maxH : desiredH;
+        final availW = c.maxWidth * widthFactor;
+        final availH = c.maxHeight * heightFactor;
+
+        final m = margins.resolve(Directionality.of(context));
+        final innerAvailW = (availW - m.horizontal).clamp(0.0, double.infinity);
+        final innerAvailH = (availH - m.vertical).clamp(0.0, double.infinity);
+
+        final hByW = innerAvailW / _a4;
+        final wByH = innerAvailH * _a4;
+
+        final double innerW, innerH;
+        if (hByW <= innerAvailH) {
+          innerW = innerAvailW;
+          innerH = hByW;
+        } else {
+          innerW = wByH;
+          innerH = innerAvailH;
+        }
+
+        final outerW = innerW + m.horizontal;
+        final outerH = innerH + m.vertical;
+
         return Align(
           alignment: Alignment.topCenter,
           child: SizedBox(
-            width: w,
-            height: h,
+            width: outerW,
+            height: outerH,
             child: Padding(
-              padding: margins,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(
-                    color: const Color.fromARGB(255, 138, 176, 201),
-                    width: 0.5,
+              padding: m,
+              child: SizedBox(
+                width: innerW,
+                height: innerH,
+                child: AspectRatio(
+                  aspectRatio: _a4,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border.all(
+                        color: const Color.fromARGB(255, 138, 176, 201),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: child,
                   ),
                 ),
-                child: child,
               ),
             ),
           ),
         );
       },
     );
+  }
+}
+
+class _MeasureSize extends StatefulWidget {
+  final Widget child;
+  final ValueChanged<Size> onChange;
+  const _MeasureSize({required this.child, required this.onChange});
+
+  @override
+  State<_MeasureSize> createState() => _MeasureSizeState();
+}
+
+class _MeasureSizeState extends State<_MeasureSize> {
+  Size? _old;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final rb = context.findRenderObject();
+      if (rb is! RenderBox || !rb.hasSize) return;
+      final sz = rb.size;
+      if (_old == sz) return;
+      _old = sz;
+      widget.onChange(sz);
+    });
+    return widget.child;
   }
 }
 
@@ -206,6 +224,7 @@ class ChapterItem {
   final String title;
   final int index;
   final String? coverPath;
+  final String? episodeTitle;
   final List<Map<String, dynamic>> delta;
 
   final int? sizeBytes;
@@ -216,6 +235,7 @@ class ChapterItem {
     required this.title,
     required this.index,
     this.coverPath,
+    this.episodeTitle,
     required this.delta,
     this.sizeBytes,
     this.charCount,
@@ -225,6 +245,7 @@ class ChapterItem {
   ChapterItem copyWith({
     String? title,
     String? coverPath,
+    String? episodeTitle,
     List<Map<String, dynamic>>? delta,
     int? sizeBytes,
     int? charCount,
@@ -235,6 +256,7 @@ class ChapterItem {
       title: title ?? this.title,
       index: index,
       coverPath: coverPath ?? this.coverPath,
+      episodeTitle: episodeTitle ?? this.episodeTitle,
       delta: delta ?? this.delta,
       sizeBytes: sizeBytes ?? this.sizeBytes,
       charCount: charCount ?? this.charCount,
@@ -245,6 +267,7 @@ class ChapterItem {
 }
 
 class BookBuilderPage extends StatefulWidget {
+  final String? episodeTitle;
   final String initialTitle;
   final List<Map<String, dynamic>> initialDeltaJson;
   final List<Map<String, dynamic>> initialDrawingJson;
@@ -253,6 +276,7 @@ class BookBuilderPage extends StatefulWidget {
   final String? documentId;
   const BookBuilderPage({
     super.key,
+    this.episodeTitle,
     required this.initialTitle,
     required this.initialDeltaJson,
     required this.initialDrawingJson,
@@ -345,8 +369,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       widget.documentId == null ? '' : 'book_meta_${widget.documentId}';
   late final WritingSettingsController _settingsController;
 
-  late List<_Block> _blocks;
-  List<_PagePlan> _pagePlans = const [];
+  List<CanvasPagePlan> _pagePlans = const [];
   int _pageCount = 1;
   final Map<int, Uint8List> _pngCache = <int, Uint8List>{};
   final Map<String, ui.Image> _imageCache = <String, ui.Image>{};
@@ -358,9 +381,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   Timer? _paginateDebounce;
   int _paginateEpoch = 0;
-  bool _paginating = false;
-
-  int _loadingCount = 0;
 
   String? _lastPaginationSignature;
   int _currentIndex = 0;
@@ -371,16 +391,15 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   OverlayEntry? _imageSubmenuEntry;
   final ValueNotifier<bool> _imageSubmenuOpenVN = ValueNotifier(false);
 
-  final GlobalKey _imageSubmenuKey = GlobalKey();
-  double? _measuredImageSubmenuHeight;
-
-  final LayerLink _imageLink = LayerLink();
-
   bool _previewAllChapters = true;
-  final Set<int> _selectedChapterIndexes = {}; // ChapterItem.index
+  final Set<int> _selectedChapterIndexes = {};
   GlassTheme get _glassTheme =>
       GlassTheme.fromFlags(reduceTransparency: _reduceTransparencyFlag);
   late final TabController _tabCtrl;
+
+  bool _paginating = false;
+
+  int _loadingCount = 0;
 
   int _tabIndex = 0;
   final PageController _pageCtrl = PageController();
@@ -405,14 +424,25 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   String get _memoKey =>
       widget.documentId == null ? '' : 'book_memos_${widget.documentId}';
 
-  void _incLoading() {
-    if (!mounted) return;
-    setState(() => _loadingCount++);
-  }
+  // ===========================
+  // episodeTitle -> Delta 주입
+  // ===========================
+  List<Map<String, dynamic>> _withEpisodeTitleDelta(
+    List<Map<String, dynamic>> original, {
+    required String episodeTitle,
+  }) {
+    final title = episodeTitle.trim();
+    if (title.isEmpty) return original;
 
-  void _decLoading() {
-    if (!mounted) return;
-    setState(() => _loadingCount = (_loadingCount - 1).clamp(0, 1 << 30));
+    return <Map<String, dynamic>>[
+      {'insert': title},
+      {
+        'insert': '\n',
+        'attributes': {'header': 3},
+      },
+      {'insert': '\n'},
+      ...original,
+    ];
   }
 
   void _disposeImages() {
@@ -437,6 +467,18 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (notify && mounted) setState(() {});
   }
 
+  void _incLoading() {
+    _loadingCount += 1;
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _decLoading() {
+    _loadingCount = (_loadingCount - 1).clamp(0, 1 << 30);
+    if (!mounted) return;
+    setState(() {});
+  }
+
   void _scheduleRebuild({Duration delay = const Duration(milliseconds: 120)}) {
     _paginateDebounce?.cancel();
     final epoch = _paginateEpoch;
@@ -446,7 +488,115 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     });
   }
 
-  Future<ui.Image?> _loadImage(String src) async {
+  Future<void> _rebuildPreviewPlans(int epoch) async {
+    if (epoch != _paginateEpoch) return;
+    if (_pageWidthPx <= 0 || _pageHeightPx <= 0) return;
+    if (_paginating) return;
+
+    final full = dq.Delta.fromJson(_delta);
+    final chunks = DeltaPageBreakSplitter.splitByPageBreak(full);
+
+    _paginating = true;
+    _incLoading();
+    try {
+      final s = _settingsController.settings;
+      final hm = _effectiveHorizontalMarginPx(s);
+      final vm = _effectiveVerticalMarginPx(s);
+      final contentW = _pageWidthPx - hm * 2;
+      final contentH = _pageHeightPx - vm * 2;
+      final maxImageH = contentH * 0.65;
+
+      await _primeImageSizesFromChunks(chunks: chunks, epoch: epoch);
+
+      final docSettings = CanvasDocSettings(
+        baseStyle: TextStyle(
+          fontSize: s.fontSize,
+          height: s.lineHeight,
+          letterSpacing: s.letterSpacing,
+          fontFamily: resolveFontFamily(s.fontFamily),
+          color: s.textColor,
+          fontWeight: FontWeight.w400,
+        ),
+        contentWidth: contentW,
+        contentHeight: contentH,
+        imageSizes: _imageSizeCache,
+        maxImageHeight: maxImageH,
+      );
+
+      final engine = CanvasDocEngine(docSettings);
+
+      final allPlans = <CanvasPagePlan>[];
+      for (final chunk in chunks) {
+        if (epoch != _paginateEpoch) return;
+        final chunkJson = (chunk.toJson() as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(growable: true);
+
+        final plans = await engine.paginateDelta(chunkJson);
+        allPlans.addAll(plans);
+      }
+
+      if (!mounted || epoch != _paginateEpoch) return;
+
+      setState(() {
+        _pagePlans =
+            allPlans.isEmpty ? [CanvasPagePlan(commands: [])] : allPlans;
+        _pageCount = _pagePlans.length.clamp(1, 1 << 30);
+        _currentIndex = _currentIndex.clamp(0, _pageCount - 1);
+      });
+
+      await _ensurePngForPage(_currentIndex + 1);
+    } finally {
+      if (mounted && epoch == _paginateEpoch) _paginating = false;
+      _decLoading();
+    }
+  }
+
+  Future<void> _primeImageSizesFromChunks({
+    required List<dynamic> chunks,
+    required int epoch,
+  }) async {
+    for (final chunk in chunks) {
+      if (epoch != _paginateEpoch) return;
+
+      final List<Map<String, dynamic>> chunkJson = (chunk.toJson() as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(growable: false);
+
+      for (final op in chunkJson) {
+        final insert = op['insert'];
+        if (insert is Map && insert['image'] is String) {
+          final src = insert['image'] as String;
+          if (src.isEmpty) continue;
+          if (_imageSizeCache.containsKey(src)) continue;
+
+          try {
+            if (src.startsWith('http://') || src.startsWith('https://')) {
+              continue;
+            }
+
+            final f = File(src);
+            if (!await f.exists()) continue;
+
+            final bytes = await f.readAsBytes();
+            final codec = await ui.instantiateImageCodec(bytes);
+            final frame = await codec.getNextFrame();
+            final img = frame.image;
+
+            _imageSizeCache[src] = Size(
+              img.width.toDouble(),
+              img.height.toDouble(),
+            );
+
+            img.dispose();
+            codec.dispose();
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  Future<ui.Image?> _loadImage(String src, {int? targetWidthPx}) async {
     final cached = _imageCache[src];
     if (cached != null) return cached;
     try {
@@ -476,6 +626,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   static const double _kA4W = 595.275590551;
   static const double _kA4H = 841.88976378;
+
   double _effectiveHorizontalMarginPx(WritingSettings s) {
     if (_pageWidthPx <= 0) return s.horizontalMargin;
     return s.horizontalMargin * (_pageWidthPx / _kA4W);
@@ -484,90 +635,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   double _effectiveVerticalMarginPx(WritingSettings s) {
     if (_pageHeightPx <= 0) return s.verticalMargin;
     return s.verticalMargin * (_pageHeightPx / _kA4H);
-  }
-
-  Future<void> _rebuildPreviewPlans(int epoch) async {
-    if (epoch != _paginateEpoch) return;
-    if (_pageWidthPx <= 0 || _pageHeightPx <= 0) return;
-    if (_paginating) return;
-    final doc = _previewCtrl.document;
-    final deltaJson =
-        (doc.toDelta().toJson() as List)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-    final plain = doc.toPlainText().trim();
-    if (plain.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _blocks = _DeltaParser().parse([
-          {'insert': '\n'},
-        ]);
-        _pagePlans = [_PagePlan(commands: [])];
-        _pageCount = 1;
-        _currentIndex = 0;
-        _ensureItemKeys();
-      });
-      return;
-    }
-    _paginating = true;
-    _incLoading();
-    try {
-      _blocks = _DeltaParser().parse(deltaJson);
-      final s = _settingsController.settings;
-      final hm = _effectiveHorizontalMarginPx(s);
-      final vm = _effectiveVerticalMarginPx(s);
-      final contentW = _pageWidthPx - hm * 2;
-      final contentH = _pageHeightPx - vm * 2;
-      final maxImageH = contentH * 0.65;
-      for (final b in _blocks) {
-        if (epoch != _paginateEpoch) return;
-        if (b is _ImageBlock) {
-          if (_imageSizeCache.containsKey(b.src)) continue;
-          final img = await _loadImage(b.src);
-          if (epoch != _paginateEpoch) return;
-          if (img != null) {
-            _imageSizeCache[b.src] = Size(
-              img.width.toDouble(),
-              img.height.toDouble(),
-            );
-          }
-        }
-      }
-      if (epoch != _paginateEpoch) return;
-      if (!mounted) return;
-
-      final engine = _CanvasLayoutEngine(
-        baseStyle: TextStyle(
-          fontSize: s.fontSize,
-          height: s.lineHeight,
-          letterSpacing: s.letterSpacing,
-          fontFamily: s.fontFamily == 'system' ? null : s.fontFamily,
-          color: s.textColor,
-          fontWeight: FontWeight.w400,
-        ),
-        contentWidth: contentW,
-        contentHeight: contentH,
-        imageSizes: _imageSizeCache,
-        maxImageHeight: maxImageH,
-      );
-      final plans = await engine.paginate(_blocks);
-      if (epoch != _paginateEpoch) return;
-      if (!mounted) return;
-      setState(() {
-        _pagePlans = plans;
-        _pageCount = plans.length.clamp(1, 1 << 30);
-        _currentIndex = _currentIndex.clamp(0, _pageCount - 1);
-        _ensureItemKeys();
-      });
-
-      await _ensurePngForPage(_currentIndex + 1);
-    } finally {
-      if (mounted && epoch == _paginateEpoch) {
-        _paginating = false;
-      }
-      _decLoading();
-    }
   }
 
   Future<Uint8List> _ensurePngForPage(int pageNumber) async {
@@ -588,7 +655,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
     canvas.drawRect(
       Rect.fromLTWH(0, 0, outW.toDouble(), outH.toDouble()),
-      Paint()..color = Colors.white,
+      Paint()..color = Colors.transparent,
     );
     canvas.scale(renderScale, renderScale);
     final origin = Offset(hm, vm);
@@ -598,6 +665,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         origin: origin,
         loadImage: _loadImage,
         maxImageHeight: (_pageHeightPx - vm * 2) * 0.65,
+        renderScale: renderScale,
       );
     }
     final picture = recorder.endRecording();
@@ -636,12 +704,23 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   void initState() {
     super.initState();
 
+    var safeDelta = widget.initialDeltaJson
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: true);
+
+    final initTitle =
+        (_currentIndex >= 0 && _currentIndex < _chapters.length)
+            ? _chapters[_currentIndex].title
+            : '';
+
+    safeDelta = _withEpisodeTitleDelta(safeDelta, episodeTitle: initTitle);
+
     _settingsController = context.read<WritingSettingsController>();
     _lastPaginationSignature = _buildPaginationSignature(
       _settingsController.settings,
     );
     _settingsController.addListener(_onSettingsChanged);
-    _delta = List<Map<String, dynamic>>.from(widget.initialDeltaJson);
+    _delta = safeDelta;
     _drawings = List<Map<String, dynamic>>.from(widget.initialDrawingJson);
     _titleCtrl = TextEditingController(text: widget.initialTitle)
       ..addListener(() => _persistTitle(_titleCtrl.text));
@@ -1121,6 +1200,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       'title': c.title,
       'index': c.index,
       'cover': c.coverPath,
+      'episodeTitle': c.episodeTitle,
       'delta': c.delta,
       'sizeBytes': c.sizeBytes,
       'charCount': c.charCount,
@@ -1173,6 +1253,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             title: m['title'] as String,
             index: (m['index'] as num).toInt(),
             coverPath: m['cover'] as String?,
+            episodeTitle: m['episodeTitle'] as String?,
             delta: (m['delta'] as List).cast<Map<String, dynamic>>(),
             sizeBytes: (m['sizeBytes'] as num?)?.toInt(),
             charCount: (m['charCount'] as num?)?.toInt(),
@@ -1223,44 +1304,32 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   void _refreshPreviewFromChapters() {
     final targets = _previewTargetChapters;
-    final mergedDelta = <Map<String, dynamic>>[];
-    if (targets.isEmpty) {
-      mergedDelta.addAll(_delta);
-    } else {
-      for (var i = 0; i < targets.length; i++) {
-        mergedDelta.addAll(targets[i].delta);
-        if (i != targets.length - 1) {
-          mergedDelta.add({
-            'insert': {'page_break': true},
-          });
 
-          mergedDelta.add({'insert': '\n'});
+    final merged = <Map<String, dynamic>>[];
+    for (var i = 0; i < targets.length; i++) {
+      merged.addAll(
+        _withEpisodeTitleDelta(
+          targets[i].delta,
+          episodeTitle: targets[i].title,
+        ),
+      );
+
+      if (i != targets.length - 1) {
+        if (merged.isNotEmpty && merged.last['insert'] != '\n') {
+          merged.add({'insert': '\n'});
         }
+        merged.add({
+          'insert': {'page_break': true},
+        });
       }
     }
 
-    if (mergedDelta.isEmpty) {
-      mergedDelta.add({'insert': '\n'});
-    } else {
-      final lastInsert = mergedDelta.last['insert'];
-      if (lastInsert is String) {
-        if (!lastInsert.endsWith('\n')) {
-          mergedDelta.add({'insert': '\n'});
-        }
-      } else {
-        mergedDelta.add({'insert': '\n'});
-      }
-    }
-    final newDoc = quill.Document.fromJson(mergedDelta).toDelta();
-    _previewCtrl.replaceText(
-      0,
-      _previewCtrl.document.length,
-      newDoc,
-      const TextSelection.collapsed(offset: 0),
-    );
-    if (mounted) {
-      _rebuildPagination();
-    }
+    if (merged.isEmpty) merged.add({'insert': '\n'});
+
+    _delta = merged;
+    _previewCtrl.document = quill.Document.fromJson(_delta);
+
+    _rebuildPagination();
   }
 
   List<Map<String, dynamic>> _buildDeltaForSave() {
@@ -1715,7 +1784,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               showWhenUnlinked: false,
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
-              offset: const Offset(0, 8),
+              offset: const Offset(0, 0),
               child: Material(
                 color: Colors.transparent,
 
@@ -1801,7 +1870,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       return;
     }
 
-    _hideImageSubmenu();
     _hideCloudSubmenu();
     final overlay = Overlay.of(context);
     _epubSubmenuOpenVN.value = true;
@@ -1835,7 +1903,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               showWhenUnlinked: false,
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
-              offset: const Offset(0, 8),
+              offset: const Offset(0, 0),
               child: Material(
                 color: Colors.transparent,
                 child: KeyedSubtree(
@@ -1967,7 +2035,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
 
-              offset: const Offset(0, -150),
+              offset: const Offset(0, -105),
 
               child: Material(
                 color: Colors.transparent,
@@ -2481,11 +2549,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                         const SizedBox(width: 8),
                         _FontChip(
                           label: '고딕체',
-                          selected: settings.fontFamily == 'inter',
+                          selected: settings.fontFamily == 'Inter',
                           onTap: () {
                             context
                                 .read<WritingSettingsController>()
-                                .updateFontFamily('inter');
+                                .updateFontFamily('Inter');
                           },
                         ),
                       ],
@@ -2497,13 +2565,13 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 label: '줄 간격',
                 valueText: settings.lineHeight.toStringAsFixed(1),
                 onMinus: () {
-                  final newH = (settings.lineHeight - 0.2).clamp(1.0, 3.0);
+                  final newH = (settings.lineHeight - 0.5).clamp(1.0, 3.0);
                   context.read<WritingSettingsController>().updateLineHeight(
                     newH,
                   );
                 },
                 onPlus: () {
-                  final newH = (settings.lineHeight + 0.2).clamp(1.0, 3.0);
+                  final newH = (settings.lineHeight + 0.5).clamp(1.0, 3.0);
                   context.read<WritingSettingsController>().updateLineHeight(
                     newH,
                   );
@@ -2514,13 +2582,13 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 label: '글 간격',
                 valueText: settings.letterSpacing.toStringAsFixed(1),
                 onMinus: () {
-                  final newLs = (settings.letterSpacing - 0.1).clamp(0.0, 0.7);
+                  final newLs = (settings.letterSpacing - 0.1).clamp(0.0, 1.0);
                   context.read<WritingSettingsController>().updateLetterSpacing(
                     newLs,
                   );
                 },
                 onPlus: () {
-                  final newLs = (settings.letterSpacing + 0.1).clamp(0.0, 0.7);
+                  final newLs = (settings.letterSpacing + 0.1).clamp(0.0, 1.0);
                   context.read<WritingSettingsController>().updateLetterSpacing(
                     newLs,
                   );
@@ -2531,13 +2599,13 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 label: '여백',
                 valueText: settings.horizontalMargin.round().toString(),
                 onMinus: () {
-                  final newM = (settings.horizontalMargin - 2).clamp(2.0, 50.0);
+                  final newM = (settings.horizontalMargin - 5).clamp(0.0, 30.0);
                   context
                       .read<WritingSettingsController>()
                       .updateHorizontalMargin(newM);
                 },
                 onPlus: () {
-                  final newM = (settings.horizontalMargin + 2).clamp(2.0, 50.0);
+                  final newM = (settings.horizontalMargin + 5).clamp(0.0, 30.0);
                   context
                       .read<WritingSettingsController>()
                       .updateHorizontalMargin(newM);
@@ -2697,6 +2765,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   Widget _buildPreviewTab(Color silver, WritingSettings settings) {
     _ensureItemKeys();
+
     return Column(
       children: [
         Transform.translate(
@@ -2711,7 +2780,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 focusColor: Colors.transparent,
                 splashFactory: NoSplash.splashFactory,
               ),
-
               child: Row(
                 children: [
                   Padding(
@@ -2757,77 +2825,73 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ),
           ),
         ),
+
         Transform.translate(
           offset: const Offset(0, -10),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child:
-                _isPageView
-                    ? SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.74,
-                      child: LayoutBuilder(
-                        builder: (context, c) {
-                          final maxCardWidth = c.maxWidth * 0.95;
-                          final pageHeight = maxCardWidth * 297 / 210;
-                          final maxCardHeight = c.maxHeight * 0.90;
-                          final cardHeight =
-                              pageHeight > maxCardHeight
-                                  ? maxCardHeight
-                                  : pageHeight;
+            padding: EdgeInsets.zero,
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final parentW = c.maxWidth;
+                final cardW = parentW * 0.95;
+                final cardH = cardW * 297 / 210;
+                final viewportH = cardH / 0.90;
 
-                          final prevW = _lastLayoutWidth;
-                          _lastLayoutWidth = maxCardWidth;
-                          final widthChanged =
-                              prevW != null &&
-                              (maxCardWidth - prevW).abs() > 0.5;
-                          if (widthChanged) {
-                            _resetPreviewCaches(notify: false);
-                            _pageWidthPx = maxCardWidth;
-                            _pageHeightPx = pageHeight;
-                            _scheduleRebuild(
-                              delay: const Duration(milliseconds: 80),
-                            );
-                          } else if (_pageWidthPx <= 0 || _pageHeightPx <= 0) {
-                            _pageWidthPx = maxCardWidth;
-                            _pageHeightPx = pageHeight;
-                            _scheduleRebuild(delay: Duration.zero);
-                          }
-                          return PageView.builder(
-                            controller: _pageCtrl,
-                            itemCount: _pageCount,
-                            itemBuilder: (context, index) {
-                              return Align(
-                                alignment: Alignment.topCenter,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 50),
-                                  child: SizedBox(
-                                    width: maxCardWidth,
-                                    height: cardHeight,
-                                    child: _buildContentCard(
-                                      index,
-                                      settings: settings,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    )
-                    : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
+                final prevW = _lastLayoutWidth;
+                _lastLayoutWidth = cardW;
+
+                final widthChanged =
+                    prevW != null && (cardW - prevW).abs() > 0.5;
+                if (widthChanged) {
+                  _resetPreviewCaches(notify: false);
+                  _pageWidthPx = cardW;
+                  _pageHeightPx = cardH;
+                  _scheduleRebuild(delay: const Duration(milliseconds: 80));
+                } else if (_pageWidthPx <= 0 || _pageHeightPx <= 0) {
+                  _pageWidthPx = cardW;
+                  _pageHeightPx = cardH;
+                  _scheduleRebuild(delay: Duration.zero);
+                }
+
+                if (_isPageView) {
+                  return SizedBox(
+                    width: parentW,
+                    height: viewportH,
+                    child: PageView.builder(
+                      controller: _pageCtrl,
                       itemCount: _pageCount,
                       itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
+                        return Align(
+                          alignment: Alignment.topCenter,
                           child: _buildContentCard(index, settings: settings),
                         );
                       },
                     ),
+                  );
+                }
+
+                return SizedBox(
+                  width: parentW,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _pageCount,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: _buildContentCard(index, settings: settings),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
         ),
+
         const SizedBox(height: 8),
       ],
     );
@@ -3300,7 +3364,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         pageBg = const Color(0xFFE3F2FD);
         break;
       default:
-        pageBg = Colors.white;
+        pageBg = Colors.transparent;
     }
 
     return LayoutBuilder(
@@ -3321,90 +3385,110 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               SizedBox(
                 width: cardW,
                 height: cardH,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(
-                      color: const Color.fromARGB(255, 138, 176, 201),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child:
-                            (isSpace || isLightSky)
-                                ? DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient:
-                                        isSpace
-                                            ? const LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: [
-                                                Color.fromARGB(255, 6, 10, 38),
-                                                Color.fromARGB(255, 20, 27, 69),
-                                                Color.fromARGB(246, 33, 23, 38),
-                                              ],
-                                            )
-                                            : const LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: [
-                                                Color.fromARGB(
-                                                  255,
-                                                  241,
-                                                  249,
-                                                  255,
-                                                ),
-                                                Color.fromARGB(
-                                                  255,
-                                                  180,
-                                                  225,
-                                                  255,
-                                                ),
-
-                                                Color.fromARGB(
-                                                  255,
-                                                  241,
-                                                  249,
-                                                  255,
-                                                ),
-                                              ],
-                                            ),
-                                  ),
-                                )
-                                : ColoredBox(color: pageBg),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color.fromARGB(255, 138, 176, 201),
+                        width: 0.5,
                       ),
-                      if (isSpace) ...[
-                        const Positioned.fill(
-                          child: _AnimatedStarField(starCount: 260),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child:
+                              (isSpace || isLightSky)
+                                  ? DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient:
+                                          isSpace
+                                              ? const LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [
+                                                  Color.fromARGB(
+                                                    255,
+                                                    6,
+                                                    10,
+                                                    38,
+                                                  ),
+                                                  Color.fromARGB(
+                                                    255,
+                                                    20,
+                                                    27,
+                                                    69,
+                                                  ),
+                                                  Color.fromARGB(
+                                                    246,
+                                                    33,
+                                                    23,
+                                                    38,
+                                                  ),
+                                                ],
+                                              )
+                                              : const LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [
+                                                  Color.fromARGB(
+                                                    255,
+                                                    241,
+                                                    249,
+                                                    255,
+                                                  ),
+                                                  Color.fromARGB(
+                                                    255,
+                                                    180,
+                                                    225,
+                                                    255,
+                                                  ),
+
+                                                  Color.fromARGB(
+                                                    255,
+                                                    241,
+                                                    249,
+                                                    255,
+                                                  ),
+                                                ],
+                                              ),
+                                    ),
+                                  )
+                                  : ColoredBox(color: pageBg),
                         ),
-                        const Positioned.fill(
-                          child: IgnorePointer(child: _ShootingStarLayer()),
-                        ),
-                      ] else if (isLightSky) ...[
-                        const Positioned.fill(
-                          child: CustomPaint(painter: _SunRayPainter()),
+                        if (isSpace) ...[
+                          const Positioned.fill(
+                            child: _AnimatedStarField(starCount: 260),
+                          ),
+                          const Positioned.fill(
+                            child: IgnorePointer(child: _ShootingStarLayer()),
+                          ),
+                        ] else if (isLightSky) ...[
+                          const Positioned.fill(
+                            child: CustomPaint(painter: _SunRayPainter()),
+                          ),
+                        ],
+
+                        Positioned.fill(
+                          child: FutureBuilder<Uint8List>(
+                            future: _ensurePngForPage(index + 1),
+                            builder: (context, snap) {
+                              final bytes = snap.data;
+                              if (bytes == null || bytes.isEmpty) {
+                                return const SizedBox.expand();
+                              }
+                              return Image.memory(
+                                bytes,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                              );
+                            },
+                          ),
                         ),
                       ],
-                      Positioned.fill(
-                        child: FutureBuilder<Uint8List>(
-                          future: _ensurePngForPage(index + 1),
-                          builder: (context, snap) {
-                            final bytes = snap.data;
-                            if (bytes == null || bytes.isEmpty) {
-                              return const SizedBox.expand();
-                            }
-                            return Image.memory(
-                              bytes,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -3427,121 +3511,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _imageSubmenuOpenVN.value = false;
     _imageSubmenuEntry?.remove();
     _imageSubmenuEntry = null;
-    _measuredImageSubmenuHeight = null;
-  }
-
-  void _showImageSubmenu() {
-    if (_imageSubmenuEntry != null) {
-      _hideImageSubmenu();
-      return;
-    }
-    final overlay = Overlay.of(context);
-    _imageSubmenuOpenVN.value = true;
-    _imageSubmenuEntry = OverlayEntry(
-      builder: (_) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_imageSubmenuEntry == null) return;
-          final ctx = _imageSubmenuKey.currentContext;
-          if (ctx == null) return;
-          final ro = ctx.findRenderObject();
-          if (ro is! RenderBox || !ro.hasSize) return;
-          final newH = ro.size.height;
-          if (_measuredImageSubmenuHeight != null &&
-              (newH - _measuredImageSubmenuHeight!).abs() < 0.5) {
-            return;
-          }
-          _measuredImageSubmenuHeight = newH;
-          _imageSubmenuEntry!.markNeedsBuild();
-        });
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _hideImageSubmenu,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            CompositedTransformFollower(
-              link: _imageLink,
-              showWhenUnlinked: false,
-              targetAnchor: Alignment.bottomCenter,
-              followerAnchor: Alignment.topCenter,
-
-              offset: const Offset(0, 8),
-              child: Material(
-                color: Colors.transparent,
-                child: KeyedSubtree(
-                  key: _imageSubmenuKey,
-                  child: FrostedContainer(
-                    enableGlass: true,
-                    blurSigma: 16,
-                    borderRadius: 22,
-                    showBorder: false,
-                    backgroundColor: Colors.white.withValues(alpha: 0.96),
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: _previewPopupWidth,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(999),
-                                onTap: _hideImageSubmenu,
-                                child: const Padding(
-                                  padding: EdgeInsets.all(6),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 18,
-                                    color: Color(0xFF1F3A56),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Expanded(
-                                child: Text(
-                                  'JPG / PNG',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 30),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          _PdfPopupItem(
-                            icon: Icons.image_outlined,
-                            label: '전체 회차',
-                            fontSize: 15.5,
-                            onTap: () {},
-                          ),
-                          const SizedBox(height: 6),
-                          _PdfPopupItem(
-                            icon: Icons.image_outlined,
-                            label: '선택 회차',
-                            fontSize: 15.5,
-                            onTap: () {},
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-    overlay.insert(_imageSubmenuEntry!);
   }
 
   void _showPdfSharePopup(BuildContext context) {
@@ -3603,15 +3572,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                   onTap: _showPdfSubmenu,
                                 ),
                                 const SizedBox(height: 6),
-                                CompositedTransformTarget(
-                                  link: _imageLink,
-                                  child: _PdfPopupItem(
-                                    icon: Icons.image_outlined,
-                                    label: 'JPG / PNG',
-                                    onTap: _showImageSubmenu,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
+
                                 CompositedTransformTarget(
                                   link: _cloudLink,
                                   child: _PdfPopupItem(
@@ -4073,17 +4034,6 @@ class _PageQuillViewState extends State<_PageQuillView>
   Widget build(BuildContext context) {
     super.build(context);
     final s = widget.settings;
-    String? fontFamily;
-    switch (s.fontFamily) {
-      case 'batang':
-        fontFamily = 'Apple SD 산돌고딕 Neo';
-        break;
-      case 'inter':
-        fontFamily = 'inter';
-        break;
-      default:
-        fontFamily = null;
-    }
     Color textColor;
     switch (s.themeId) {
       case 'dark':
@@ -4122,7 +4072,7 @@ class _PageQuillViewState extends State<_PageQuillView>
         fontSize: s.fontSize,
         height: s.lineHeight,
         letterSpacing: s.letterSpacing,
-        fontFamily: fontFamily,
+        fontFamily: resolveFontFamily(s.fontFamily),
         color: textColor,
       ),
 
@@ -4633,7 +4583,7 @@ class _MiniReadingPreview extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.only(left: 2, bottom: 6, top: 3),
           child: Text(
-            '미리보기',
+            '예시',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -4749,7 +4699,7 @@ class _MiniReadingPreview extends StatelessWidget {
         return 'Inter';
       case 'system':
       default:
-        return null;
+        return 'Inter';
     }
   }
 
@@ -5298,770 +5248,4 @@ class _SunRayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-sealed class _Block {}
-
-class _ParagraphBlock extends _Block {
-  final _BlockStyle style;
-  final List<_Line> lines = [];
-  _ParagraphBlock({required this.style});
-  void addLine(_Line l) => lines.add(l);
-}
-
-class _ImageBlock extends _Block {
-  final String src;
-  _ImageBlock(this.src);
-}
-
-class _HrBlock extends _Block {
-  final bool solid;
-  _HrBlock({required this.solid});
-}
-
-enum _LineKind { text, image, hr }
-
-class _Line {
-  final _LineKind kind;
-  final List<_Run> runs;
-  final _BlockStyle style;
-  final String? imageSource;
-  final bool? hrSolid;
-  _Line({required this.runs, required this.style})
-    : kind = _LineKind.text,
-      imageSource = null,
-      hrSolid = null;
-  _Line.image(this.imageSource)
-    : kind = _LineKind.image,
-      runs = const [],
-      style = const _BlockStyle(),
-      hrSolid = null;
-  _Line.hr({required bool solid})
-    : kind = _LineKind.hr,
-      runs = const [],
-      style = const _BlockStyle(),
-      imageSource = null,
-      hrSolid = solid;
-}
-
-class _Run {
-  final String text;
-  final _InlineStyle inline;
-  const _Run({required this.text, required this.inline});
-}
-
-@immutable
-class _InlineStyle {
-  final bool bold;
-  final bool italic;
-  final bool underline;
-  final bool strike;
-  final Color? color;
-  final Color? background;
-  final double? sizePt;
-  const _InlineStyle({
-    required this.bold,
-
-    required this.italic,
-    required this.underline,
-    required this.strike,
-    required this.color,
-    required this.background,
-    required this.sizePt,
-  });
-  static const empty = _InlineStyle(
-    bold: false,
-    italic: false,
-    underline: false,
-    strike: false,
-    color: null,
-    background: null,
-    sizePt: null,
-  );
-  static _InlineStyle fromDeltaAttrs(Map<String, dynamic> attrs) {
-    bool b(String k) => attrs[k] == true;
-    Color? parseHex(String? v) {
-      if (v == null) return null;
-      final s = v.trim();
-      if (!s.startsWith('#')) return null;
-      final hex = s.substring(1);
-      if (hex.length != 6) return null;
-      final n = int.tryParse(hex, radix: 16);
-      if (n == null) return null;
-      return Color(0xFF000000 | n);
-    }
-
-    double? parseSize(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      if (v is String) return double.tryParse(v);
-      return null;
-    }
-
-    return _InlineStyle(
-      bold: b('bold'),
-      italic: b('italic'),
-      underline: b('underline'),
-      strike: b('strike'),
-      color: parseHex(attrs['color'] as String?),
-      background: parseHex(attrs['background'] as String?),
-      sizePt: parseSize(attrs['size']),
-    );
-  }
-
-  TextStyle applyTo(TextStyle base) {
-    return base.copyWith(
-      fontWeight: bold ? FontWeight.w700 : base.fontWeight,
-      fontStyle: italic ? FontStyle.italic : base.fontStyle,
-      decoration: TextDecoration.combine([
-        if (underline) TextDecoration.underline,
-        if (strike) TextDecoration.lineThrough,
-      ]),
-      color: color ?? base.color,
-      backgroundColor: background,
-      fontSize: sizePt ?? base.fontSize,
-    );
-  }
-}
-
-@immutable
-class _BlockStyle {
-  final int header;
-  final TextAlign align;
-  final int indent;
-  final _ListType listType;
-  final bool blockQuote;
-  final bool codeBlock;
-  const _BlockStyle({
-    this.header = 0,
-    this.align = TextAlign.left,
-    this.indent = 0,
-    this.listType = _ListType.none,
-    this.blockQuote = false,
-    this.codeBlock = false,
-  });
-  static _BlockStyle fromDeltaAttrs(Map<String, dynamic> attrs) {
-    int header = 0;
-    final h = attrs['header'];
-    if (h is num) header = h.toInt();
-    if (h is String) header = int.tryParse(h) ?? 0;
-    TextAlign align = TextAlign.left;
-    final a = attrs['align'];
-    if (a == 'center') align = TextAlign.center;
-    if (a == 'right') align = TextAlign.right;
-    int indent = 0;
-    final ind = attrs['indent'];
-    if (ind is num) indent = ind.toInt();
-    if (ind is String) indent = int.tryParse(ind) ?? 0;
-    _ListType list = _ListType.none;
-    final l = attrs['list'];
-    if (l == 'bullet') list = _ListType.bullet;
-    if (l == 'ordered') list = _ListType.ordered;
-    final bq = attrs['blockquote'] == true;
-    final code = attrs['code-block'] == true;
-    return _BlockStyle(
-      header: header,
-      align: align,
-      indent: indent,
-      listType: list,
-      blockQuote: bq,
-      codeBlock: code,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is _BlockStyle &&
-      other.header == header &&
-      other.align == align &&
-      other.indent == indent &&
-      other.listType == listType &&
-      other.blockQuote == blockQuote &&
-      other.codeBlock == codeBlock;
-  @override
-  int get hashCode =>
-      Object.hash(header, align, indent, listType, blockQuote, codeBlock);
-}
-
-enum _ListType { none, bullet, ordered }
-
-class _DeltaParser {
-  List<_Block> parse(List<Map<String, dynamic>> deltaJson) {
-    final lines = <_Line>[];
-    final currentRuns = <_Run>[];
-    void flushLine(Map<String, dynamic>? newlineAttrs) {
-      final block = _BlockStyle.fromDeltaAttrs(newlineAttrs ?? const {});
-      lines.add(_Line(runs: List<_Run>.from(currentRuns), style: block));
-      currentRuns.clear();
-    }
-
-    for (final op in deltaJson) {
-      final insert = op['insert'];
-      final attrs =
-          (op['attributes'] is Map)
-              ? Map<String, dynamic>.from(op['attributes'] as Map)
-              : <String, dynamic>{};
-      if (insert is String) {
-        final parts = insert.split('\n');
-        for (int i = 0; i < parts.length; i++) {
-          final text = parts[i];
-          if (text.isNotEmpty) {
-            currentRuns.add(
-              _Run(text: text, inline: _InlineStyle.fromDeltaAttrs(attrs)),
-            );
-          }
-          if (i != parts.length - 1) flushLine(attrs);
-        }
-      } else if (insert is Map) {
-        if (insert.containsKey('image')) {
-          final src = insert['image'];
-          if (src is String && src.isNotEmpty) {
-            if (currentRuns.isNotEmpty) flushLine(const {});
-            lines.add(_Line.image(src));
-          }
-        } else if (insert.containsKey('hr_solid')) {
-          if (currentRuns.isNotEmpty) flushLine(const {});
-          lines.add(_Line.hr(solid: true));
-        } else if (insert.containsKey('hr')) {
-          if (currentRuns.isNotEmpty) flushLine(const {});
-          lines.add(_Line.hr(solid: false));
-        }
-      }
-    }
-    if (currentRuns.isNotEmpty) flushLine(const {});
-    final blocks = <_Block>[];
-    _ParagraphBlock? current;
-    for (final l in lines) {
-      if (l.kind == _LineKind.image) {
-        current = null;
-        blocks.add(_ImageBlock(l.imageSource!));
-        continue;
-      }
-      if (l.kind == _LineKind.hr) {
-        current = null;
-        blocks.add(_HrBlock(solid: l.hrSolid ?? false));
-        continue;
-      }
-      if (current == null || current.style != l.style) {
-        current = _ParagraphBlock(style: l.style);
-        blocks.add(current);
-      }
-      current.addLine(l);
-    }
-    if (blocks.isEmpty) blocks.add(_ParagraphBlock(style: const _BlockStyle()));
-    return blocks;
-  }
-}
-
-String _sanitizeUtf16(String s) {
-  bool hasSurrogate = false;
-  for (final cu in s.codeUnits) {
-    if (cu >= 0xD800 && cu <= 0xDFFF) {
-      hasSurrogate = true;
-      break;
-    }
-  }
-  if (!hasSurrogate) return s;
-  final out = StringBuffer();
-  final units = s.codeUnits;
-  for (int i = 0; i < units.length; i++) {
-    final cu = units[i];
-    if (cu >= 0xD800 && cu <= 0xDBFF) {
-      if (i + 1 < units.length) {
-        final cu2 = units[i + 1];
-        if (cu2 >= 0xDC00 && cu2 <= 0xDFFF) {
-          out.writeCharCode(cu);
-          out.writeCharCode(cu2);
-          i++;
-          continue;
-        }
-      }
-      out.write('\uFFFD');
-      continue;
-    }
-    if (cu >= 0xDC00 && cu <= 0xDFFF) {
-      out.write('\uFFFD');
-      continue;
-    }
-    out.writeCharCode(cu);
-  }
-  return out.toString();
-}
-
-class _PagePlan {
-  final List<_DrawCommand> commands;
-  _PagePlan({required this.commands});
-}
-
-sealed class _DrawCommand {
-  Future<void> paint({
-    required Canvas canvas,
-    required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
-    required double maxImageHeight,
-  });
-}
-
-class _CanvasLayoutEngine {
-  _CanvasLayoutEngine({
-    required this.baseStyle,
-    required this.contentWidth,
-    required this.contentHeight,
-    required this.imageSizes,
-    required this.maxImageHeight,
-  });
-  final TextStyle baseStyle;
-  final double contentWidth;
-  final double contentHeight;
-  final Map<String, Size> imageSizes;
-  final double maxImageHeight;
-  Future<List<_PagePlan>> paginate(List<_Block> blocks) async {
-    final pages = <_PagePlan>[];
-    var current = _PagePlan(commands: []);
-    double y = 0;
-    void newPage() {
-      pages.add(current);
-      current = _PagePlan(commands: []);
-      y = 0;
-    }
-
-    for (final b in blocks) {
-      if (b is _HrBlock) {
-        const h = 18.0;
-
-        if (y + h > contentHeight && y > 0) newPage();
-        current.commands.add(
-          _HrDrawCommand(y: y + 8, solid: b.solid, width: contentWidth),
-        );
-        y += h;
-        continue;
-      }
-      if (b is _ImageBlock) {
-        double reservedH = math.min(contentHeight * 0.45, 320.0);
-        final sz = imageSizes[b.src];
-        if (sz != null && sz.width > 0 && sz.height > 0) {
-          final scale = contentWidth / sz.width;
-          double drawH = sz.height * scale;
-          if (drawH > maxImageHeight) drawH = maxImageHeight;
-          reservedH = drawH;
-        }
-        if (y + reservedH > contentHeight && y > 0) newPage();
-        current.commands.add(
-          _ImageDrawCommand(y: y, src: b.src, width: contentWidth),
-        );
-        y += reservedH + 14;
-        continue;
-      }
-      if (b is _ParagraphBlock) {
-        final paragraphRuns = <_Run>[];
-        for (int i = 0; i < b.lines.length; i++) {
-          paragraphRuns.addAll(b.lines[i].runs);
-          if (i != b.lines.length - 1) {
-            paragraphRuns.add(
-              const _Run(text: '\n', inline: _InlineStyle.empty),
-            );
-          }
-        }
-        final pad = _BlockPadding.of(b.style);
-        final innerW = contentWidth - pad.left - pad.right;
-        final paraStyle = _BlockTextStyle.of(baseStyle, b.style);
-        var remainingRuns = paragraphRuns;
-        while (remainingRuns.isNotEmpty) {
-          final tp = _buildTextPainter(remainingRuns, paraStyle, b.style.align);
-          tp.layout(maxWidth: innerW);
-          final decoTop = pad.topDecoration;
-          final decoBottom = pad.bottomDecoration;
-          final available = contentHeight - y - decoTop - decoBottom - 0.5;
-          if (available <= 8 && y > 0) {
-            newPage();
-            continue;
-          }
-          if (tp.height <= available ||
-              (y == 0 && tp.height <= (contentHeight - decoTop - decoBottom))) {
-            current.commands.add(
-              _ParagraphDrawCommand(
-                y: y,
-                runs: remainingRuns,
-                baseStyle: paraStyle,
-                blockStyle: b.style,
-                width: innerW,
-                padding: pad,
-              ),
-            );
-            y += decoTop + tp.height + decoBottom;
-            break;
-          }
-          int cut = _cutOffsetByLineMetrics(tp, available, innerW);
-          if (cut <= 0) {
-            if (y > 0) {
-              newPage();
-              continue;
-            }
-            cut = 1;
-          }
-          final split = _RunSplitter.split(remainingRuns, cut);
-          final head = split.$1;
-          final tail = split.$2;
-          current.commands.add(
-            _ParagraphDrawCommand(
-              y: y,
-              runs: head,
-              baseStyle: paraStyle,
-              blockStyle: b.style,
-              width: innerW,
-              padding: pad,
-            ),
-          );
-          newPage();
-          remainingRuns = _trimLeadingNewlines(tail);
-        }
-        y += _BlockSpacing.of(b.style);
-        continue;
-      }
-    }
-    if (current.commands.isNotEmpty || pages.isEmpty) pages.add(current);
-    return pages.isEmpty ? [_PagePlan(commands: [])] : pages;
-  }
-
-  TextPainter _buildTextPainter(
-    List<_Run> runs,
-    TextStyle base,
-    TextAlign align,
-  ) {
-    final spans = <InlineSpan>[];
-    for (final r in runs) {
-      spans.add(
-        TextSpan(text: _sanitizeUtf16(r.text), style: r.inline.applyTo(base)),
-      );
-    }
-    return TextPainter(
-      text: TextSpan(children: spans),
-      textAlign: align,
-      textDirection: ui.TextDirection.ltr,
-    );
-  }
-
-  int _cutOffsetByLineMetrics(
-    TextPainter tp,
-    double available,
-    double maxWidth,
-  ) {
-    final lines = tp.computeLineMetrics();
-    if (lines.isEmpty) return 0;
-    double used = 0;
-    double cutY = 0;
-    for (final lm in lines) {
-      final next = used + lm.height;
-      if (next <= available) {
-        used = next;
-        cutY = used;
-      } else {
-        break;
-      }
-    }
-    if (cutY <= 0) return 0;
-    final pos = tp.getPositionForOffset(Offset(maxWidth - 1, cutY - 1));
-    return pos.offset;
-  }
-
-  List<_Run> _trimLeadingNewlines(List<_Run> runs) {
-    if (runs.isEmpty) return runs;
-    final out = <_Run>[];
-    bool skipping = true;
-    for (final r in runs) {
-      if (skipping) {
-        final trimmedLeft = r.text.replaceFirst(RegExp(r'^\n+'), '');
-        if (trimmedLeft.isEmpty) continue;
-        out.add(_Run(text: trimmedLeft, inline: r.inline));
-        skipping = false;
-      } else {
-        out.add(r);
-      }
-    }
-    return out;
-  }
-}
-
-class _ParagraphDrawCommand extends _DrawCommand {
-  _ParagraphDrawCommand({
-    required this.y,
-    required this.runs,
-    required this.baseStyle,
-
-    required this.blockStyle,
-    required this.width,
-    required this.padding,
-  });
-  final double y;
-  final List<_Run> runs;
-  final TextStyle baseStyle;
-  final _BlockStyle blockStyle;
-  final double width;
-  final _BlockPadding padding;
-  @override
-  Future<void> paint({
-    required Canvas canvas,
-    required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
-    required double maxImageHeight,
-  }) async {
-    final x0 = origin.dx + padding.left;
-    final y0 = origin.dy + y + padding.topDecoration;
-    final spans = <InlineSpan>[];
-    for (final r in runs) {
-      spans.add(
-        TextSpan(
-          text: _sanitizeUtf16(r.text),
-          style: r.inline.applyTo(baseStyle),
-        ),
-      );
-    }
-    final tp = TextPainter(
-      text: TextSpan(children: spans),
-      textAlign: blockStyle.align,
-      textDirection: ui.TextDirection.ltr,
-    )..layout(maxWidth: width);
-    final paraRect = Rect.fromLTWH(
-      origin.dx,
-      origin.dy + y,
-      width + padding.left + padding.right,
-      padding.topDecoration + tp.height + padding.bottomDecoration,
-    );
-    padding.paintDecoration(canvas, paraRect);
-    if (blockStyle.listType != _ListType.none) {
-      final markerX = origin.dx + padding.listMarkerX;
-      final markerY = y0 + 2;
-      final markerStyle = baseStyle.copyWith(
-        fontSize: (baseStyle.fontSize ?? 14) * 0.95,
-        fontWeight: FontWeight.w700,
-      );
-      final marker = blockStyle.listType == _ListType.bullet ? '•' : '1.';
-      final mtp = TextPainter(
-        text: TextSpan(text: marker, style: markerStyle),
-
-        textDirection: ui.TextDirection.ltr,
-      )..layout(maxWidth: padding.left);
-      mtp.paint(canvas, Offset(markerX, markerY));
-    }
-    tp.paint(canvas, Offset(x0, y0));
-  }
-}
-
-class _HrDrawCommand extends _DrawCommand {
-  _HrDrawCommand({required this.y, required this.solid, required this.width});
-  final double y;
-  final bool solid;
-  final double width;
-  @override
-  Future<void> paint({
-    required Canvas canvas,
-    required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
-    required double maxImageHeight,
-  }) async {
-    final paint =
-        Paint()
-          ..color = const Color.fromARGB(255, 129, 147, 182)
-          ..strokeWidth = solid ? 1.0 : 0.6
-          ..style = PaintingStyle.stroke;
-    final start = Offset(origin.dx, origin.dy + y);
-    final end = Offset(origin.dx + width, origin.dy + y);
-    if (solid) {
-      canvas.drawLine(start, end, paint);
-    } else {
-      const dashW = 5.0;
-      const dashS = 5.0;
-      double x = start.dx;
-      while (x < end.dx) {
-        final x2 = math.min(x + dashW, end.dx);
-        canvas.drawLine(Offset(x, start.dy), Offset(x2, start.dy), paint);
-        x += dashW + dashS;
-      }
-    }
-  }
-}
-
-class _ImageDrawCommand extends _DrawCommand {
-  _ImageDrawCommand({required this.y, required this.src, required this.width});
-  final double y;
-  final String src;
-  final double width;
-  @override
-  Future<void> paint({
-    required Canvas canvas,
-    required Offset origin,
-    required Future<ui.Image?> Function(String src) loadImage,
-
-    required double maxImageHeight,
-  }) async {
-    final img = await loadImage(src);
-    if (img == null) {
-      final r = Rect.fromLTWH(origin.dx, origin.dy + y, width, 140);
-      final border =
-          Paint()
-            ..color = const Color(0xFFBDBDBD)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1;
-      canvas.drawRect(r, border);
-      final tp = TextPainter(
-        text: const TextSpan(
-          text: '이미지를 불러올 수 없습니다',
-          style: TextStyle(fontSize: 13, color: Color(0xFF777777)),
-        ),
-        textDirection: ui.TextDirection.ltr,
-      )..layout(maxWidth: width - 20);
-      tp.paint(canvas, Offset(r.left + 10, r.top + 10));
-      return;
-    }
-    final iw = img.width.toDouble();
-    final ih = img.height.toDouble();
-    final scale = width / iw;
-    double drawH = ih * scale;
-    double drawW = width;
-    if (drawH > maxImageHeight) {
-      final s2 = maxImageHeight / drawH;
-      drawH = maxImageHeight;
-      drawW = drawW * s2;
-    }
-    final dx = origin.dx + (width - drawW) / 2;
-    final dy = origin.dy + y;
-    final dst = Rect.fromLTWH(dx, dy, drawW, drawH);
-    final srcRect = Rect.fromLTWH(0, 0, iw, ih);
-    canvas.drawImageRect(
-      img,
-      srcRect,
-      dst,
-      Paint()..filterQuality = FilterQuality.high,
-    );
-  }
-}
-
-class _BlockPadding {
-  final double left;
-  final double right;
-  final double topDecoration;
-  final double bottomDecoration;
-  final bool quote;
-  final bool code;
-  final _ListType list;
-  final int indent;
-  const _BlockPadding({
-    required this.left,
-
-    required this.right,
-    required this.topDecoration,
-    required this.bottomDecoration,
-    required this.quote,
-    required this.code,
-    required this.list,
-    required this.indent,
-  });
-  static _BlockPadding of(_BlockStyle s) {
-    final baseIndent = 14.0 * s.indent;
-    double left = baseIndent;
-    double right = 0;
-    if (s.listType != _ListType.none) left += 22;
-    final quote = s.blockQuote;
-    final code = s.codeBlock;
-    if (quote) {
-      left += 16;
-      right += 6;
-    }
-    if (code) {
-      left += 12;
-      right += 12;
-    }
-    return _BlockPadding(
-      left: left,
-      right: right,
-      topDecoration: (quote || code) ? 8 : 0,
-      bottomDecoration: (quote || code) ? 8 : 0,
-      quote: quote,
-      code: code,
-      list: s.listType,
-      indent: s.indent,
-    );
-  }
-
-  double get listMarkerX => (left - 18).clamp(0, 10000);
-  void paintDecoration(Canvas canvas, Rect paragraphRect) {
-    if (!quote && !code) return;
-    if (code) {
-      final r = RRect.fromRectAndRadius(
-        paragraphRect,
-        const Radius.circular(10),
-      );
-      canvas.drawRRect(
-        r,
-        Paint()..color = const Color.fromARGB(40, 120, 140, 160),
-      );
-    }
-    if (quote) {
-      final barPaint =
-          Paint()
-            ..color = const Color.fromARGB(255, 171, 193, 217)
-            ..strokeWidth = 3.0
-            ..style = PaintingStyle.stroke;
-      final x = paragraphRect.left + 6;
-
-      canvas.drawLine(
-        Offset(x, paragraphRect.top + 6),
-        Offset(x, paragraphRect.bottom - 6),
-        barPaint,
-      );
-    }
-  }
-}
-
-class _BlockTextStyle {
-  static TextStyle of(TextStyle base, _BlockStyle s) {
-    double size = base.fontSize ?? 15;
-    if (s.header == 1) size *= 1.55;
-    if (s.header == 2) size *= 1.35;
-    if (s.header == 3) size *= 1.18;
-    final isHeader = s.header > 0;
-    final isCode = s.codeBlock;
-    return base.copyWith(
-      fontSize: size,
-      fontWeight: isHeader ? FontWeight.w800 : base.fontWeight,
-      fontFamily: isCode ? (base.fontFamily ?? 'monospace') : base.fontFamily,
-      height: base.height,
-    );
-  }
-}
-
-class _BlockSpacing {
-  static double of(_BlockStyle s) {
-    if (s.header == 1) return 10;
-    if (s.header == 2) return 8;
-    if (s.header == 3) return 6;
-    if (s.blockQuote || s.codeBlock) return 8;
-    return 6;
-  }
-}
-
-class _RunSplitter {
-  static (List<_Run>, List<_Run>) split(List<_Run> runs, int cutOffset) {
-    if (cutOffset <= 0) return (<_Run>[], List<_Run>.from(runs));
-    int remaining = cutOffset;
-    final left = <_Run>[];
-    final right = <_Run>[];
-    for (final r in runs) {
-      final len = r.text.length;
-      if (remaining >= len) {
-        left.add(r);
-        remaining -= len;
-      } else if (remaining <= 0) {
-        right.add(r);
-      } else {
-        final a = r.text.substring(0, remaining);
-        final b = r.text.substring(remaining);
-        if (a.isNotEmpty) left.add(_Run(text: a, inline: r.inline));
-        if (b.isNotEmpty) right.add(_Run(text: b, inline: r.inline));
-        remaining = 0;
-      }
-    }
-
-    return (left, right);
-  }
 }

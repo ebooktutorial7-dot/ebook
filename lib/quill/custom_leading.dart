@@ -1,4 +1,4 @@
-// leading.dart
+// custom_leading.dart
 // ignore_for_file: implementation_imports
 
 import 'package:flutter/material.dart';
@@ -8,39 +8,74 @@ import 'package:flutter_quill/flutter_quill.dart' show Attribute;
 import 'package:flutter_quill/src/document/nodes/node.dart';
 import 'package:flutter_quill/src/editor/raw_editor/builders/leading_block_builder.dart';
 
-/// ChapterWritePage에서:
-/// quill.QuillEditorConfig(customLeadingBlockBuilder: buildCustomLeading)
-Widget? buildCustomLeading(Node node, LeadingConfig cfg) {
-  final attr = cfg.attribute;
+/// ✅ 해결 2: 색을 "직접" 주입하는 버전
+///
+/// - themeTextColor == null  → 기본 블랙 마커
+/// - themeTextColor != null  → 테마 글자색 마커
+///
+/// 사용 예 (ChapterWritePage):
+///   final Color? markerColor =
+///       (settings.themeId == 'default') ? null : _textColorFromSettings(settings);
+///   customLeadingBlockBuilder: buildCustomLeadingWithColor(markerColor),
+Widget? Function(Node, LeadingConfig) buildCustomLeadingWithColor(
+  Color? themeTextColor,
+) {
+  return (Node node, LeadingConfig cfg) {
+    final attr = cfg.attribute;
 
-  final isUl = attr == Attribute.ul;
-  final isOl = attr == Attribute.ol;
-  final isCheck = attr == Attribute.checked || attr == Attribute.unchecked;
+    final isUl = attr == Attribute.ul;
+    final isOl = attr == Attribute.ol;
+    final isCheck = attr == Attribute.checked || attr == Attribute.unchecked;
 
-  // ✅ 체크박스는 기본 렌더링에 맡김(여기서 건드리면 uiBuilder 타입 차이로 에러 나기 쉬움)
-  if (isCheck) return null;
+    // ✅ 체크박스는 기본 렌더링에 맡김
+    if (isCheck) return null;
+    if (!isUl && !isOl) return null;
 
-  if (!isUl && !isOl) return null;
+    // ✅ 마커 색: 기본 블랙 or 테마 글자색
+    final Color markerColor = themeTextColor ?? Colors.black;
 
-  const markerColor = Colors.black;
+    final width = cfg.width ?? 36.0;
+    final padRight = cfg.padding ?? 6.0;
 
-  final width = cfg.width ?? 36.0;
-  final padRight = cfg.padding ?? 6.0;
+    // ✅ “본문 크기에 따라 자연스럽게”
+    final baseFont = _resolveBaseFontSize(cfg);
 
-  // ✅ “본문 크기에 따라 자연스럽게”
-  // - style.fontSize가 있으면 그게 가장 정확
-  // - 없으면 lineSize에서 추정
-  final baseFont = _resolveBaseFontSize(cfg);
+    // 인덴트 레벨(있으면 살짝 줄임)
+    final indentLevel = (cfg.attrs[Attribute.indent.key]?.value as int?) ?? 0;
 
-  // 인덴트 레벨(있으면 살짝 줄임)
-  final indentLevel = (cfg.attrs[Attribute.indent.key]?.value as int?) ?? 0;
+    // ✅ UL: 텍스트 '•'
+    if (isUl) {
+      final ulFont = _shrinkByIndent(
+        baseFont * 0.95,
+        indentLevel,
+      ).clamp(12.0, 20.0);
 
-  // ✅ UL: png.dart처럼 텍스트 '•'
-  if (isUl) {
-    final ulFont = _shrinkByIndent(
-      baseFont * 0.95,
+      return SizedBox(
+        width: width,
+        child: Padding(
+          padding: EdgeInsets.only(right: padRight),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _TextMarker(
+              text: '•',
+              color: markerColor,
+              fontSize: ulFont,
+              fontWeight: FontWeight.w800,
+              topNudge: _nudgeForMarker(baseFont),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ✅ OL: "1." (원형 없음)
+    final label = _resolveOrderedLabel(cfg);
+    final marker = '$label.';
+
+    final olFont = _shrinkByIndent(
+      baseFont * 0.80,
       indentLevel,
-    ).clamp(12.0, 20.0);
+    ).clamp(11.0, 18.0);
 
     return SizedBox(
       width: width,
@@ -49,42 +84,16 @@ Widget? buildCustomLeading(Node node, LeadingConfig cfg) {
         child: Align(
           alignment: Alignment.topCenter,
           child: _TextMarker(
-            text: '•',
+            text: marker,
             color: markerColor,
-            fontSize: ulFont,
+            fontSize: olFont,
             fontWeight: FontWeight.w800,
-            topNudge: _nudgeForMarker(baseFont),
+            topNudge: _nudgeForMarker(baseFont) + 1.0,
           ),
         ),
       ),
     );
-  }
-
-  // ✅ OL: PNG처럼 "1." (원형 없음)
-  final label = _resolveOrderedLabel(cfg);
-  final marker = '$label.';
-
-  final olFont = _shrinkByIndent(
-    baseFont * 0.80,
-    indentLevel,
-  ).clamp(11.0, 18.0);
-
-  return SizedBox(
-    width: width,
-    child: Padding(
-      padding: EdgeInsets.only(right: padRight),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: _TextMarker(
-          text: marker,
-          color: markerColor,
-          fontSize: olFont,
-          fontWeight: FontWeight.w800,
-          topNudge: _nudgeForMarker(baseFont) + 1.0,
-        ),
-      ),
-    ),
-  );
+  };
 }
 
 /// ✅ 현재 줄 폰트 크기 추정
@@ -107,18 +116,14 @@ double _shrinkByIndent(double v, int indent) {
   return v * factor;
 }
 
-/// ✅ 폰트 크기에 따른 미세 위치 보정(너무 위/아래로 뜨는 것 방지)
+/// ✅ 폰트 크기에 따른 미세 위치 보정
 double _nudgeForMarker(double baseFont) {
-  // baseFont가 크면 살짝 더 내려서 시각적으로 “중앙”처럼 보이게
   if (baseFont >= 20) return 2.0;
   if (baseFont >= 17) return 1.5;
   return 1.0;
 }
 
-/// ✅ 안전: getIndexNumberByIndent가
-/// - 어떤 빌드에서는 String? 일 수 있고
-/// - 어떤 빌드에서는 함수일 수 있고
-/// - 어떤 빌드에서는 아예 없을 수 있음
+/// ✅ 안전: getIndexNumberByIndent 대응
 String _resolveOrderedLabel(LeadingConfig cfg) {
   final dynamic v = cfg.getIndexNumberByIndent;
 
@@ -126,12 +131,10 @@ String _resolveOrderedLabel(LeadingConfig cfg) {
     return v.trim();
   }
 
-  // "함수"인 경우에만 호출 (여기서 잘못 호출하면 invocation 에러)
   if (v is String Function()) {
     final r = v();
     if (r.trim().isNotEmpty) return r.trim();
   } else if (v is Function) {
-    // 혹시 typedef가 달라서 Function으로만 잡히는 경우까지 방어
     try {
       final r = v();
       if (r is String && r.trim().isNotEmpty) return r.trim();

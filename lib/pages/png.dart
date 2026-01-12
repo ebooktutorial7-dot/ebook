@@ -20,9 +20,97 @@ import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'dart:collection';
 import 'dart:isolate';
 
+List<Map<String, dynamic>> stripThemeBaseColorFromDelta(
+  List<Map<String, dynamic>> delta, {
+  String themeBaseColorHex = '#ffffff',
+  bool stripBackgroundToo = false,
+}) {
+  final target = themeBaseColorHex.trim().toLowerCase();
+
+  bool isTarget(dynamic v) {
+    if (v is! String) return false;
+    return v.trim().toLowerCase() == target;
+  }
+
+  return delta
+      .map((op) {
+        final m = Map<String, dynamic>.from(op);
+
+        final attrsRaw = m['attributes'];
+        if (attrsRaw is Map) {
+          final attrs = Map<String, dynamic>.from(attrsRaw);
+
+          var changed = false;
+
+          if (isTarget(attrs['color'])) {
+            attrs.remove('color');
+            changed = true;
+          }
+
+          if (stripBackgroundToo && isTarget(attrs['background'])) {
+            attrs.remove('background');
+            changed = true;
+          }
+
+          if (changed) {
+            if (attrs.isEmpty) {
+              m.remove('attributes');
+            } else {
+              m['attributes'] = attrs;
+            }
+          }
+        }
+
+        return m;
+      })
+      .toList(growable: true);
+}
+
+ThemeData fixedLightTheme() {
+  return ThemeData(
+    brightness: Brightness.light,
+    useMaterial3: true,
+
+    scaffoldBackgroundColor: Colors.white,
+
+    colorScheme: const ColorScheme.light(
+      primary: Color(0xFF1F3A56),
+      surface: Colors.white,
+      onSurface: Color(0xFF111111),
+    ),
+
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.white,
+      foregroundColor: Color(0xFF111111),
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+    ),
+
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF1F3A56),
+        overlayColor: Colors.transparent,
+        splashFactory: NoSplash.splashFactory,
+      ),
+    ),
+
+    elevatedButtonTheme: const ElevatedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStatePropertyAll(Color(0xFFE9F7FF)),
+        foregroundColor: WidgetStatePropertyAll(Color(0xFF1F3A56)),
+        elevation: WidgetStatePropertyAll(0.0),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        overlayColor: WidgetStatePropertyAll(Colors.transparent),
+        splashFactory: NoSplash.splashFactory,
+      ),
+    ),
+  );
+}
+
 extension Matrix4ScaleCompat on Matrix4 {
-  Matrix4 scaleByDouble(double x, double y, double z, double w) {
-    // this = this * S (S는 scale matrix)
+  Matrix4 scaleByDouble(double x, double y, double z) {
     final s =
         Matrix4.identity()
           ..setEntry(0, 0, x)
@@ -151,348 +239,357 @@ Future<SharePickResult?> showShareOptionsDialog({
     context: context,
     barrierColor: barrierColor.withValues(alpha: 0.21),
     builder: (_) {
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          void confirm() {
-            if (rangeMode == ShareRangeMode.range) {
-              final ok = applyFields(commitNormalize: true);
-              if (!ok) {
-                setModalState(() {});
-                return;
+      return Theme(
+        data: fixedLightTheme(),
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            void confirm() {
+              if (rangeMode == ShareRangeMode.range) {
+                final ok = applyFields(commitNormalize: true);
+                if (!ok) {
+                  setModalState(() {});
+                  return;
+                }
+              } else {
+                // current/all은 이미 값이 맞춰져 있음
+                rangeInvalid = false;
+                normalizeRange();
+                syncCtrls();
               }
-            } else {
-              // current/all은 이미 값이 맞춰져 있음
-              rangeInvalid = false;
-              normalizeRange();
-              syncCtrls();
+
+              Navigator.pop(
+                context,
+                SharePickResult(
+                  format: format,
+                  rangeMode: rangeMode,
+                  startPage: start,
+                  endPage: end,
+                ),
+              );
             }
 
-            Navigator.pop(
-              context,
-              SharePickResult(
-                format: format,
-                rangeMode: rangeMode,
-                startPage: start,
-                endPage: end,
-              ),
-            );
-          }
+            Widget segPill({required List<Widget> children}) {
+              return Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const ui.Color.fromARGB(255, 234, 243, 255),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(children: children),
+              );
+            }
 
-          Widget segPill({required List<Widget> children}) {
-            return Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: const ui.Color.fromARGB(255, 234, 243, 255),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(children: children),
-            );
-          }
-
-          Widget segItem({
-            required String label,
-            required bool selected,
-            required VoidCallback onTap,
-          }) {
-            return Expanded(
-              child: GestureDetector(
-                onTap: onTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: selected ? Colors.white : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
-                    border:
-                        selected
-                            ? Border.all(
-                              color: const Color(0xFFBFD7EE),
-                              width: 1,
-                            )
-                            : null,
-                  ),
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                      color:
+            Widget segItem({
+              required String label,
+              required bool selected,
+              required VoidCallback onTap,
+            }) {
+              return Expanded(
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selected ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                      border:
                           selected
-                              ? const Color(0xFF1F3A56)
-                              : const ui.Color.fromARGB(255, 144, 164, 185),
+                              ? Border.all(
+                                color: const Color(0xFFBFD7EE),
+                                width: 1,
+                              )
+                              : null,
+                    ),
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w400,
+                        color:
+                            selected
+                                ? const Color(0xFF1F3A56)
+                                : const ui.Color.fromARGB(255, 144, 164, 185),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }
+              );
+            }
 
-          Widget minimalField(
-            TextEditingController ctrl,
-            FocusNode focus, {
-            double width = 56, // ✅ 기본 알약 폭
-          }) {
-            final border =
-                rangeInvalid
-                    ? const ui.Color.fromARGB(255, 239, 111, 109)
-                    : const Color(0xFFD6E3F0);
+            Widget minimalField(
+              TextEditingController ctrl,
+              FocusNode focus, {
+              double width = 56, // ✅ 기본 알약 폭
+            }) {
+              final border =
+                  rangeInvalid
+                      ? const ui.Color.fromARGB(255, 239, 111, 109)
+                      : const Color(0xFFD6E3F0);
 
-            return Container(
-              width: width, // ✅ 가로 고정
-              height: 34,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: border, width: 0.8),
-              ),
-              alignment: Alignment.center,
-              child: CupertinoTextField(
-                controller: ctrl,
-                focusNode: focus,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: const BoxDecoration(color: Colors.transparent),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  height: 1.0,
-                  color: Color(0xFF1F3A56),
+              return Container(
+                width: width, // ✅ 가로 고정
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: border, width: 0.8),
                 ),
-                onChanged:
-                    (_) => setModalState(
-                      () => applyFields(commitNormalize: false),
-                    ),
-                onEditingComplete:
-                    () =>
-                        setModalState(() => applyFields(commitNormalize: true)),
-              ),
-            );
-          }
-
-          final showRange = rangeMode == ShareRangeMode.range;
-
-          return Material(
-            type: MaterialType.transparency,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 24,
-                ),
-                child: Container(
-                  width: 250,
-                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE6ECF3)),
+                alignment: Alignment.center,
+                child: CupertinoTextField(
+                  controller: ctrl,
+                  focusNode: focus,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        dialogTitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF111111),
+                  decoration: const BoxDecoration(color: Colors.transparent),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                    color: Color(0xFF1F3A56),
+                  ),
+                  onChanged:
+                      (_) => setModalState(
+                        () => applyFields(commitNormalize: false),
+                      ),
+                  onEditingComplete:
+                      () => setModalState(
+                        () => applyFields(commitNormalize: true),
+                      ),
+                ),
+              );
+            }
+
+            final showRange = rangeMode == ShareRangeMode.range;
+
+            return Material(
+              type: MaterialType.transparency,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 24,
+                  ),
+                  child: Container(
+                    width: 250,
+                    padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFE6ECF3)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          dialogTitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111111),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // FORMAT (minimal segmented)
-                      segPill(
-                        children: [
-                          segItem(
-                            label: 'PDF',
-                            selected: format == ShareFormat.pdf,
-                            onTap:
-                                () => setModalState(
-                                  () => format = ShareFormat.pdf,
-                                ),
-                          ),
-                          segItem(
-                            label: 'PNG',
-                            selected: format == ShareFormat.png,
-                            onTap:
-                                () => setModalState(
-                                  () => format = ShareFormat.png,
-                                ),
-                          ),
-                          segItem(
-                            label: 'JPG',
-                            selected: format == ShareFormat.jpg,
-                            onTap:
-                                () => setModalState(
-                                  () => format = ShareFormat.jpg,
-                                ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // RANGE (minimal segmented)
-                      segPill(
-                        children: [
-                          segItem(
-                            label: '지금',
-                            selected: rangeMode == ShareRangeMode.current,
-                            onTap:
-                                () => setModalState(
-                                  () => setPreset(ShareRangeMode.current),
-                                ),
-                          ),
-                          segItem(
-                            label: '전체',
-                            selected: rangeMode == ShareRangeMode.all,
-                            onTap:
-                                () => setModalState(
-                                  () => setPreset(ShareRangeMode.all),
-                                ),
-                          ),
-                          segItem(
-                            label: '직접',
-                            selected: rangeMode == ShareRangeMode.range,
-                            onTap:
-                                () => setModalState(() {
-                                  setPreset(ShareRangeMode.range);
-                                  startFocus.requestFocus();
-                                }),
-                          ),
-                        ],
-                      ),
-
-                      // A안: start/end only when range
-                      if (!showRange)
-                        const SizedBox(height: 7)
-                      else
-                        Padding(
-                          padding: const EdgeInsets.only(top: 15),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center, // 가운데 정렬(선택)
-                                children: [
-                                  minimalField(
-                                    startCtrl,
-                                    startFocus,
-                                    width: 60,
+                        // FORMAT (minimal segmented)
+                        segPill(
+                          children: [
+                            segItem(
+                              label: 'PDF',
+                              selected: format == ShareFormat.pdf,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.pdf,
                                   ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
+                            ),
+                            segItem(
+                              label: 'PNG',
+                              selected: format == ShareFormat.png,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.png,
+                                  ),
+                            ),
+                            segItem(
+                              label: 'JPG',
+                              selected: format == ShareFormat.jpg,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.jpg,
+                                  ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // RANGE (minimal segmented)
+                        segPill(
+                          children: [
+                            segItem(
+                              label: '지금',
+                              selected: rangeMode == ShareRangeMode.current,
+                              onTap:
+                                  () => setModalState(
+                                    () => setPreset(ShareRangeMode.current),
+                                  ),
+                            ),
+                            segItem(
+                              label: '전체',
+                              selected: rangeMode == ShareRangeMode.all,
+                              onTap:
+                                  () => setModalState(
+                                    () => setPreset(ShareRangeMode.all),
+                                  ),
+                            ),
+                            segItem(
+                              label: '직접',
+                              selected: rangeMode == ShareRangeMode.range,
+                              onTap:
+                                  () => setModalState(() {
+                                    setPreset(ShareRangeMode.range);
+                                    startFocus.requestFocus();
+                                  }),
+                            ),
+                          ],
+                        ),
+
+                        // A안: start/end only when range
+                        if (!showRange)
+                          const SizedBox(height: 7)
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(top: 15),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center, // 가운데 정렬(선택)
+                                  children: [
+                                    minimalField(
+                                      startCtrl,
+                                      startFocus,
+                                      width: 60,
                                     ),
-                                    child: Text(
-                                      '~',
-                                      style: TextStyle(
-                                        color: Color(0xFF9AA7B4),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                      child: Text(
+                                        '~',
+                                        style: TextStyle(
+                                          color: Color(0xFF9AA7B4),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  minimalField(endCtrl, endFocus, width: 60),
-                                ],
-                              ),
+                                    minimalField(endCtrl, endFocus, width: 60),
+                                  ],
+                                ),
 
-                              const SizedBox(height: 6),
-                              Text(
-                                '1~$pagesCount',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color:
-                                      rangeInvalid
-                                          ? const ui.Color.fromARGB(
-                                            255,
-                                            255,
-                                            94,
-                                            92,
-                                          )
-                                          : const Color(0xFF9AA7B4),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '1~$pagesCount',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        rangeInvalid
+                                            ? const ui.Color.fromARGB(
+                                              255,
+                                              255,
+                                              94,
+                                              92,
+                                            )
+                                            : const Color(0xFF9AA7B4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: TextButton.styleFrom(
+                                  overlayColor:
+                                      Colors
+                                          .transparent, // ✅ long press / hover 제거
+                                  splashFactory: NoSplash.splashFactory,
+                                ),
+                                child: const Text(
+                                  '닫기',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F3A56),
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ButtonStyle(
+                                  backgroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFFE9F7FF),
+                                  ),
+                                  foregroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFF1F3A56),
+                                  ),
+                                  elevation: const WidgetStatePropertyAll(0.0),
+                                  shadowColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  surfaceTintColor:
+                                      const WidgetStatePropertyAll(
+                                        Colors.transparent,
+                                      ),
+                                  overlayColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  splashFactory: NoSplash.splashFactory,
+                                  shape: WidgetStatePropertyAll(
+                                    RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(50),
+                                    ),
+                                  ),
+                                  padding: const WidgetStatePropertyAll(
+                                    EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+
+                                onPressed: canConfirm() ? confirm : null,
+                                child: const Text(
+                                  '공유',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-
-                      const SizedBox(height: 12),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: TextButton.styleFrom(
-                                overlayColor:
-                                    Colors
-                                        .transparent, // ✅ long press / hover 제거
-                                splashFactory: NoSplash.splashFactory,
-                              ),
-                              child: const Text(
-                                '닫기',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1F3A56),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ButtonStyle(
-                                backgroundColor: const WidgetStatePropertyAll(
-                                  Color(0xFFE9F7FF),
-                                ),
-                                foregroundColor: const WidgetStatePropertyAll(
-                                  Color(0xFF1F3A56),
-                                ),
-                                elevation: const WidgetStatePropertyAll(0.0),
-                                shadowColor: const WidgetStatePropertyAll(
-                                  Colors.transparent,
-                                ),
-                                surfaceTintColor: const WidgetStatePropertyAll(
-                                  Colors.transparent,
-                                ),
-                                overlayColor: const WidgetStatePropertyAll(
-                                  Colors.transparent,
-                                ),
-                                splashFactory: NoSplash.splashFactory,
-                                shape: WidgetStatePropertyAll(
-                                  RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(50),
-                                  ),
-                                ),
-                                padding: const WidgetStatePropertyAll(
-                                  EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-
-                              onPressed: canConfirm() ? confirm : null,
-                              child: const Text(
-                                '공유',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     },
   );
@@ -649,10 +746,10 @@ class PngPage extends StatefulWidget {
     required this.revision,
     this.episodeTitle,
     // 스타일/설정(ChapterWritePage settings 그대로 넘기면 됨)
-    this.horizontalMargin = 18,
+    this.horizontalMargin = 17,
     this.verticalMargin = 18,
-    this.baseFontSize = 15,
-    this.lineHeight = 1.55,
+    this.baseFontSize = 14,
+    this.lineHeight = 1.45,
     this.letterSpacing = 0.0,
     this.fontFamily,
     this.pageBackgroundColor = Colors.white,
@@ -709,6 +806,20 @@ class _PngPageState extends State<PngPage> {
   static const double _minUiScale = 1.0;
   static const double _maxUiScale = 4.0;
   static const double _stepUiScale = 0.15;
+
+  // A4 기준(프린팅 px) 보정용 상수 (BookBuilder와 동일)
+  static const double _kA4W = 595.275590551;
+  static const double _kA4H = 841.88976378;
+
+  double _effectiveHorizontalMarginPx() {
+    if (_pageWidthPx <= 0) return widget.horizontalMargin;
+    return widget.horizontalMargin * (_pageWidthPx / _kA4W);
+  }
+
+  double _effectiveVerticalMarginPx() {
+    if (_pageHeightPx <= 0) return widget.verticalMargin;
+    return widget.verticalMargin * (_pageHeightPx / _kA4H);
+  }
 
   int _loadingCount = 0;
   bool get _isLoading => _loadingCount > 0;
@@ -909,7 +1020,7 @@ class _PngPageState extends State<PngPage> {
                           SizedBox(
                             width: usableW,
                             child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
+                              data: SliderThemeData(
                                 trackHeight: 0.35,
                                 overlayShape: SliderComponentShape.noOverlay,
                                 thumbShape: const RoundSliderThumbShape(
@@ -1125,6 +1236,34 @@ class _PngPageState extends State<PngPage> {
     return results.whereType<T>().toList();
   }
 
+  Future<List<T?>> _runWithConcurrencyNullable<T>({
+    required List<Future<T?> Function()> tasks,
+    int concurrency = 2,
+  }) async {
+    if (tasks.isEmpty) return <T?>[];
+
+    final results = List<T?>.filled(tasks.length, null);
+    int nextIndex = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        final i = nextIndex++;
+        if (i >= tasks.length) return;
+
+        try {
+          results[i] = await tasks[i]();
+        } catch (_) {
+          // 실패는 null 유지
+          results[i] = null;
+        }
+      }
+    }
+
+    final runners = List.generate(math.max(1, concurrency), (_) => worker());
+    await Future.wait(runners);
+    return results;
+  }
+
   void _resetPaginationAndCaches({bool notify = true}) {
     _paginateDebounce?.cancel();
     _paginateEpoch++; // 이전 paginate 전부 무효화
@@ -1216,11 +1355,19 @@ class _PngPageState extends State<PngPage> {
   @override
   void initState() {
     super.initState();
+
     var safeDelta = widget.deltaJson
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: true);
 
-    // ✅ 추가: 회차 제목을 delta 맨 앞에 삽입
+    // ✅ A안: 테마 기본색(#ffffff)만 제거
+    safeDelta = stripThemeBaseColorFromDelta(
+      safeDelta,
+      themeBaseColorHex: '#ffffff',
+      stripBackgroundToo: false, // 원하면 true
+    );
+
+    // ✅ 회차 제목 삽입
     safeDelta = _withEpisodeTitleDelta(safeDelta);
 
     _blocks = _DeltaParser().parse(safeDelta);
@@ -1236,6 +1383,14 @@ class _PngPageState extends State<PngPage> {
     var safeDelta = widget.deltaJson
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: true);
+
+    // ✅ A안: 테마 기본색(#ffffff)만 제거
+    safeDelta = stripThemeBaseColorFromDelta(
+      safeDelta,
+      themeBaseColorHex: '#ffffff',
+      stripBackgroundToo: false, // 원하면 true
+    );
+
     safeDelta = _withEpisodeTitleDelta(safeDelta);
 
     final newDeltaSig = _calcDeltaSig(safeDelta);
@@ -1339,8 +1494,11 @@ class _PngPageState extends State<PngPage> {
     _paginating = true;
     _incLoading();
     try {
-      final contentW = _pageWidthPx - widget.horizontalMargin * 2;
-      final contentH = _pageHeightPx - widget.verticalMargin * 2;
+      final hm = _effectiveHorizontalMarginPx();
+      final vm = _effectiveVerticalMarginPx();
+
+      final contentW = _pageWidthPx - hm * 2;
+      final contentH = _pageHeightPx - vm * 2;
 
       final maxImageH = contentH * widget.maxImageHeightRatio;
 
@@ -1563,16 +1721,17 @@ class _PngPageState extends State<PngPage> {
     final srcs = _collectImageSrcsFromPlan(plan);
     if (srcs.isEmpty) return;
 
-    final double contentW = _pageWidthPx - widget.horizontalMargin * 2;
+    final hm = _effectiveHorizontalMarginPx();
+    final double contentW = _pageWidthPx - hm * 2;
     final int targetPx = (contentW * scale).round().clamp(64, 4096);
 
-    final tasks = <Future<void> Function()>[
-      for (final src in srcs)
-        () async {
-          await _loadImage(src, targetWidthPx: targetPx);
-        },
-    ];
+    final tasks = <Future<void> Function()>[];
 
+    for (final src in srcs) {
+      tasks.add(() async {
+        await _loadImage(src, targetWidthPx: targetPx);
+      });
+    }
     // ✅ 페이지 내부 프리로드는 2 정도가 안전(메모리 피크 억제)
     await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
   }
@@ -1594,26 +1753,20 @@ class _PngPageState extends State<PngPage> {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // 배경
-    final bgPaint = Paint()..color = widget.pageBackgroundColor;
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, outW.toDouble(), outH.toDouble()),
-      bgPaint,
-    );
-
     canvas.scale(scale, scale);
 
-    final origin = Offset(widget.horizontalMargin, widget.verticalMargin);
+    final hm = _effectiveHorizontalMarginPx();
+    final vm = _effectiveVerticalMarginPx();
+
+    final origin = Offset(hm, vm);
 
     for (final cmd in plan.commands) {
       await cmd.paint(
         canvas: canvas,
         origin: origin,
-        loadImage: _loadImage, // ✅ 새 시그니처
-        maxImageHeight:
-            (_pageHeightPx - widget.verticalMargin * 2) *
-            widget.maxImageHeightRatio,
-        renderScale: scale, // ✅ 추가
+        loadImage: _loadImage,
+        maxImageHeight: (_pageHeightPx - vm * 2) * widget.maxImageHeightRatio,
+        renderScale: scale,
       );
     }
 
@@ -1729,6 +1882,7 @@ class _PngPageState extends State<PngPage> {
   }
 
   Future<void> _onShareTap() async {
+    const int concurrency = 2;
     if (_isLoading) return;
     if (_pages.isEmpty) return;
 
@@ -1827,18 +1981,12 @@ class _PngPageState extends State<PngPage> {
         });
       }
 
-      // ✅ JPG는 CPU/메모리 부담 → 2가 안전, PNG만이면 3도 가능
-      final concurrency = (pick.format == ShareFormat.jpg) ? 2 : 3;
-
-      final xfiles = await _runWithConcurrency<XFile?>(
+      final xfiles = await _runWithConcurrencyNullable<XFile>(
         tasks: tasks,
         concurrency: concurrency,
       );
 
-      final files = <XFile>[
-        for (final xf in xfiles)
-          if (xf != null) xf,
-      ];
+      final files = xfiles.whereType<XFile>().toList();
 
       if (!mounted) return;
       if (files.isEmpty) {
@@ -1907,273 +2055,288 @@ class _PngPageState extends State<PngPage> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxCardWidth = constraints.maxWidth * 0.95;
-        _pageWidthPx = maxCardWidth;
-        _pageHeightPx = maxCardWidth * 297 / 210; // A4 ratio
+    return Theme(
+      data: fixedLightTheme(),
+      child: Builder(
+        builder: (context) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final maxCardWidth = constraints.maxWidth * 0.95;
+              _pageWidthPx = maxCardWidth;
+              _pageHeightPx = maxCardWidth * 297 / 210; // A4 ratio
 
-        final dpr = MediaQuery.of(context).devicePixelRatio;
-        _previewRenderScale = (dpr * 1.1).clamp(1.2, 3.5);
+              final dpr = MediaQuery.of(context).devicePixelRatio;
+              _previewRenderScale = (dpr * 1.1).clamp(1.2, 3.5);
 
-        // 폭 변화 감지
-        final prevW = _lastLayoutWidth;
-        _lastLayoutWidth = maxCardWidth;
-        final widthChanged =
-            prevW != null && (maxCardWidth - prevW).abs() > 0.5;
-        if (widthChanged) {
-          _resetPaginationAndCaches(notify: false);
-          _schedulePaginate(delay: const Duration(milliseconds: 50));
-        }
+              // 폭 변화 감지
+              final prevW = _lastLayoutWidth;
+              _lastLayoutWidth = maxCardWidth;
+              final widthChanged =
+                  prevW != null && (maxCardWidth - prevW).abs() > 0.5;
+              if (widthChanged) {
+                _resetPaginationAndCaches(notify: false);
+                _schedulePaginate(delay: const Duration(milliseconds: 50));
+              }
 
-        if (!_paginateScheduled) {
-          _paginateScheduled = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _paginateScheduled = false;
-            if (!mounted) return;
-            _schedulePaginate(delay: Duration.zero);
-          });
-        }
+              if (!_paginateScheduled) {
+                _paginateScheduled = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _paginateScheduled = false;
+                  if (!mounted) return;
+                  _schedulePaginate(delay: Duration.zero);
+                });
+              }
 
-        final maxCardHeight = constraints.maxHeight * 0.90;
-        final desiredH = _pageHeightPx;
-        final cardHeight = desiredH > maxCardHeight ? maxCardHeight : desiredH;
+              final maxCardHeight = constraints.maxHeight * 0.90;
+              final desiredH = _pageHeightPx;
+              final cardHeight =
+                  desiredH > maxCardHeight ? maxCardHeight : desiredH;
 
-        return Scaffold(
-          appBar: AppBar(title: Text(widget.title)),
-          body: Stack(
-            children: [
-              PageView.builder(
-                controller: _pageCtrl,
+              return Scaffold(
+                appBar: AppBar(title: Text(widget.title)),
+                body: Stack(
+                  children: [
+                    PageView.builder(
+                      controller: _pageCtrl,
 
-                physics:
-                    _isSliderDragging
-                        ? const NeverScrollableScrollPhysics()
-                        : const BouncingScrollPhysics(),
+                      physics:
+                          _isSliderDragging
+                              ? const NeverScrollableScrollPhysics()
+                              : const BouncingScrollPhysics(),
 
-                itemCount: _pagesCount,
-                onPageChanged: (index) {
-                  _resetZoom();
-                  final newPage = index + 1;
+                      itemCount: _pagesCount,
+                      onPageChanged: (index) {
+                        _resetZoom();
+                        final newPage = index + 1;
 
-                  setState(() {
-                    _page = newPage;
+                        setState(() {
+                          _page = newPage;
 
-                    // ✅ 드래그 중이면 슬라이더 표시값도 같이 맞춤
-                    if (_isSliderDragging) {
-                      _lastPreviewPage = newPage;
-                      _sliderDragValue = newPage.toDouble();
-                    }
-                  });
-
-                  final dir = (newPage - _lastPageForDirection).sign;
-                  _lastPageForDirection = newPage;
-
-                  final pages = <int>[newPage - 1, newPage + 1];
-
-                  // 옵션: 방향이 있으면 +2까지
-                  if (dir > 0) pages.add(newPage + 2);
-                  if (dir < 0) pages.add(newPage - 2);
-
-                  _enqueuePrefetchNear(newPage, pages);
-                },
-
-                itemBuilder: (context, index) {
-                  final pageNumber = index + 1;
-
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: _cardTopPadding),
-                      child: FutureBuilder<Uint8List>(
-                        future: _ensurePngForPage(pageNumber),
-                        builder: (context, snap) {
-                          if (!snap.hasData || snap.data!.isEmpty) {
-                            return SizedBox(
-                              width: maxCardWidth,
-                              height: cardHeight,
-                            );
+                          // ✅ 드래그 중이면 슬라이더 표시값도 같이 맞춤
+                          if (_isSliderDragging) {
+                            _lastPreviewPage = newPage;
+                            _sliderDragValue = newPage.toDouble();
                           }
+                        });
 
-                          final bytes = snap.data!;
-                          return ClipRect(
-                            child: InteractiveViewer(
-                              transformationController: _zoomCtrl,
-                              panEnabled: true,
-                              scaleEnabled: true,
-                              minScale: _minUiScale,
-                              maxScale: _maxUiScale,
-                              onInteractionUpdate: (details) {
-                                // ✅ 핀치로 바뀐 현재 스케일을 UI 상태에 반영(버튼 줌과 표시 동기화용)
-                                _uiScale = _zoomCtrl.value
-                                    .getMaxScaleOnAxis()
-                                    .clamp(_minUiScale, _maxUiScale);
-                              },
-                              onInteractionEnd: (_) {
-                                // ✅ 끝났을 때 한 번 더 정리(필요시)
-                                _uiScale = _zoomCtrl.value
-                                    .getMaxScaleOnAxis()
-                                    .clamp(_minUiScale, _maxUiScale);
-                              },
-                              child: SizedBox(
-                                width: maxCardWidth,
-                                height: cardHeight,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: widget.pageBackgroundColor,
-                                    border: Border.all(
-                                      color: const ui.Color.fromARGB(
-                                        255,
-                                        138,
-                                        176,
-                                        201,
+                        final dir = (newPage - _lastPageForDirection).sign;
+                        _lastPageForDirection = newPage;
+
+                        final pages = <int>[newPage - 1, newPage + 1];
+
+                        // 옵션: 방향이 있으면 +2까지
+                        if (dir > 0) pages.add(newPage + 2);
+                        if (dir < 0) pages.add(newPage - 2);
+
+                        _enqueuePrefetchNear(newPage, pages);
+                      },
+
+                      itemBuilder: (context, index) {
+                        final pageNumber = index + 1;
+
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              top: _cardTopPadding,
+                            ),
+                            child: FutureBuilder<Uint8List>(
+                              future: _ensurePngForPage(pageNumber),
+                              builder: (context, snap) {
+                                if (!snap.hasData || snap.data!.isEmpty) {
+                                  return SizedBox(
+                                    width: maxCardWidth,
+                                    height: cardHeight,
+                                  );
+                                }
+
+                                final bytes = snap.data!;
+                                return ClipRect(
+                                  child: InteractiveViewer(
+                                    transformationController: _zoomCtrl,
+                                    panEnabled: true,
+                                    scaleEnabled: true,
+                                    minScale: _minUiScale,
+                                    maxScale: _maxUiScale,
+                                    onInteractionUpdate: (details) {
+                                      // ✅ 핀치로 바뀐 현재 스케일을 UI 상태에 반영(버튼 줌과 표시 동기화용)
+                                      _uiScale = _zoomCtrl.value
+                                          .getMaxScaleOnAxis()
+                                          .clamp(_minUiScale, _maxUiScale);
+                                    },
+                                    onInteractionEnd: (_) {
+                                      // ✅ 끝났을 때 한 번 더 정리(필요시)
+                                      _uiScale = _zoomCtrl.value
+                                          .getMaxScaleOnAxis()
+                                          .clamp(_minUiScale, _maxUiScale);
+                                    },
+                                    child: SizedBox(
+                                      width: maxCardWidth,
+                                      height: cardHeight,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.transparent,
+                                          border: Border.all(
+                                            color: const ui.Color.fromARGB(
+                                              255,
+                                              138,
+                                              176,
+                                              201,
+                                            ),
+                                            width: 0.5,
+                                          ),
+                                        ),
+                                        child: Image.memory(
+                                          bytes,
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.high,
+                                        ),
                                       ),
-                                      width: 0.5,
                                     ),
                                   ),
-                                  child: Image.memory(
-                                    bytes,
-                                    fit: BoxFit.contain,
-                                    filterQuality: FilterQuality.high,
-                                  ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
 
-              // 왼쪽 상단(목차 자리) — PNG는 목차 없이 비워둠
-              Positioned(
-                left: 10,
-                top: _cardTopPadding - 55,
-                child: IconButton(
-                  onPressed: null,
-                  icon: Icon(
-                    Icons.format_list_numbered,
-                    color: const ui.Color.fromARGB(
-                      255,
-                      129,
-                      152,
-                      177,
-                    ).withValues(alpha: 0.35),
-                    size: 25,
-                  ),
-                ),
-              ),
+                    // 왼쪽 상단(목차 자리) — PNG는 목차 없이 비워둠
+                    Positioned(
+                      left: 10,
+                      top: _cardTopPadding - 55,
+                      child: IconButton(
+                        onPressed: null,
+                        icon: Icon(
+                          Icons.format_list_numbered,
+                          color: const ui.Color.fromARGB(
+                            255,
+                            129,
+                            152,
+                            177,
+                          ).withValues(alpha: 0.35),
+                          size: 25,
+                        ),
+                      ),
+                    ),
 
-              // 오른쪽 상단: 다운로드 + 공유
-              Positioned(
-                right: 10,
-                top: _cardTopPadding - 55,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed:
-                          (_isLoading || _pages.isEmpty)
-                              ? null
-                              : _onDownloadTap,
-                      icon: const Icon(
-                        Icons.download_outlined,
-                        color: _topIconColor,
-                        size: 25,
+                    // 오른쪽 상단: 다운로드 + 공유
+                    Positioned(
+                      right: 10,
+                      top: _cardTopPadding - 55,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed:
+                                (_isLoading || _pages.isEmpty)
+                                    ? null
+                                    : _onDownloadTap,
+                            icon: const Icon(
+                              Icons.download_outlined,
+                              color: _topIconColor,
+                              size: 25,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          IconButton(
+                            onPressed:
+                                (_isLoading || _pages.isEmpty)
+                                    ? null
+                                    : _onShareTap,
+                            icon: const Icon(
+                              Icons.ios_share,
+                              color: _topIconColor,
+                              size: 23,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    IconButton(
-                      onPressed:
-                          (_isLoading || _pages.isEmpty) ? null : _onShareTap,
-                      icon: const Icon(
-                        Icons.ios_share,
-                        color: _topIconColor,
-                        size: 23,
+                    // ===== 슬라이더 바(하단 pill 바 바로 위) =====
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: _controlBottom + 60, // pill 바 위로 살짝 띄움(필요시 조절)
+                      child: IgnorePointer(
+                        ignoring:
+                            _isLoading || _pages.isEmpty, // 로딩/빈페이지면 입력 막기
+                        child: Opacity(
+                          opacity: (_isLoading || _pages.isEmpty) ? 0.35 : 1.0,
+                          child: _pageSliderBar(
+                            maxCardWidth: maxCardWidth,
+                            cardHeight: cardHeight,
+                          ),
+                        ),
                       ),
                     ),
+
+                    // 하단 컨트롤 바
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: _controlBottom,
+                      child: SafeArea(
+                        child: _pill(
+                          child: Row(
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _tightIconButton(
+                                    onPressed: _zoomOut,
+                                    icon: Icons.zoom_out,
+                                  ),
+                                  _tightIconButton(
+                                    onPressed: _zoomIn,
+                                    icon: Icons.zoom_in,
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$_page / $_pagesCount',
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 11),
+                                  _tightIconButton(
+                                    onPressed: _page <= 1 ? null : _goFirst,
+                                    icon: Icons.keyboard_double_arrow_left,
+                                  ),
+                                  _tightIconButton(
+                                    onPressed: _page <= 1 ? null : _goPrev,
+                                    icon: Icons.chevron_left,
+                                  ),
+                                  _tightIconButton(
+                                    onPressed:
+                                        _page >= _pagesCount ? null : _goNext,
+                                    icon: Icons.chevron_right,
+                                  ),
+                                  _tightIconButton(
+                                    onPressed:
+                                        _page >= _pagesCount ? null : _goLast,
+                                    icon: Icons.keyboard_double_arrow_right,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    _loadingOverlay(),
                   ],
                 ),
-              ),
-              // ===== 슬라이더 바(하단 pill 바 바로 위) =====
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: _controlBottom + 60, // pill 바 위로 살짝 띄움(필요시 조절)
-                child: IgnorePointer(
-                  ignoring: _isLoading || _pages.isEmpty, // 로딩/빈페이지면 입력 막기
-                  child: Opacity(
-                    opacity: (_isLoading || _pages.isEmpty) ? 0.35 : 1.0,
-                    child: _pageSliderBar(
-                      maxCardWidth: maxCardWidth,
-                      cardHeight: cardHeight,
-                    ),
-                  ),
-                ),
-              ),
-
-              // 하단 컨트롤 바
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: _controlBottom,
-                child: SafeArea(
-                  child: _pill(
-                    child: Row(
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _tightIconButton(
-                              onPressed: _zoomOut,
-                              icon: Icons.zoom_out,
-                            ),
-                            _tightIconButton(
-                              onPressed: _zoomIn,
-                              icon: Icons.zoom_in,
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '$_page / $_pagesCount',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            const SizedBox(width: 11),
-                            _tightIconButton(
-                              onPressed: _page <= 1 ? null : _goFirst,
-                              icon: Icons.keyboard_double_arrow_left,
-                            ),
-                            _tightIconButton(
-                              onPressed: _page <= 1 ? null : _goPrev,
-                              icon: Icons.chevron_left,
-                            ),
-                            _tightIconButton(
-                              onPressed: _page >= _pagesCount ? null : _goNext,
-                              icon: Icons.chevron_right,
-                            ),
-                            _tightIconButton(
-                              onPressed: _page >= _pagesCount ? null : _goLast,
-                              icon: Icons.keyboard_double_arrow_right,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              _loadingOverlay(),
-            ],
-          ),
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -2579,7 +2742,7 @@ class _CanvasLayoutEngine {
       baseStyle.fontFamily,
       baseStyle.fontWeight,
       s.align,
-      innerW.round(), // 폭이 바뀌면 재측정 필요
+      (innerW * 10).round(), // 0.1px 단위
     );
 
     for (final r in s.runs) {
@@ -2787,7 +2950,7 @@ class _CanvasLayoutEngine {
 
     // 빈 줄 높이 보정(기존 로직 유지)
     if (h <= 0.1) {
-      final fs = baseStyle.fontSize ?? 15.0;
+      final fs = baseStyle.fontSize ?? 14.0;
       final lh = (baseStyle.height ?? 1.0);
       h = (fs * lh);
     }
@@ -2879,7 +3042,7 @@ class _CanvasLayoutEngine {
           _ImageDrawCommand(y: y, src: b.src, width: contentWidth),
         );
 
-        y += reservedH + 14;
+        y += reservedH + 10;
         continue;
       }
 
@@ -2928,7 +3091,7 @@ class _CanvasLayoutEngine {
 
           final available = contentHeight - y - decoTop - decoBottom - 0.5;
 
-          if (available <= 8 && y > 0) {
+          if (available <= 8) {
             newPage();
             continue;
           }
@@ -2944,8 +3107,7 @@ class _CanvasLayoutEngine {
             // 다음 줄이 안 들어가면 stop
             if (pageSlices.isNotEmpty && usedH + h > available) break;
 
-            // 첫 줄도 못 들어가면(아주 큰 글자/한 줄 랩이 과한 경우) -> 아래에서 run split 처리
-            if (pageSlices.isEmpty && h > available && y > 0) break;
+            if (pageSlices.isEmpty && h > available) break;
 
             pageSlices.add(s);
             usedH += h;
@@ -3177,7 +3339,7 @@ class _ParagraphDrawCommand extends _DrawCommand {
 
       // 빈 줄 높이 보정
       if (h <= 0.1) {
-        final fs = baseStyle.fontSize ?? 15.0;
+        final fs = baseStyle.fontSize ?? 14.0;
         final lh = (baseStyle.height ?? 1.0);
         h = fs * lh;
       }
@@ -3204,7 +3366,7 @@ class _ParagraphDrawCommand extends _DrawCommand {
         if (fs != null && fs.isFinite && fs > 0) return fs;
       }
     }
-    return baseStyle.fontSize ?? 15.0;
+    return baseStyle.fontSize ?? 14.0;
   }
 
   double _markerFontSizeForBlock({
@@ -3255,7 +3417,7 @@ class _ParagraphDrawCommand extends _DrawCommand {
       if (marker.isNotEmpty) {
         final markerX = origin.dx + padding.listMarkerX;
         final baseFs =
-            _firstVisibleFontSizeCache ?? (baseStyle.fontSize ?? 15.0);
+            _firstVisibleFontSizeCache ?? (baseStyle.fontSize ?? 14.0);
         final markerFs = _markerFontSizeForBlock(
           textFontSize: baseFs,
           blockStyle: blockStyle,
@@ -3443,16 +3605,16 @@ class _BlockPadding {
     // ✅ header 위/아래 여백을 "decoration padding"으로 처리
     double headerTop = 0, headerBottom = 0;
     if (s.header == 1) {
-      headerTop = 30;
-      headerBottom = 14;
-    }
-    if (s.header == 2) {
-      headerTop = 18;
+      headerTop = 24;
       headerBottom = 10;
     }
+    if (s.header == 2) {
+      headerTop = 14;
+      headerBottom = 7;
+    }
     if (s.header == 3) {
-      headerTop = 12;
-      headerBottom = 8;
+      headerTop = 10;
+      headerBottom = 6;
     }
 
     double topDeco = headerTop;
@@ -3519,7 +3681,7 @@ class _BlockPadding {
 
 class _BlockTextStyle {
   static TextStyle of(TextStyle base, _BlockStyle s) {
-    double size = base.fontSize ?? 15;
+    double size = base.fontSize ?? 14;
     FontWeight? weight = base.fontWeight;
 
     if (s.header == 1) {
@@ -3559,14 +3721,13 @@ class _BlockTextStyle {
 
 class _BlockSpacing {
   static double of(_BlockStyle s) {
-    if (s.header > 0) return 0; // ✅ 헤더 여백은 padding에서 처리
-    if (s.blockQuote || s.codeBlock) return 8;
-    return 6;
+    if (s.header > 0) return 0;
+    if (s.blockQuote || s.codeBlock) return 6;
+    return 4;
   }
 }
 
 class _RunSplitter {
-  /// runs를 "문자 offset" 기준으로 앞/뒤로 쪼갬 (TextPainter offset 기준)
   static (List<_Run>, List<_Run>) split(List<_Run> runs, int cutOffset) {
     if (cutOffset <= 0) return (<_Run>[], List<_Run>.from(runs));
 
