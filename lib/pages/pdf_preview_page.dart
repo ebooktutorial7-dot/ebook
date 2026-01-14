@@ -30,8 +30,6 @@ import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'package:ebook_tutorial_app/widgets/pdf/pdf_chapter_picker_dialog.dart';
 
 const _loaderColor = ui.Color.fromARGB(255, 150, 194, 224);
-
-// 카드 위 아이콘 컬러 (목차 아이콘과 동일 톤)
 const _topIconColor = ui.Color.fromARGB(255, 71, 95, 121);
 
 enum ShareFormat { pdf, png, jpg }
@@ -47,8 +45,8 @@ class SharePickResult {
   });
   final ShareFormat format;
   final ShareRangeMode rangeMode;
-  final int startPage; // 1-based inclusive
-  final int endPage; // 1-based inclusive
+  final int startPage;
+  final int endPage;
 }
 
 Future<SharePickResult?> showShareOptionsDialog({
@@ -484,7 +482,7 @@ class LruCache<K, V extends Object> {
   V? get(K key) {
     final v = _map.remove(key);
     if (v == null) return null;
-    _map[key] = v; // 최근 사용으로 갱신
+    _map[key] = v;
     return v;
   }
 
@@ -520,9 +518,348 @@ class CustomPdfPreviewPage extends StatefulWidget {
   State<CustomPdfPreviewPage> createState() => _CustomPdfPreviewPageState();
 }
 
-// ===== Export (Hi-res) bytes cache: Byte-LRU + in-flight + queue =====
+String _safeFileNameStandalone(String name) {
+  final trimmed = name.trim().isEmpty ? 'document' : name.trim();
+  final sanitized = trimmed.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
+}
 
-/// export 결과를 구분하는 키: (페이지 번호 + 긴 변 픽셀)
+Future<File> _writeBytesToTempStandalone({
+  required Uint8List bytes,
+  required String fileName,
+}) async {
+  final dir = await getTemporaryDirectory();
+  final file = File(p.join(dir.path, fileName));
+  await file.writeAsBytes(bytes, flush: true);
+  return file;
+}
+
+Future<T> _withDocPage<T>(
+  PdfDocument doc,
+  int pageNumber,
+  Future<T> Function(PdfPage page) run,
+) async {
+  final page = await doc.getPage(pageNumber);
+  try {
+    return await run(page);
+  } finally {
+    try {
+      final r = (page as dynamic).close();
+      if (r is Future) await r;
+    } catch (_) {}
+    try {
+      final r = (page as dynamic).dispose();
+      if (r is Future) await r;
+    } catch (_) {}
+  }
+}
+
+Uint8List _pngToJpgSyncStandalone(Uint8List pngBytes, int quality) {
+  final decoded = img.decodeImage(pngBytes);
+  if (decoded == null) return Uint8List(0);
+  return Uint8List.fromList(img.encodeJpg(decoded, quality: quality));
+}
+
+Future<Uint8List> _pngToJpgInIsolateStandalone(
+  Uint8List pngBytes, {
+  int quality = 92,
+}) async {
+  if (pngBytes.isEmpty) return Uint8List(0);
+  return Isolate.run(() => _pngToJpgSyncStandalone(pngBytes, quality));
+}
+
+Future<List<T?>> _runWithConcurrencyNullableStandalone<T>({
+  required List<Future<T?> Function()> tasks,
+  int concurrency = 2,
+}) async {
+  if (tasks.isEmpty) return <T?>[];
+  final results = List<T?>.filled(tasks.length, null);
+  int nextIndex = 0;
+
+  Future<void> worker() async {
+    while (true) {
+      final i = nextIndex++;
+      if (i >= tasks.length) return;
+      try {
+        results[i] = await tasks[i]();
+      } catch (_) {
+        results[i] = null;
+      }
+    }
+  }
+
+  await Future.wait(List.generate(math.max(1, concurrency), (_) => worker()));
+  return results;
+}
+
+Future<File?> _renderImageToTempFileFromDoc({
+  required PdfDocument doc,
+  required int pageNumber,
+  required int targetLongSidePx,
+  required String baseName,
+  required ShareFormat format,
+}) async {
+  final pngBytes = await _withDocPage(doc, pageNumber, (page) {
+    return _renderExportPngBytesFromPage(
+      page,
+      targetLongSidePx: targetLongSidePx,
+    );
+  });
+  if (pngBytes.isEmpty) return null;
+
+  final bool asJpg = format == ShareFormat.jpg;
+  final outBytes =
+      asJpg
+          ? await _pngToJpgInIsolateStandalone(pngBytes, quality: 92)
+          : pngBytes;
+  if (outBytes.isEmpty) return null;
+
+  final dir = await getTemporaryDirectory();
+  final ext = asJpg ? 'jpg' : 'png';
+  final seq = pageNumber.toString().padLeft(3, '0');
+  final nonce = DateTime.now().microsecondsSinceEpoch.toString();
+  final file = File(p.join(dir.path, 'share_${baseName}_${seq}_$nonce.$ext'));
+
+  await file.writeAsBytes(outBytes, flush: true);
+  if (!await file.exists()) return null;
+  if (await file.length() <= 0) return null;
+
+  return file;
+}
+
+Future<Uint8List> _buildPdfFromRenderedPagesStandalone({
+  required PdfDocument doc,
+  required List<int> pages,
+  required String title,
+}) async {
+  const double maxLongSidePt = 842.0;
+  final out = pw.Document();
+  final base = _safeFileNameStandalone(title);
+
+  final tempFiles = <File>[];
+  final pageFormats = <int, pdf.PdfPageFormat>{};
+
+  try {
+    final tasks = <Future<File?> Function()>[];
+    for (final pg in pages) {
+      tasks.add(() async {
+        return _withDocPage(doc, pg, (page) async {
+          final w = page.width.toDouble();
+          final h = page.height.toDouble();
+          final portrait = h >= w;
+          final aspect = (h == 0) ? 1.0 : (w / h);
+
+          const longSide = maxLongSidePt;
+          final shortSide = longSide * (portrait ? aspect : (1.0 / aspect));
+          final pageW = portrait ? shortSide : longSide;
+          final pageH = portrait ? longSide : shortSide;
+          pageFormats[pg] = pdf.PdfPageFormat(pageW, pageH);
+          final pngBytes = await _renderExportPngBytesFromPage(
+            page,
+            targetLongSidePx: 2600,
+          );
+          if (pngBytes.isEmpty) return null;
+
+          final jpgBytes = await _pngToJpgInIsolateStandalone(
+            pngBytes,
+            quality: 83,
+          );
+          if (jpgBytes.isEmpty) return null;
+
+          final dir = await getTemporaryDirectory();
+          final seq = pg.toString().padLeft(3, '0');
+          final nonce = DateTime.now().microsecondsSinceEpoch.toString();
+          final file = File(
+            p.join(dir.path, 'share_${base}_${seq}_$nonce.jpg'),
+          );
+          await file.writeAsBytes(jpgBytes, flush: false);
+
+          if (!await file.exists()) return null;
+          if (await file.length() <= 0) return null;
+          return file;
+        });
+      });
+    }
+
+    final files = await _runWithConcurrencyNullableStandalone<File>(
+      tasks: tasks,
+      concurrency: 3,
+    );
+
+    for (int i = 0; i < pages.length; i++) {
+      final pg = pages[i];
+      final f = files[i];
+      final pf = pageFormats[pg];
+      if (f == null || pf == null) continue;
+
+      tempFiles.add(f);
+
+      out.addPage(
+        pw.Page(
+          pageFormat: pf,
+          margin: pw.EdgeInsets.zero,
+          build:
+              (_) => pw.FullPage(
+                ignoreMargins: true,
+                child: pw.FittedBox(
+                  fit: pw.BoxFit.contain,
+                  child: pw.Image(_FileBackedImage(f)),
+                ),
+              ),
+        ),
+      );
+    }
+
+    return out.save();
+  } finally {
+    for (final f in tempFiles) {
+      try {
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    }
+  }
+}
+
+Future<int> pdfPageCountFromBytes(Uint8List pdfBytes) async {
+  PdfDocument? doc;
+  try {
+    doc = await PdfDocument.openData(pdfBytes);
+    return math.max(1, doc.pageCount);
+  } finally {
+    try {
+      doc?.dispose();
+    } catch (_) {}
+  }
+}
+
+Future<void> sharePdfBytesWithPick({
+  required String title,
+  required Uint8List pdfBytes,
+  required SharePickResult pick,
+  required void Function(String msg) toast,
+  Rect? sharePositionOrigin,
+}) async {
+  PdfDocument? doc;
+  final safeTitle = title.trim().isEmpty ? 'document' : title.trim();
+
+  try {
+    doc = await PdfDocument.openData(pdfBytes);
+    final pagesCount = math.max(1, doc.pageCount);
+
+    final start = pick.startPage.clamp(1, pagesCount);
+    final end = pick.endPage.clamp(1, pagesCount);
+
+    final pages = <int>[for (int i = start; i <= end; i++) i];
+    final base = _safeFileNameStandalone(safeTitle);
+
+    // ===== PDF =====
+    if (pick.format == ShareFormat.pdf) {
+      final bool isAll = (start == 1 && end == pagesCount);
+
+      if (pick.rangeMode == ShareRangeMode.all && isAll) {
+        final file = await _writeBytesToTempStandalone(
+          bytes: pdfBytes,
+          fileName: '$base.pdf',
+        );
+        await Share.shareXFiles(
+          [
+            XFile(
+              file.path,
+              mimeType: 'application/pdf',
+              name: p.basename(file.path),
+            ),
+          ],
+          text: safeTitle,
+          sharePositionOrigin: sharePositionOrigin,
+        );
+        return;
+      }
+
+      final outBytes = await _buildPdfFromRenderedPagesStandalone(
+        doc: doc,
+        pages: pages,
+        title: safeTitle,
+      );
+
+      if (outBytes.isEmpty) {
+        toast('공유할 파일이 없습니다');
+        return;
+      }
+
+      final file = await _writeBytesToTempStandalone(
+        bytes: outBytes,
+        fileName: '$base.pdf',
+      );
+      await Share.shareXFiles(
+        [
+          XFile(
+            file.path,
+            mimeType: 'application/pdf',
+            name: p.basename(file.path),
+          ),
+        ],
+        text: safeTitle,
+        sharePositionOrigin: sharePositionOrigin,
+      );
+      return;
+    }
+
+    // ===== PNG/JPG =====
+    final tasks = <Future<File?> Function()>[];
+    for (final pg in pages) {
+      tasks.add(() async {
+        return _renderImageToTempFileFromDoc(
+          doc: doc!,
+          pageNumber: pg,
+          targetLongSidePx: 2600,
+          baseName: base,
+          format: pick.format,
+        );
+      });
+    }
+
+    final files = await _runWithConcurrencyNullableStandalone<File>(
+      tasks: tasks,
+      concurrency: (pick.format == ShareFormat.jpg) ? 2 : 3,
+    );
+
+    final xfiles = files
+        .whereType<File>()
+        .map((f) {
+          final isPng = pick.format == ShareFormat.png;
+          return XFile(
+            f.path,
+            mimeType: isPng ? 'image/png' : 'image/jpeg',
+            name: p.basename(f.path),
+          );
+        })
+        .toList(growable: false);
+
+    if (xfiles.isEmpty) {
+      toast('공유할 파일이 없습니다');
+      return;
+    }
+
+    await Share.shareXFiles(
+      xfiles,
+      text: safeTitle,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+
+    for (final xf in xfiles) {
+      try {
+        await File(xf.path).delete();
+      } catch (_) {}
+    }
+  } catch (e) {
+    toast('공유 실패: $e');
+  } finally {
+    try {
+      doc?.dispose();
+    } catch (_) {}
+  }
+}
+
 class _ExportKey {
   final int page;
   final int longSidePx;
@@ -592,7 +929,7 @@ class ByteLruCache<K, V extends Object> {
   V? get(K key) {
     final entry = _map.remove(key);
     if (entry == null) return null;
-    _map[key] = entry; // LRU 갱신
+    _map[key] = entry;
     return entry.value;
   }
 
@@ -604,7 +941,6 @@ class ByteLruCache<K, V extends Object> {
   }) {
     if (bytesWeight <= 0) return;
 
-    // 기존 항목 회수
     final prev = _map.remove(key);
     if (prev != null) {
       _totalBytes -= prev.bytesWeight;
@@ -612,13 +948,11 @@ class ByteLruCache<K, V extends Object> {
       onEvict?.call(key, prev.value, prev.bytesWeight);
     }
 
-    // 한 항목이 예산보다 크면 캐시하지 않음
     if (bytesWeight > maxBytes) return;
 
     _map[key] = _ByteEntry(value: value, bytesWeight: bytesWeight);
     _totalBytes += bytesWeight;
 
-    // 예산 초과분 제거
     while (_totalBytes > maxBytes && _map.isNotEmpty) {
       final oldestKey = _map.keys.first;
       final oldest = _map.remove(oldestKey);
@@ -647,26 +981,18 @@ class _ByteEntry<V> {
   const _ByteEntry({required this.value, required this.bytesWeight});
 }
 
-/// pdf/widgets에는 FileImage가 없어서 커스텀으로 대체
-/// - 저장 시점에만 파일을 읽어 PdfImage로 변환
-/// - 큰 Uint8List를 오래 들고 있지 않게(스풀 목적)
 class _FileBackedImage extends pw.ImageProvider {
   _FileBackedImage(
     this.file, {
     pdf.PdfImageOrientation orientation = pdf.PdfImageOrientation.topLeft,
     double? dpi,
-  }) : super(
-         1,
-         1, // height (required) - 0보단 1이 안전합니다
-         orientation,
-         dpi,
-       );
+  }) : super(1, 1, orientation, dpi);
 
   final File file;
 
   @override
   pdf.PdfImage buildImage(pw.Context context, {int? width, int? height}) {
-    final bytes = file.readAsBytesSync(); // 페이지 단위로만 로드
+    final bytes = file.readAsBytesSync();
     return pdf.PdfImage.file(context.document, bytes: bytes);
   }
 }
@@ -714,7 +1040,7 @@ class _PageLifeState extends State<_PageLife> {
 class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   PdfDocument? _doc;
 
-  int _pdfSession = 0; // PDF가 바뀔 때마다 증가(세대)
+  int _pdfSession = 0;
 
   final List<_PendingImage> _pendingDisposeImages = [];
   bool _disposeScheduled = false;
@@ -739,7 +1065,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     } else {
       _pageImgRefCount[page] = cur;
     }
-    _scheduleDisposePendingImages(); // release 될 때마다 정리 재시도
+    _scheduleDisposePendingImages();
   }
 
   bool _isPageImageInUse(int page) => (_pageImgRefCount[page] ?? 0) > 0;
@@ -770,7 +1096,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
         ..clear()
         ..addAll(keep);
 
-      // ✅ 실제 dispose는 한 프레임 더 미룸
       WidgetsBinding.instance.addPostFrameCallback((_) {
         for (final img in toDispose) {
           try {
@@ -829,11 +1154,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   final Set<int> _pageImgPrefetchQueued = <int>{};
   int _pageImgPrefetchRunning = 0;
   static const int _pageImgPrefetchConcurrency = 2;
-
-  // ===== Export (Hi-res) bytes cache: Byte-LRU + in-flight + queue =====
-
-  // export PNG bytes 캐시 예산(필요시 조절)
-  static const int _exportCacheBudgetBytes = 80 * 1024 * 1024; // 80MB
+  static const int _exportCacheBudgetBytes = 80 * 1024 * 1024;
   late final ByteLruCache<_ExportKey, Uint8List> _exportPngCache =
       ByteLruCache<_ExportKey, Uint8List>(maxBytes: _exportCacheBudgetBytes);
 
@@ -845,7 +1166,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   final List<_ExportKey> _exportPrefetchQueue = <_ExportKey>[];
   final Set<_ExportKey> _exportPrefetchQueued = <_ExportKey>{};
   int _exportPrefetchRunning = 0;
-  static const int _exportPrefetchConcurrency = 2; // 안전하게 2 추천
+  static const int _exportPrefetchConcurrency = 2;
 
   bool _pauseExportPrefetch = false;
 
@@ -855,33 +1176,27 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     _exportPrefetchRunning = 0;
   }
 
-  /// export cache/flight 정리(새 PDF 열 때/종료 시)
   void _clearExportCache() {
     _exportInFlight.clear();
-    _exportPngCache.clear(); // Uint8List는 dispose 불필요
+    _exportPngCache.clear();
     _clearExportPrefetchQueue();
   }
 
-  /// export png bytes를 캐시/flight 포함해서 보장
   Future<Uint8List> _ensureExportPngBytes(
     int pageNumber, {
     required int targetLongSidePx,
   }) {
     final key = _ExportKey(pageNumber, targetLongSidePx);
-
-    // 1) 캐시 히트
     final cached = _exportPngCache.get(key);
     if (cached != null && cached.isNotEmpty) {
       return Future.value(cached);
     }
 
-    // 2) 같은 작업이 진행 중이면 그 Future 재사용
     final inflight = _exportInFlight[key];
     if (inflight != null) {
       return inflight;
     }
 
-    // 3) 새로 렌더 시작
     final fut = () async {
       final Uint8List bytes;
       try {
@@ -900,7 +1215,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       return bytes;
     }();
 
-    // 4) in-flight 등록 + 끝나면 정리
     _exportInFlight[key] = fut.whenComplete(() {
       _exportInFlight.remove(key);
     });
@@ -998,8 +1312,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   int _thumbPrefetchRunning = 0;
   static const int _thumbPrefetchConcurrency = 2;
 
-  // ===== Slider state (PNG 페이지와 동일 컨셉) =====
-  double? _sliderDragValue; // null이면 드래그 중 아님
+  // ===== Slider state =====
+  double? _sliderDragValue;
   bool get _isSliderDragging => _sliderDragValue != null;
   int _lastPreviewPage = 1;
 
@@ -1039,10 +1353,9 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
 
   // ===== Toast (PNG와 동일 컨셉: 한 군데에서만 호출) =====
   void _toast(String msg) {
-    AppToast.show(context, msg); // ✅ app_toast.dart 그대로 사용
+    AppToast.show(context, msg);
   }
 
-  // ===== Share 안내문(문구)도 한 곳에서 통일 =====
   String _shareDoneToast(ShareFormat f) {
     switch (f) {
       case ShareFormat.pdf:
@@ -1142,10 +1455,9 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   }
 
   Future<void> _openFromBytes(Uint8List bytes) async {
-    final int mySession = ++_pdfSession; // ✅ 여기 추가(세대 전환)
+    final int mySession = ++_pdfSession;
     _incLoading();
 
-    // ✅ 먼저 화면에서 제거되도록 doc을 null로 만들고 한 프레임 양보
     setState(() {
       _doc = null;
       _pagesCount = 1;
@@ -1153,13 +1465,11 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     });
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || mySession != _pdfSession) {
-      // ✅ 사용
       _decLoading();
       return;
     }
     _pageImgCache.clear(
       onEvict: (k, v, w) {
-        // ✅ PDF 교체 시에는 핀/인유즈 상관없이 pending으로
         _deferDisposeImage(k, v);
       },
     );
@@ -1175,7 +1485,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     try {
       final doc = await PdfDocument.openData(bytes);
       if (!mounted || mySession != _pdfSession) {
-        // ✅ 사용
         try {
           doc.dispose();
         } catch (_) {}
@@ -1187,16 +1496,14 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
         _pagesCount = doc.pageCount;
         _page = 1;
       });
-      if (mySession != _pdfSession) return; // ✅ 사용
-      // ✅ 최초 진입: 1~4 썸네일 선행 로드(드래그 썸네일 지연 감소)
+      if (mySession != _pdfSession) return;
       _enqueueThumbPrefetchNear(1, [1, 2, 3, 4]);
 
       _jumpToFirstSafely();
       _resetZoom();
-      // ✅ 본문 이미지도 최초 근처 프리로드(체감 개선)
       _enqueuePageImagePrefetchNear(1, [1, 2, 3]);
     } catch (e) {
-      if (!mounted || mySession != _pdfSession) return; // ✅ 사용
+      if (!mounted || mySession != _pdfSession) return;
       _toast('PDF 열기 실패: $e');
     } finally {
       _decLoading();
@@ -1239,7 +1546,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
           backgroundFill: true,
         );
 
-        // ✅ 여기서 dispose 하지 않음
         return await pageImage.createImageIfNotAvailable();
       });
 
@@ -1340,7 +1646,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       _thumbPrefetchQueued.remove(pg);
       _thumbPrefetchRunning++;
 
-      // await 하지 않고 백그라운드 선행 로드(동시성 제한은 여기서)
       _ensureThumbForPage(pg).whenComplete(() {
         if (!mounted) return;
         _thumbPrefetchRunning = math.max(0, _thumbPrefetchRunning - 1);
@@ -1352,7 +1657,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   void _clearThumbPrefetchQueue() {
     _thumbPrefetchQueue.clear();
     _thumbPrefetchQueued.clear();
-    _thumbPrefetchRunning = 0; // ✅ 추가
+    _thumbPrefetchRunning = 0;
   }
 
   Future<Uint8List> _ensureThumbForPage(int pageNumber) {
@@ -1369,14 +1674,13 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   }
 
   Future<Uint8List> _renderThumbBytes(int pageNumber) async {
-    final int mySession = _pdfSession; // ✅
+    final int mySession = _pdfSession;
     PdfPageImage? pageImage;
     ui.Image? imgObj;
     try {
-      if (mySession != _pdfSession) return Uint8List(0); // ✅ 사용
+      if (mySession != _pdfSession) return Uint8List(0);
       final bytes = await _withPage(pageNumber, (page) async {
-        if (mySession != _pdfSession) return Uint8List(0); // ✅ 사용
-        // 썸네일은 가볍게: 폭 기준 240px 근처로
+        if (mySession != _pdfSession) return Uint8List(0);
         const targetW = 240;
         final scale = (targetW / page.width).clamp(0.2, 2.0);
 
@@ -1385,13 +1689,13 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
           height: (page.height * scale).round(),
           backgroundFill: true,
         );
-        if (mySession != _pdfSession) return Uint8List(0); // ✅ 사용
+        if (mySession != _pdfSession) return Uint8List(0);
         imgObj = await pageImage!.createImageIfNotAvailable();
-        if (mySession != _pdfSession) return Uint8List(0); // ✅ 사용
+        if (mySession != _pdfSession) return Uint8List(0);
         final bd = await imgObj!.toByteData(format: ui.ImageByteFormat.png);
         return bd?.buffer.asUint8List() ?? Uint8List(0);
       });
-      if (mySession != _pdfSession) return Uint8List(0); // ✅ 사용
+      if (mySession != _pdfSession) return Uint8List(0);
 
       if (bytes.isNotEmpty) {
         _thumbCacheLru.put(pageNumber, bytes);
@@ -1400,7 +1704,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     } catch (_) {
       return Uint8List(0);
     } finally {
-      // ✅ 세션이 바뀌었으면 plugin 쪽 dispose 레이스를 피하기 위해 dispose 자체를 건너뜀
       if (mySession == _pdfSession) {
         try {
           imgObj?.dispose();
@@ -1482,13 +1785,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     return Isolate.run(() => _pngToJpgSync(pngBytes, quality));
   }
 
-  // ============================================================
-  // PDF 공유(현재/범위) 최적화:
-  //  - 페이지 렌더 결과를 임시 파일로 흘린 뒤 pw.FileImage로 붙여서
-  //    큰 바이트가 pw.MemoryImage에 오래 남지 않게 함(피크 메모리 감소)
-  //  - 속도 손해 최소화: 파일 준비는 concurrency=2로 파이프라이닝
-  // ============================================================
-
   Future<File?> _renderExportImageToTempFileFromPage({
     required PdfPage page,
     required int pageNumber,
@@ -1563,7 +1859,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       final size = exists ? await file.length() : -1;
       debugPrint('[share] wrote=${file.path} exists=$exists size=$size');
 
-      // ✅ 파일이 실제로 0바이트면 공유 대상에서 제외되므로, 여기서 방어
       if (!exists || size <= 0) return null;
 
       return file;
@@ -1614,12 +1909,10 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     final pageFormats = <int, pdf.PdfPageFormat>{};
 
     try {
-      // 1) "파일 준비"는 병렬(2)
       final tasks = <Future<File?> Function()>[];
       for (final pg in pages) {
         tasks.add(() async {
           return _withPage(pg, (page) async {
-            // 페이지 포맷 계산(기존 로직 그대로)
             final w = page.width.toDouble();
             final h = page.height.toDouble();
             final portrait = h >= w;
@@ -1631,7 +1924,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
             final pageH = portrait ? longSide : shortSide;
             pageFormats[pg] = pdf.PdfPageFormat(pageW, pageH);
 
-            // ✅ 여기서는 page를 이미 잡고 있으니, getPage를 다시 타지 않게 fromPage 사용
             return _renderExportImageToTempFileFromPage(
               page: page,
               pageNumber: pg,
@@ -1649,7 +1941,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
         concurrency: 3,
       );
 
-      // 2) addPage는 순서대로
       for (int i = 0; i < pages.length; i++) {
         final pg = pages[i];
         final f = files[i];
@@ -1668,9 +1959,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                   ignoreMargins: true,
                   child: pw.FittedBox(
                     fit: pw.BoxFit.contain,
-                    child: pw.Image(
-                      _FileBackedImage(f),
-                    ), // ✅ 핵심(큰 bytes 오래 보관 X)
+                    child: pw.Image(_FileBackedImage(f)),
                   ),
                 ),
           ),
@@ -1679,7 +1968,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
 
       return out.save();
     } finally {
-      // 3) 임시 파일 정리
       for (final f in tempFiles) {
         try {
           if (await f.exists()) {
@@ -1758,7 +2046,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
 
     final concurrency = (format == ShareFormat.jpg) ? 2 : 3;
 
-    // ✅ 여기 중요: <XFile> (nullable 아님)
     return runWithConcurrency<XFile>(tasks: tasks, concurrency: concurrency);
   }
 
@@ -1814,8 +2101,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     final pages = <int>[for (int i = pick.startPage; i <= pick.endPage; i++) i];
     final base = _safeFileName(widget.title);
     final doneToast = _shareDoneToast(pick.format);
-
-    // (기존) 공유 시작 전에 export 프리패치(앞쪽/근처부터)
     final int exportLongSidePx = (pick.format == ShareFormat.pdf) ? 3400 : 2600;
     _enqueueExportPrefetch(
       center: pick.startPage,
@@ -1830,7 +2115,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
 
     _incLoading();
 
-    // ✅ 여기: "공유 작업 중에는 export 프리패치 펌프 일시정지"
     _pauseExportPrefetch = true;
 
     try {
@@ -1901,7 +2185,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       if (!mounted) return;
       _toast(doneToast);
 
-      // ✅ 임시 이미지 파일 정리 (best-effort)
       for (final xf in files) {
         try {
           await File(xf.path).delete();
@@ -1911,9 +2194,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       if (!mounted) return;
       _toast(_shareFailToast);
     } finally {
-      // ✅ 여기: 반드시 원복 + 다시 펌프
       _pauseExportPrefetch = false;
-      _pumpExportPrefetch(); // 다시 재개
+      _pumpExportPrefetch();
 
       _decLoading();
     }
@@ -1991,7 +2273,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Slider row
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(
@@ -2023,7 +2304,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                                     _sliderDragValue = v;
                                     _page = pg;
                                   });
-                                  // ✅ 드래그 중 체감 개선: 미리 주변 썸네일을 준비
                                   _enqueueThumbPrefetchNear(pg, [
                                     pg - 1,
                                     pg,
@@ -2057,7 +2337,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                     ),
                   ),
 
-                  // Drag thumbnail
                   if (_isSliderDragging && _pagesCount > 0)
                     Positioned(
                       left: (thumbX - (thumbW / 2)).clamp(
@@ -2167,7 +2446,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
               final newPage = index + 1;
               setState(() => _page = newPage);
 
-              // ✅ 페이지 이동 직후 주변 썸네일 준비(다음 드래그가 빨라짐)
               _enqueueThumbPrefetchNear(newPage, [
                 newPage - 1,
                 newPage,
@@ -2220,13 +2498,11 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
                                 minScale: _minUiScale,
                                 maxScale: _maxUiScale,
                                 onInteractionUpdate: (details) {
-                                  // ✅ 핀치로 바뀐 현재 스케일을 UI 상태에 반영(버튼 줌과 표시 동기화용)
                                   _uiScale = _zoomCtrl.value
                                       .getMaxScaleOnAxis()
                                       .clamp(_minUiScale, _maxUiScale);
                                 },
                                 onInteractionEnd: (_) {
-                                  // ✅ 끝났을 때 한 번 더 정리(필요시)
                                   _uiScale = _zoomCtrl.value
                                       .getMaxScaleOnAxis()
                                       .clamp(_minUiScale, _maxUiScale);
@@ -2317,7 +2593,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: _controlBottom + 60, // PNG와 동일 컨셉: pill 바 위로 띄움
+            bottom: _controlBottom + 60,
             child: IgnorePointer(
               ignoring: _isLoading || _doc == null || _pagesCount <= 1,
               child: Opacity(

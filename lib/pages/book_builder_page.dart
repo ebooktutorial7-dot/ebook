@@ -1,4 +1,5 @@
 // book_builder_page.dart
+
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
@@ -424,9 +425,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   String get _memoKey =>
       widget.documentId == null ? '' : 'book_memos_${widget.documentId}';
 
-  // ===========================
-  // episodeTitle -> Delta 주입
-  // ===========================
   List<Map<String, dynamic>> _withEpisodeTitleDelta(
     List<Map<String, dynamic>> original, {
     required String episodeTitle,
@@ -1576,7 +1574,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       builder:
           (_) => CupertinoActionSheet(
             title: const Text('삭제 확인'),
-            message: Text('‘${c.title}’ 회차를 삭제하시겠습니까?'),
+            message: Text('‘${_shortTitle(c.title, max: 24)}’ 회차를 삭제하시겠습니까?'),
             actions: [
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
@@ -1599,6 +1597,212 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ),
           ),
     );
+  }
+
+  String _shortTitle(String title, {int max = 18}) {
+    if (title.length <= max) return title;
+    return '${title.substring(0, max)}…';
+  }
+
+  Future<ShareFormat?> showShareFormatOnlyDialog({
+    required BuildContext context,
+    Color barrierColor = const Color(0xFF0F2238),
+    String dialogTitle = '공유',
+    String confirmLabel = '공유',
+  }) async {
+    ShareFormat format = ShareFormat.pdf;
+
+    final result = await showDialog<ShareFormat>(
+      context: context,
+      barrierColor: barrierColor.withValues(alpha: 0.21),
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Widget segPill({required List<Widget> children}) {
+              return Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const ui.Color.fromARGB(255, 234, 243, 255),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(children: children),
+              );
+            }
+
+            Widget segItem({
+              required String label,
+              required bool selected,
+              required VoidCallback onTap,
+            }) {
+              return Expanded(
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selected ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                      border:
+                          selected
+                              ? Border.all(
+                                color: const Color(0xFFBFD7EE),
+                                width: 1,
+                              )
+                              : null,
+                    ),
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w400,
+                        color:
+                            selected
+                                ? const Color(0xFF1F3A56)
+                                : const ui.Color.fromARGB(255, 144, 164, 185),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            void confirm() => Navigator.pop(context, format);
+
+            return Material(
+              type: MaterialType.transparency,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 24,
+                  ),
+                  child: Container(
+                    width: 250,
+                    padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFE6ECF3)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          dialogTitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111111),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        segPill(
+                          children: [
+                            segItem(
+                              label: 'PDF',
+                              selected: format == ShareFormat.pdf,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.pdf,
+                                  ),
+                            ),
+                            segItem(
+                              label: 'PNG',
+                              selected: format == ShareFormat.png,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.png,
+                                  ),
+                            ),
+                            segItem(
+                              label: 'JPG',
+                              selected: format == ShareFormat.jpg,
+                              onTap:
+                                  () => setModalState(
+                                    () => format = ShareFormat.jpg,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: TextButton.styleFrom(
+                                  overlayColor: Colors.transparent,
+                                  splashFactory: NoSplash.splashFactory,
+                                ),
+                                child: const Text(
+                                  '닫기',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F3A56),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ButtonStyle(
+                                  backgroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFFE9F7FF),
+                                  ),
+                                  foregroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFF1F3A56),
+                                  ),
+                                  elevation: const WidgetStatePropertyAll(0.0),
+                                  shadowColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  surfaceTintColor:
+                                      const WidgetStatePropertyAll(
+                                        Colors.transparent,
+                                      ),
+                                  overlayColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  splashFactory: NoSplash.splashFactory,
+                                  shape: WidgetStatePropertyAll(
+                                    RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(50),
+                                    ),
+                                  ),
+                                  padding: const WidgetStatePropertyAll(
+                                    EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                                onPressed: confirm,
+                                child: Text(
+                                  confirmLabel,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    return result;
   }
 
   void _showChapterMoreDialog(ChapterItem c) {
@@ -1652,8 +1856,50 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     const SizedBox(height: 8),
                     GlassActionButton(
                       theme: theme,
+                      icon: Icons.ios_share,
+                      label: '‘${_shortTitle(c.title)}’ 공유',
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final bytes = await buildBookPdf(
+                          chapters: [c],
+                          showChapterTitle: true,
+                        );
+                        if (!mounted) return;
+                        final pagesCount = await pdfPageCountFromBytes(bytes);
+                        if (!mounted) return;
+                        final format = await showShareFormatOnlyDialog(
+                          context: context,
+                          dialogTitle: '공유',
+                          confirmLabel: '공유',
+                        );
+                        if (!mounted || format == null) return;
+
+                        final pick = SharePickResult(
+                          format: format,
+                          rangeMode: ShareRangeMode.all,
+                          startPage: 1,
+                          endPage: pagesCount,
+                        );
+
+                        final box = context.findRenderObject() as RenderBox?;
+                        final origin =
+                            box == null
+                                ? null
+                                : (box.localToGlobal(Offset.zero) & box.size);
+                        await sharePdfBytesWithPick(
+                          title: c.title,
+                          pdfBytes: bytes,
+                          pick: pick,
+                          toast: (msg) => AppToast.show(context, msg),
+                          sharePositionOrigin: origin,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    GlassActionButton(
+                      theme: theme,
                       icon: Icons.delete_outline,
-                      label: '‘${c.title}’ 삭제',
+                      label: '‘${_shortTitle(c.title)}’ 삭제',
                       onPressed: () {
                         Navigator.pop(context);
                         _confirmDeleteChapter(c);
@@ -2716,10 +2962,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                       children: [
                         if (c.pinned)
                           const Padding(
-                            padding: EdgeInsets.only(right: 4),
-                            child: Text(
-                              ' ',
-                              style: TextStyle(fontSize: 15, height: 1.3),
+                            padding: EdgeInsets.only(right: 5),
+                            child: Icon(
+                              Icons.add,
+                              size: 16,
+                              color: Color(0xFF64B5F6),
                             ),
                           ),
                         Expanded(
@@ -2727,7 +2974,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                             c.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-
                             style: TextStyle(
                               fontSize: 15.5,
                               fontWeight: FontWeight.w400,

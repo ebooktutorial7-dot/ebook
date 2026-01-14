@@ -20,6 +20,8 @@ import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'dart:collection';
 import 'dart:isolate';
 
+const String kBgAlphaKey = 'bgAlpha';
+
 List<Map<String, dynamic>> stripThemeBaseColorFromDelta(
   List<Map<String, dynamic>> delta, {
   String themeBaseColorHex = '#ffffff',
@@ -135,8 +137,6 @@ class SharePickResult {
 
   final ShareFormat format;
   final ShareRangeMode rangeMode;
-
-  // 1-based inclusive
   final int startPage;
   final int endPage;
 }
@@ -150,10 +150,10 @@ Future<SharePickResult?> showShareOptionsDialog({
   String confirmLabel = '공유',
 }) async {
   ShareFormat format = ShareFormat.png;
-  ShareRangeMode rangeMode = ShareRangeMode.all; // ✅ 기본: 전체
+  ShareRangeMode rangeMode = ShareRangeMode.all;
 
-  int start = 1; // ✅ 기본: 전체
-  int end = pagesCount; // ✅ 기본: 전체
+  int start = 1;
+  int end = pagesCount;
 
   final startCtrl = TextEditingController(text: '$start');
   final endCtrl = TextEditingController(text: '$end');
@@ -221,7 +221,6 @@ Future<SharePickResult?> showShareOptionsDialog({
       end = pagesCount;
       syncCtrls();
     } else {
-      // range: 비어있으면 현재값 유지, 없으면 현재페이지
       if (startCtrl.text.trim().isEmpty) startCtrl.text = '$currentPage';
       if (endCtrl.text.trim().isEmpty) endCtrl.text = '$currentPage';
       applyFields(commitNormalize: true);
@@ -251,7 +250,6 @@ Future<SharePickResult?> showShareOptionsDialog({
                   return;
                 }
               } else {
-                // current/all은 이미 값이 맞춰져 있음
                 rangeInvalid = false;
                 normalizeRange();
                 syncCtrls();
@@ -321,7 +319,7 @@ Future<SharePickResult?> showShareOptionsDialog({
             Widget minimalField(
               TextEditingController ctrl,
               FocusNode focus, {
-              double width = 56, // ✅ 기본 알약 폭
+              double width = 56,
             }) {
               final border =
                   rangeInvalid
@@ -329,7 +327,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                       : const Color(0xFFD6E3F0);
 
               return Container(
-                width: width, // ✅ 가로 고정
+                width: width,
                 height: 34,
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -398,7 +396,6 @@ Future<SharePickResult?> showShareOptionsDialog({
                         ),
                         const SizedBox(height: 12),
 
-                        // FORMAT (minimal segmented)
                         segPill(
                           children: [
                             segItem(
@@ -430,7 +427,6 @@ Future<SharePickResult?> showShareOptionsDialog({
 
                         const SizedBox(height: 20),
 
-                        // RANGE (minimal segmented)
                         segPill(
                           children: [
                             segItem(
@@ -461,7 +457,6 @@ Future<SharePickResult?> showShareOptionsDialog({
                           ],
                         ),
 
-                        // A안: start/end only when range
                         if (!showRange)
                           const SizedBox(height: 7)
                         else
@@ -470,8 +465,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.center, // 가운데 정렬(선택)
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     minimalField(
                                       startCtrl,
@@ -523,9 +517,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                               child: TextButton(
                                 onPressed: () => Navigator.pop(context),
                                 style: TextButton.styleFrom(
-                                  overlayColor:
-                                      Colors
-                                          .transparent, // ✅ long press / hover 제거
+                                  overlayColor: Colors.transparent,
                                   splashFactory: NoSplash.splashFactory,
                                 ),
                                 child: const Text(
@@ -623,8 +615,6 @@ class LruCache<K, V extends Object> {
 
     while (_map.length > maxEntries) {
       final oldestKey = _map.keys.first;
-
-      // ✅ '!' 제거 + null 체크로 안전하게
       final oldestVal = _map.remove(oldestKey);
       if (oldestVal != null) {
         onEvict?.call(oldestKey, oldestVal);
@@ -661,7 +651,7 @@ class ByteLruCache<K, V extends Object> {
   V? get(K key) {
     final entry = _map.remove(key);
     if (entry == null) return null;
-    _map[key] = entry; // LRU 갱신(맨 뒤로)
+    _map[key] = entry;
     return entry.value;
   }
 
@@ -675,14 +665,12 @@ class ByteLruCache<K, V extends Object> {
   }) {
     if (bytesWeight <= 0) return;
 
-    // 이미 있던 항목이면 먼저 제거(바이트 회수)
     final prev = _map.remove(key);
     if (prev != null) {
       _totalBytes -= prev.bytesWeight;
       if (_totalBytes < 0) _totalBytes = 0;
     }
 
-    // 한 항목이 예산보다 큰 경우: 캐시하지 않는 편이 안전
     if (bytesWeight > maxBytes) {
       return;
     }
@@ -745,7 +733,6 @@ class PngPage extends StatefulWidget {
     required this.deltaJson,
     required this.revision,
     this.episodeTitle,
-    // 스타일/설정(ChapterWritePage settings 그대로 넘기면 됨)
     this.horizontalMargin = 17,
     this.verticalMargin = 18,
     this.baseFontSize = 14,
@@ -755,17 +742,12 @@ class PngPage extends StatefulWidget {
     this.pageBackgroundColor = Colors.white,
     this.defaultTextColor = const Color(0xFF111111),
 
-    // 렌더 품질(저장/공유 품질에 영향)
     this.renderScale = 2.8,
-    // 이미지 최대 높이 비율(페이지 내에서 너무 길면 축소)
     this.maxImageHeightRatio = 0.65,
   });
 
   final String title;
-
   final String? episodeTitle;
-
-  /// Quill delta json: List<Map<String, dynamic>>
   final List<Map<String, dynamic>> deltaJson;
   final int revision;
 
@@ -795,8 +777,6 @@ class _PngPageState extends State<PngPage> {
 
   final PageController _pageCtrl = PageController();
   final TransformationController _zoomCtrl = TransformationController();
-
-  // 이미지 원본 사이즈 캐시 (src -> Size(w,h))
   final Map<String, Size> _imageSizeCache = <String, Size>{};
 
   static const double _cardTopPadding = 70;
@@ -807,7 +787,6 @@ class _PngPageState extends State<PngPage> {
   static const double _maxUiScale = 4.0;
   static const double _stepUiScale = 0.15;
 
-  // A4 기준(프린팅 px) 보정용 상수 (BookBuilder와 동일)
   static const double _kA4W = 595.275590551;
   static const double _kA4H = 841.88976378;
 
@@ -824,32 +803,24 @@ class _PngPageState extends State<PngPage> {
   int _loadingCount = 0;
   bool get _isLoading => _loadingCount > 0;
 
-  // A4 기준(미리보기 카드 기준 폭에 맞춰 계산)
   double _pageWidthPx = 0;
   double _pageHeightPx = 0;
 
   double? _lastLayoutWidth;
   int _styleSig = 0;
 
-  int _deltaSig = 0; // delta 내용 해시 시그니처
-  bool _paginateScheduled = false; // postFrame 중복 호출 방지
+  int _deltaSig = 0;
+  bool _paginateScheduled = false;
 
-  // ===== Render scale split =====
-  double _previewRenderScale = 2.0; // build()에서 DPR 기반으로 갱신
-  static const double _exportRenderScale = 2.8; // 저장/공유 고정(원하면 위젯 파라미터로)
+  double _previewRenderScale = 2.0;
+  static const double _exportRenderScale = 2.8;
 
-  // settings 연속 변경 폭주 방지: 디바운스 + 취소(epoch)
   Timer? _paginateDebounce;
   int _paginateEpoch = 0;
   bool _paginating = false;
-
-  // ===== Slider state =====
-  double? _sliderDragValue; // null이면 드래그 중 아님
-
+  double? _sliderDragValue;
   bool get _isSliderDragging => _sliderDragValue != null;
-
   int _lastPreviewPage = 1;
-
   int _sliderValueToPage(double v) {
     final pc = math.max(1, _pagesCount);
     return v.round().clamp(1, pc);
@@ -862,8 +833,6 @@ class _PngPageState extends State<PngPage> {
     if (!_pageCtrl.hasClients) return;
     _pageCtrl.jumpToPage(p - 1);
 
-    // onPageChanged가 알아서 _page setState를 해주지만,
-    // 드래그 종료 직후 즉시 반영 원하면 여기도 업데이트 가능
     setState(() => _page = p);
 
     _enqueuePrefetchNear(p, [p - 1, p, p + 1, p + 2]);
@@ -892,11 +861,9 @@ class _PngPageState extends State<PngPage> {
       {'insert': t},
       {
         'insert': '\n',
-        'attributes': {
-          'header': 3, // 원하는 크기에 맞게 1/2/3 선택
-        },
+        'attributes': {'header': 3},
       },
-      {'insert': '\n'}, // 제목-본문 간격(원하면 1개만)
+      {'insert': '\n'},
       ...delta,
     ];
   }
@@ -976,7 +943,6 @@ class _PngPageState extends State<PngPage> {
     const double thumbH = 118;
     const double bubbleTopGap = 8;
 
-    // ✅ DPR에 맞춰 "딱 1 physical px" 테두리
     final double onePx = 1.0 / MediaQuery.of(context).devicePixelRatio;
 
     return Container(
@@ -1008,7 +974,6 @@ class _PngPageState extends State<PngPage> {
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // ===== Slider row =====
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(
@@ -1070,8 +1035,6 @@ class _PngPageState extends State<PngPage> {
                       ),
                     ),
                   ),
-
-                  // ===== Drag thumbnail (드래그 중에만 표시) =====
                   if (_isSliderDragging && _pages.isNotEmpty)
                     Positioned(
                       left: (thumbX - (thumbW / 2)).clamp(
@@ -1086,7 +1049,6 @@ class _PngPageState extends State<PngPage> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          // ✅ 선을 맨 위 레이어로 + 1px 고정
                           foregroundDecoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
@@ -1223,16 +1185,13 @@ class _PngPageState extends State<PngPage> {
 
         try {
           results[i] = await tasks[i]();
-        } catch (_) {
-          // ✅ 개별 실패는 null로 두고 계속
-        }
+        } catch (_) {}
       }
     }
 
     final runners = List.generate(math.max(1, concurrency), (_) => worker());
     await Future.wait(runners);
 
-    // null이 남아있을 수 있으니 cast 대신 필터/기본값 처리 필요
     return results.whereType<T>().toList();
   }
 
@@ -1253,7 +1212,6 @@ class _PngPageState extends State<PngPage> {
         try {
           results[i] = await tasks[i]();
         } catch (_) {
-          // 실패는 null 유지
           results[i] = null;
         }
       }
@@ -1266,7 +1224,7 @@ class _PngPageState extends State<PngPage> {
 
   void _resetPaginationAndCaches({bool notify = true}) {
     _paginateDebounce?.cancel();
-    _paginateEpoch++; // 이전 paginate 전부 무효화
+    _paginateEpoch++;
     _paginating = false;
 
     _pages = const [];
@@ -1301,11 +1259,9 @@ class _PngPageState extends State<PngPage> {
   late List<_Block> _blocks;
   List<_PagePlan> _pages = const [];
 
-  static const int _maxImageCacheEntries = 60; // 40~80 사이 추천
+  static const int _maxImageCacheEntries = 60;
   late final LruCache<String, ui.Image> _imageCache =
       LruCache<String, ui.Image>(maxEntries: _maxImageCacheEntries);
-
-  // ===== THUMB PNG cache (저해상도) =====
 
   final Map<int, Future<Uint8List>> _thumbInFlight = <int, Future<Uint8List>>{};
   static const int _maxThumbCachePages = 32;
@@ -1313,14 +1269,9 @@ class _PngPageState extends State<PngPage> {
     maxEntries: _maxThumbCachePages,
   );
 
-  // thumb 전용 렌더 스케일(필요하면 조절)
   static const double _thumbRenderScale = 0.9;
-
-  // ===== PNG render in-flight (중복 렌더 방지) =====
   final Map<int, Future<Uint8List>> _pngInFlight = <int, Future<Uint8List>>{};
-
-  // ===== File bytes cache (disk IO 줄이기) =====
-  static const int _fileBytesCacheBudgetBytes = 60 * 1024 * 1024; // 60MB
+  static const int _fileBytesCacheBudgetBytes = 60 * 1024 * 1024;
   late final ByteLruCache<String, Uint8List> _fileBytesCache =
       ByteLruCache<String, Uint8List>(maxBytes: _fileBytesCacheBudgetBytes);
 
@@ -1338,18 +1289,15 @@ class _PngPageState extends State<PngPage> {
     return bytes;
   }
 
-  // ===== LRU (바이트 예산) =====
-  static const int _pngCacheBudgetBytes = 120 * 1024 * 1024; // 120MB
+  static const int _pngCacheBudgetBytes = 120 * 1024 * 1024;
   late final ByteLruCache<int, Uint8List> _pngCacheLru =
       ByteLruCache<int, Uint8List>(maxBytes: _pngCacheBudgetBytes);
 
-  // ===== Prefetch queue (동시성 제한) =====
   final List<int> _prefetchQueue = <int>[];
   final Set<int> _prefetchQueued = <int>{};
   int _prefetchRunning = 0;
   static const int _prefetchConcurrency = 2;
 
-  // PageView 방향 추정(옵션)
   int _lastPageForDirection = 1;
 
   @override
@@ -1360,14 +1308,12 @@ class _PngPageState extends State<PngPage> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: true);
 
-    // ✅ A안: 테마 기본색(#ffffff)만 제거
     safeDelta = stripThemeBaseColorFromDelta(
       safeDelta,
       themeBaseColorHex: '#ffffff',
-      stripBackgroundToo: false, // 원하면 true
+      stripBackgroundToo: false,
     );
 
-    // ✅ 회차 제목 삽입
     safeDelta = _withEpisodeTitleDelta(safeDelta);
 
     _blocks = _DeltaParser().parse(safeDelta);
@@ -1384,11 +1330,10 @@ class _PngPageState extends State<PngPage> {
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: true);
 
-    // ✅ A안: 테마 기본색(#ffffff)만 제거
     safeDelta = stripThemeBaseColorFromDelta(
       safeDelta,
       themeBaseColorHex: '#ffffff',
-      stripBackgroundToo: false, // 원하면 true
+      stripBackgroundToo: false,
     );
 
     safeDelta = _withEpisodeTitleDelta(safeDelta);
@@ -1483,7 +1428,7 @@ class _PngPageState extends State<PngPage> {
   }
 
   // ---------------------------
-  // 페이지네이션(블록 -> 페이지별 드로잉 플랜)
+  // 페이지네이션
   // ---------------------------
   Future<void> _paginateIfNeeded(int epoch) async {
     if (epoch != _paginateEpoch) return;
@@ -1502,7 +1447,6 @@ class _PngPageState extends State<PngPage> {
 
       final maxImageH = contentH * widget.maxImageHeightRatio;
 
-      // 이미지 원본 사이즈 수집(페이지네이션 정확도용)
       for (final b in _blocks) {
         if (epoch != _paginateEpoch) return;
         if (b is _ImageBlock) {
@@ -1527,7 +1471,7 @@ class _PngPageState extends State<PngPage> {
           letterSpacing: widget.letterSpacing,
           fontFamily: widget.fontFamily,
           fontFamilyFallback: const [
-            'Apple SD Gothic Neo', // iOS 한글
+            'Apple SD Gothic Neo',
             'Noto Sans KR',
             'Roboto',
             'sans-serif',
@@ -1552,9 +1496,8 @@ class _PngPageState extends State<PngPage> {
         _page = 1;
       });
 
-      // UX: 첫/다음 페이지를 미리 렌더 캐시
       await _ensurePngForPage(1);
-      _enqueuePrefetchNear(1, [2, 3, 4]); // 초기 진입 체감 개선
+      _enqueuePrefetchNear(1, [2, 3, 4]);
     } finally {
       if (mounted && epoch == _paginateEpoch) {
         _paginating = false;
@@ -1563,12 +1506,6 @@ class _PngPageState extends State<PngPage> {
     }
   }
 
-  // ---------------------------
-  // 이미지 로딩(로컬/네트워크) - 다운스케일 디코드 지원
-  // ---------------------------
-
-  // 기존: LruCache<String, ui.Image> _imageCache 유지
-  // 단, key를 src@wNNN로 나눠서 캐시 충돌 방지
   String _imgKey(String src, int? w) => w == null ? src : '$src@w$w';
 
   Future<ui.Image?> _loadImage(String src, {int? targetWidthPx}) async {
@@ -1581,7 +1518,7 @@ class _PngPageState extends State<PngPage> {
       Uint8List bytes;
 
       if (src.startsWith('http://') || src.startsWith('https://')) {
-        return null; // 현재 정책 유지
+        return null;
       } else {
         final b = await _readFileBytesCached(src);
         if (b == null) return null;
@@ -1626,7 +1563,7 @@ class _PngPageState extends State<PngPage> {
   }
 
   Future<Uint8List> _renderPngForPage(int pageNumber) async {
-    final int epoch = _paginateEpoch; // ✅ 렌더 시작 시점
+    final int epoch = _paginateEpoch;
 
     final bytes = await _renderPngForPageWithScale(
       pageNumber,
@@ -1634,8 +1571,6 @@ class _PngPageState extends State<PngPage> {
     );
 
     if (bytes.isEmpty) return bytes;
-
-    // ✅ 리셋/스타일 변경 이후라면 결과 버림
     if (!mounted || epoch != _paginateEpoch) {
       return Uint8List(0);
     }
@@ -1646,18 +1581,16 @@ class _PngPageState extends State<PngPage> {
   }
 
   // ===== EXPORT PNG cache (고해상도 공유/저장용) =====
-  static const int _exportPngCacheBudgetBytes = 90 * 1024 * 1024; // 90MB
+  static const int _exportPngCacheBudgetBytes = 90 * 1024 * 1024;
   late final ByteLruCache<int, Uint8List> _exportPngCacheLru =
       ByteLruCache<int, Uint8List>(maxBytes: _exportPngCacheBudgetBytes);
 
   Future<Uint8List> _renderExportPngForPage(int pageNumber) {
     if (_pages.isEmpty) return Future.value(Uint8List(0));
 
-    // ✅ 1) export 캐시 먼저 조회
     final cached = _exportPngCacheLru.get(pageNumber);
     if (cached != null) return Future.value(cached);
 
-    // ✅ 2) inflight 재사용
     final inflight = _exportInFlight[pageNumber];
     if (inflight != null) return inflight;
 
@@ -1665,11 +1598,8 @@ class _PngPageState extends State<PngPage> {
 
     final fut = _renderPngForPageWithScale(pageNumber, _exportRenderScale)
         .then((bytes) {
-          // ✅ 리셋/스타일 변경 이후 결과는 버림
           if (!mounted || epoch != _paginateEpoch) return Uint8List(0);
           if (bytes.isEmpty) return bytes;
-
-          // ✅ 3) export 캐시에 저장
           _exportPngCacheLru.put(pageNumber, bytes, bytesWeight: bytes.length);
 
           return bytes;
@@ -1693,7 +1623,6 @@ class _PngPageState extends State<PngPage> {
 
     final fut = _renderPngForPageWithScale(pageNumber, _thumbRenderScale)
         .then((bytes) {
-          // ✅ 빈 결과는 캐시하지 않음
           if (bytes.isNotEmpty) {
             _thumbCacheLru.put(pageNumber, bytes);
           }
@@ -1732,7 +1661,6 @@ class _PngPageState extends State<PngPage> {
         await _loadImage(src, targetWidthPx: targetPx);
       });
     }
-    // ✅ 페이지 내부 프리로드는 2 정도가 안전(메모리 피크 억제)
     await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
   }
 
@@ -1749,15 +1677,15 @@ class _PngPageState extends State<PngPage> {
 
     final int outW = (_pageWidthPx * scale).round();
     final int outH = (_pageHeightPx * scale).round();
-
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
     canvas.scale(scale, scale);
+    final bgPaint = Paint()..color = widget.pageBackgroundColor;
+    canvas.drawRect(Rect.fromLTWH(0, 0, _pageWidthPx, _pageHeightPx), bgPaint);
 
     final hm = _effectiveHorizontalMarginPx();
     final vm = _effectiveVerticalMarginPx();
-
     final origin = Offset(hm, vm);
 
     for (final cmd in plan.commands) {
@@ -1857,7 +1785,7 @@ class _PngPageState extends State<PngPage> {
       final tasks = <Future<void> Function()>[];
 
       for (int i = 1; i <= _pagesCount; i++) {
-        final pg = i; // ✅ 캡처 고정
+        final pg = i;
         tasks.add(() async {
           final bytes = await _renderExportPngForPage(pg);
           if (bytes.isEmpty) return;
@@ -1867,8 +1795,6 @@ class _PngPageState extends State<PngPage> {
           await file.writeAsBytes(bytes, flush: true);
         });
       }
-
-      // ✅ 동시성 2 추천 (메모리 안정적)
       await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
 
       if (!mounted) return;
@@ -1906,7 +1832,6 @@ class _PngPageState extends State<PngPage> {
     try {
       final base = _safeFileName(widget.title);
 
-      // 포맷별 토스트 문구
       final String formatLabel;
       switch (pick.format) {
         case ShareFormat.pdf:
@@ -1967,7 +1892,7 @@ class _PngPageState extends State<PngPage> {
               name: p.basename(f.path),
             );
           } else {
-            final jpgBytes = await _pngToJpgInIsolate(pngBytes); // ✅ isolate
+            final jpgBytes = await _pngToJpgInIsolate(pngBytes);
             if (jpgBytes.isEmpty) return null;
 
             final name = '${base}_${pg.toString().padLeft(3, '0')}.jpg';
@@ -2063,12 +1988,11 @@ class _PngPageState extends State<PngPage> {
             builder: (context, constraints) {
               final maxCardWidth = constraints.maxWidth * 0.95;
               _pageWidthPx = maxCardWidth;
-              _pageHeightPx = maxCardWidth * 297 / 210; // A4 ratio
+              _pageHeightPx = maxCardWidth * 297 / 210;
 
               final dpr = MediaQuery.of(context).devicePixelRatio;
               _previewRenderScale = (dpr * 1.1).clamp(1.2, 3.5);
 
-              // 폭 변화 감지
               final prevW = _lastLayoutWidth;
               _lastLayoutWidth = maxCardWidth;
               final widthChanged =
@@ -2111,8 +2035,6 @@ class _PngPageState extends State<PngPage> {
 
                         setState(() {
                           _page = newPage;
-
-                          // ✅ 드래그 중이면 슬라이더 표시값도 같이 맞춤
                           if (_isSliderDragging) {
                             _lastPreviewPage = newPage;
                             _sliderDragValue = newPage.toDouble();
@@ -2121,10 +2043,7 @@ class _PngPageState extends State<PngPage> {
 
                         final dir = (newPage - _lastPageForDirection).sign;
                         _lastPageForDirection = newPage;
-
                         final pages = <int>[newPage - 1, newPage + 1];
-
-                        // 옵션: 방향이 있으면 +2까지
                         if (dir > 0) pages.add(newPage + 2);
                         if (dir < 0) pages.add(newPage - 2);
 
@@ -2159,13 +2078,11 @@ class _PngPageState extends State<PngPage> {
                                     minScale: _minUiScale,
                                     maxScale: _maxUiScale,
                                     onInteractionUpdate: (details) {
-                                      // ✅ 핀치로 바뀐 현재 스케일을 UI 상태에 반영(버튼 줌과 표시 동기화용)
                                       _uiScale = _zoomCtrl.value
                                           .getMaxScaleOnAxis()
                                           .clamp(_minUiScale, _maxUiScale);
                                     },
                                     onInteractionEnd: (_) {
-                                      // ✅ 끝났을 때 한 번 더 정리(필요시)
                                       _uiScale = _zoomCtrl.value
                                           .getMaxScaleOnAxis()
                                           .clamp(_minUiScale, _maxUiScale);
@@ -2201,8 +2118,6 @@ class _PngPageState extends State<PngPage> {
                         );
                       },
                     ),
-
-                    // 왼쪽 상단(목차 자리) — PNG는 목차 없이 비워둠
                     Positioned(
                       left: 10,
                       top: _cardTopPadding - 55,
@@ -2220,8 +2135,6 @@ class _PngPageState extends State<PngPage> {
                         ),
                       ),
                     ),
-
-                    // 오른쪽 상단: 다운로드 + 공유
                     Positioned(
                       right: 10,
                       top: _cardTopPadding - 55,
@@ -2254,14 +2167,13 @@ class _PngPageState extends State<PngPage> {
                         ],
                       ),
                     ),
-                    // ===== 슬라이더 바(하단 pill 바 바로 위) =====
+                    // ===== 슬라이더 바 =====
                     Positioned(
                       left: 0,
                       right: 0,
-                      bottom: _controlBottom + 60, // pill 바 위로 살짝 띄움(필요시 조절)
+                      bottom: _controlBottom + 60,
                       child: IgnorePointer(
-                        ignoring:
-                            _isLoading || _pages.isEmpty, // 로딩/빈페이지면 입력 막기
+                        ignoring: _isLoading || _pages.isEmpty,
                         child: Opacity(
                           opacity: (_isLoading || _pages.isEmpty) ? 0.35 : 1.0,
                           child: _pageSliderBar(
@@ -2271,7 +2183,6 @@ class _PngPageState extends State<PngPage> {
                         ),
                       ),
                     ),
-
                     // 하단 컨트롤 바
                     Positioned(
                       left: 12,
@@ -2328,7 +2239,6 @@ class _PngPageState extends State<PngPage> {
                         ),
                       ),
                     ),
-
                     _loadingOverlay(),
                   ],
                 ),
@@ -2363,15 +2273,11 @@ class _DeltaParser {
         final parts = insert.split('\n');
         for (int i = 0; i < parts.length; i++) {
           final text = parts[i];
-
-          // ✅ 빈 줄도 라인으로 남겨야 하므로, text.isNotEmpty일 때만 run 추가
           if (text.isNotEmpty) {
             currentRuns.add(
               _Run(text: text, inline: _InlineStyle.fromDeltaAttrs(attrs)),
             );
           }
-
-          // ✅ \n 만날 때마다 라인 flush (여기서 align/list/header/indent 등 라인 스타일 확정)
           if (i != parts.length - 1) {
             flushLine(attrs);
           }
@@ -2392,8 +2298,6 @@ class _DeltaParser {
         }
       }
     }
-
-    // 마지막에 남아있는 run flush
     if (currentRuns.isNotEmpty) {
       flushLine(const {});
     }
@@ -2420,14 +2324,11 @@ class _DeltaParser {
       final isListLine = l.style.listType != _ListType.none;
 
       if (isListLine) {
-        // ✅ 리스트는 "한 줄 = 한 아이템" (절대 합치지 않음)
         current = _ParagraphBlock(style: l.style);
         current.addLine(l);
         blocks.add(current);
         continue;
       }
-
-      // ✅ 일반 문단은 기존대로 합치기
       if (current == null || current.style != l.style) {
         current = _ParagraphBlock(style: l.style);
         blocks.add(current);
@@ -2503,19 +2404,34 @@ class _InlineStyle {
     required this.background,
     required this.sizePt,
   });
-
   static _InlineStyle fromDeltaAttrs(Map<String, dynamic> attrs) {
     bool b(String k) => attrs[k] == true;
 
-    Color? parseHex(String? v) {
+    Color? parseColorAny(dynamic v) {
       if (v == null) return null;
-      final s = v.trim();
-      if (!s.startsWith('#')) return null;
-      final hex = s.substring(1);
-      if (hex.length != 6) return null;
-      final n = int.tryParse(hex, radix: 16);
-      if (n == null) return null;
-      return Color(0xFF000000 | n);
+
+      if (v is int) {
+        return Color(v & 0xFFFFFFFF);
+      }
+
+      if (v is String) {
+        final s = v.trim();
+        if (!s.startsWith('#')) return null;
+
+        final hex = s.substring(1);
+        if (hex.length == 6) {
+          final n = int.tryParse(hex, radix: 16);
+          if (n == null) return null;
+          return Color(0xFF000000 | n);
+        }
+        if (hex.length == 8) {
+          final n = int.tryParse(hex, radix: 16);
+          if (n == null) return null;
+          return Color(n);
+        }
+      }
+
+      return null;
     }
 
     double? parseSize(dynamic v) {
@@ -2525,13 +2441,24 @@ class _InlineStyle {
       return null;
     }
 
+    // ---- background ----
+    Color? bg = parseColorAny(attrs['background']);
+
+    final dynA = attrs[kBgAlphaKey];
+    if (bg != null && dynA != null) {
+      int a = 255;
+      if (dynA is int) a = dynA.clamp(0, 255);
+      if (dynA is num) a = dynA.toInt().clamp(0, 255);
+      bg = bg.withAlpha(a);
+    }
+
     return _InlineStyle(
       bold: b('bold'),
       italic: b('italic'),
       underline: b('underline'),
       strike: b('strike'),
-      color: parseHex(attrs['color'] as String?),
-      background: parseHex(attrs['background'] as String?),
+      color: parseColorAny(attrs['color']),
+      background: bg,
       sizePt: parseSize(attrs['size']),
     );
   }
@@ -2553,10 +2480,10 @@ class _InlineStyle {
 
 @immutable
 class _BlockStyle {
-  final int header; // 0 normal, 1/2/3...
-  final TextAlign align; // left/center/right
-  final int indent; // quill indent
-  final _ListType listType; // ul/ol
+  final int header;
+  final TextAlign align;
+  final int indent;
+  final _ListType listType;
   final bool blockQuote;
   final bool codeBlock;
 
@@ -2577,19 +2504,15 @@ class _BlockStyle {
 
     TextAlign align = TextAlign.left;
     final a = attrs['align'];
-
-    // ✅ 여기 보강
     if (a == 'center') {
       align = TextAlign.center;
     } else if (a == 'right' || a == 'end') {
       align = TextAlign.right;
-    } // ✅ end 대응
-    else if (a == 'justify') {
+    } else if (a == 'justify') {
       align = TextAlign.justify;
     } else if (a == 'left' || a == 'start') {
       align = TextAlign.left;
     }
-
     int indent = 0;
     final ind = attrs['indent'];
     if (ind is num) indent = ind.toInt();
@@ -2690,7 +2613,7 @@ String _sanitizeUtf16(String s) {
 }
 
 /// =======================================================
-/// Layout Engine -> Page plans (draw commands)
+/// Layout Engine -> Page plans
 /// =======================================================
 
 class _CanvasLayoutEngine {
@@ -2707,23 +2630,15 @@ class _CanvasLayoutEngine {
   final double contentHeight;
   final Map<String, Size> imageSizes;
   final double maxImageHeight;
-
-  // ===== Measure cache (pagination) =====
   final Map<int, double> _sliceHeightCache = <int, double>{};
 
-  // ===== Soft-wrap helpers (ZWSP) =====
   static const String _zwsp = '\u200B';
-
-  // URL/영단어에서 자연스러운 분기점이 될만한 문자들 뒤에 ZWSP 삽입
   static const String _urlBreakAfterChars = r'/:?&=#._-~%+@';
-
-  // "공백이 전혀 없는" 토큰이 너무 길면, N grapheme마다 ZWSP 삽입
   static const int _hardTokenGraphemeThreshold = 28;
   static const int _hardTokenInsertEvery = 8;
 
   bool _isWhitespaceChar(String ch) => RegExp(r'\s').hasMatch(ch);
 
-  // 이미 ZWSP가 들어있으면 중복 삽입 방지 위해 먼저 제거
   String _stripZwsp(String s) => s.replaceAll(_zwsp, '');
 
   bool _looksLikeUrl(String token) {
@@ -2742,7 +2657,7 @@ class _CanvasLayoutEngine {
       baseStyle.fontFamily,
       baseStyle.fontWeight,
       s.align,
-      (innerW * 10).round(), // 0.1px 단위
+      (innerW * 10).round(),
     );
 
     for (final r in s.runs) {
@@ -2761,7 +2676,6 @@ class _CanvasLayoutEngine {
     return h;
   }
 
-  /// token 내부에 줄바꿈 힌트(ZWSP)를 삽입한 문자열을 반환
   String _softWrapToken(String token) {
     token = _stripZwsp(token);
     if (token.isEmpty) return token;
@@ -2769,7 +2683,6 @@ class _CanvasLayoutEngine {
     final chars = token.characters;
     final gCount = chars.length;
 
-    // 1) URL-ish: '/', '?', '&', '=', '.', '_' 등 뒤에 ZWSP 삽입
     if (_looksLikeUrl(token)) {
       final out = StringBuffer();
       for (final g in chars) {
@@ -2780,18 +2693,12 @@ class _CanvasLayoutEngine {
       }
       return out.toString();
     }
-
-    // 2) 공백/구두점이 거의 없는 긴 토큰: 일정 간격으로 ZWSP 삽입
-    // (이모지도 characters 단위로 안전)
     if (gCount >= _hardTokenGraphemeThreshold) {
       final out = StringBuffer();
       int i = 0;
       for (final g in chars) {
         out.write(g);
         i++;
-
-        // CamelCase/숫자 전환도 분기점으로 쓰면 보기 좋음 (옵션)
-        // 여기서는 최소한의 규칙만: 일정 간격
         if (i % _hardTokenInsertEvery == 0) {
           out.write(_zwsp);
         }
@@ -2802,20 +2709,15 @@ class _CanvasLayoutEngine {
     return token;
   }
 
-  /// runs 전체에서 "공백 없는 긴 토큰"에 ZWSP를 삽입한 runs를 반환
   List<_Run> _softWrapRuns(List<_Run> runs) {
     final out = <_Run>[];
 
     for (final r in runs) {
       final raw = _stripZwsp(r.text);
-
-      // 빠른 탈출: 길이가 짧으면 그대로
       if (raw.length < _hardTokenGraphemeThreshold) {
         out.add(r.text == raw ? r : _Run(text: raw, inline: r.inline));
         continue;
       }
-
-      // 공백을 보존하면서 토큰 단위로 처리
       final buf = StringBuffer();
       final sb = StringBuffer();
 
@@ -2829,7 +2731,7 @@ class _CanvasLayoutEngine {
       for (final g in raw.characters) {
         if (_isWhitespaceChar(g)) {
           flushToken();
-          buf.write(g); // 공백은 그대로
+          buf.write(g);
         } else {
           sb.write(g);
         }
@@ -2843,14 +2745,7 @@ class _CanvasLayoutEngine {
     return out;
   }
 
-  /// cutOffset(UTF-16 index)을 기준으로, 뒤로 탐색해서 "공백/구두점" 경계로 컷을 이동
-  /// - 공백류: 그 공백 "앞"에서 끊음(다음 페이지 선행 공백 제거)
-  /// - 구두점류: 구두점 "뒤"에서 끊음
-  int _snapCutToNiceBoundary(
-    String text,
-    int cutOffset, {
-    int lookBack = 48, // 너무 많이 뒤로 당기면 페이지 낭비 -> 적당히
-  }) {
+  int _snapCutToNiceBoundary(String text, int cutOffset, {int lookBack = 48}) {
     if (cutOffset <= 0) return 0;
     if (text.isEmpty) return cutOffset;
     if (cutOffset > text.length) cutOffset = text.length;
@@ -2858,7 +2753,6 @@ class _CanvasLayoutEngine {
     bool isWhitespace(String ch) => RegExp(r'\s').hasMatch(ch) || ch == _zwsp;
 
     bool isPunct(String ch) {
-      // 라틴 + 한글 문장부호 + 괄호/따옴표 일부
       const punct =
           '.,!?;:…·。！？、'
           ')]}’”"\''
@@ -2871,16 +2765,14 @@ class _CanvasLayoutEngine {
       final ch = text[i];
 
       if (isWhitespace(ch)) {
-        // 공백 바로 앞에서 끊기(공백은 다음 페이지에서 제거할 예정)
         return i;
       }
       if (isPunct(ch)) {
-        // 구두점 뒤에서 끊기
         return i + 1;
       }
     }
 
-    return cutOffset; // 못 찾으면 원래 컷 유지
+    return cutOffset;
   }
 
   List<_Run> _trimLeadingWhitespaceRuns(List<_Run> runs) {
@@ -2892,8 +2784,6 @@ class _CanvasLayoutEngine {
         out.add(r);
         continue;
       }
-
-      // ✅ 선행 공백 + 선행 ZWSP 제거
       final s = r.text;
       final trimmed = s.replaceFirst(RegExp(r'^[\s\u200B]+'), '');
 
@@ -2912,7 +2802,6 @@ class _CanvasLayoutEngine {
     final out = <_LineSlice>[];
 
     for (final line in b.lines) {
-      // ✅ 여기서 긴 토큰 soft wrap(ZWSP) 적용
       final cookedRuns = _softWrapRuns(line.runs);
 
       out.add(_LineSlice(runs: cookedRuns, align: line.style.align));
@@ -2948,7 +2837,6 @@ class _CanvasLayoutEngine {
 
     double h = tp.height;
 
-    // 빈 줄 높이 보정(기존 로직 유지)
     if (h <= 0.1) {
       final fs = baseStyle.fontSize ?? 14.0;
       final lh = (baseStyle.height ?? 1.0);
@@ -2960,7 +2848,6 @@ class _CanvasLayoutEngine {
   }
 
   bool _isEmptyParagraphBlock(_ParagraphBlock b) {
-    // 텍스트/개행을 합쳐서 공백 제거 후 남는 게 없으면 “빈 줄”
     final buf = StringBuffer();
     for (final line in b.lines) {
       for (final r in line.runs) {
@@ -2977,8 +2864,6 @@ class _CanvasLayoutEngine {
     final pages = <_PagePlan>[];
     var current = _PagePlan(commands: []);
     double y = 0;
-
-    // ✅ ordered list 상태 (페이지 넘어가도 유지)
     int orderedCounter = 0;
     bool inOrderedList = false;
 
@@ -2986,11 +2871,9 @@ class _CanvasLayoutEngine {
       pages.add(current);
       current = _PagePlan(commands: []);
       y = 0;
-      // ❗️페이지가 바뀌어도 ordered list는 "끊기지 않음"
     }
 
     for (final b in blocks) {
-      // ---------------- HR ----------------
       // ---------------- HR ----------------
       if (b is _HrBlock) {
         inOrderedList = false;
@@ -3002,8 +2885,6 @@ class _CanvasLayoutEngine {
         const double dashedBoxH = 7.0;
         final double boxH = b.solid ? solidBoxH : dashedBoxH;
         final double blockH = padV + boxH + padV;
-
-        // ✅ 선은 박스 정중앙에
         final double lineYInsideBox = boxH / 2.0;
 
         if (y + blockH > contentHeight && y > 0) newPage();
@@ -3020,9 +2901,7 @@ class _CanvasLayoutEngine {
         continue;
       }
 
-      // ---------------- IMAGE ----------------
       if (b is _ImageBlock) {
-        // 이미지도 리스트를 끊는 게 자연스러움
         inOrderedList = false;
         orderedCounter = 0;
 
@@ -3047,7 +2926,6 @@ class _CanvasLayoutEngine {
       }
 
       if (b is _ParagraphBlock) {
-        // ✅ ordered list 카운트 계산 (블록=한 아이템 덩어리 기준)
         String? markerText;
 
         if (b.style.listType == _ListType.ordered) {
@@ -3078,8 +2956,6 @@ class _CanvasLayoutEngine {
         final pad = _BlockPadding.of(b.style);
         final innerW = math.max(0.0, contentWidth - pad.left - pad.right);
         final paraStyle = _BlockTextStyle.of(baseStyle, b.style);
-
-        // ✅ 라인(정렬 포함) 기반 slices
         final slices = _buildSlicesFromBlock(b).toList(growable: true);
 
         int cursor = 0;
@@ -3096,31 +2972,22 @@ class _CanvasLayoutEngine {
             continue;
           }
 
-          // ✅ 이 페이지에 들어갈 slice들을 최대한 담기
           final pageSlices = <_LineSlice>[];
           double usedH = 0;
 
           while (cursor < slices.length) {
             final s = slices[cursor];
             final h = _measureSliceHeight(s, paraStyle, innerW);
-
-            // 다음 줄이 안 들어가면 stop
             if (pageSlices.isNotEmpty && usedH + h > available) break;
-
             if (pageSlices.isEmpty && h > available) break;
-
             pageSlices.add(s);
             usedH += h;
             cursor++;
           }
-
-          // ✅ 아무 것도 못 담았고, 페이지 시작이 아니면 새 페이지
           if (pageSlices.isEmpty && y > 0) {
             newPage();
             continue;
           }
-
-          // ✅ 한 페이지 시작(y==0)인데도 첫 slice가 너무 커서 못 담는 경우: 그 slice 내부를 run split
           if (pageSlices.isEmpty && cursor < slices.length) {
             final s = slices[cursor];
 
@@ -3131,7 +2998,6 @@ class _CanvasLayoutEngine {
             int cut = _cutOffsetByLineMetrics(tp, canUse, innerW);
             if (cut <= 0) cut = 1;
 
-            // ✅ 자연스러운 경계로 컷 보정(공백/구두점 뒤로 탐색)
             final flatText = s.runs.map((e) => e.text).join();
             cut = _snapCutToNiceBoundary(flatText, cut, lookBack: 32);
             if (cut <= 0) cut = 1;
@@ -3152,16 +3018,8 @@ class _CanvasLayoutEngine {
                 isListContinuation: isContinuation,
               ),
             );
-
-            // 다음 페이지로
             newPage();
-
-            // tailRuns가 남으면 같은 align로 이어서 다시 처리
             if (tailRuns.isNotEmpty) {
-              // cursor는 그대로(현재 slice 계속), slices[cursor]를 tail로 교체
-              // 간단히: tail을 현재 커서 위치에 덮어쓰기
-              // (dart list는 final이지만 내부 요소는 교체 가능)
-              // ignore: avoid_function_literals_in_foreach_calls
               slices[cursor] = _LineSlice(runs: tailRuns, align: s.align);
               markerText = null;
               isContinuation = true;
@@ -3173,8 +3031,6 @@ class _CanvasLayoutEngine {
               continue;
             }
           }
-
-          // ✅ 정상 케이스: pageSlices 한 덩어리 출력
           current.commands.add(
             _ParagraphDrawCommand(
               y: y,
@@ -3189,8 +3045,6 @@ class _CanvasLayoutEngine {
           );
 
           y += decoTop + usedH + decoBottom;
-
-          // 다음 페이지로 넘어갔으면 continuation
           if (cursor < slices.length) {
             newPage();
             markerText = null;
@@ -3234,17 +3088,9 @@ class _CanvasLayoutEngine {
     if (lastFullLine < 0) return 0;
 
     final lm = lines[lastFullLine];
-
-    // ✅ 마지막 줄의 descent 만큼 위로 올려서 "안전한 y"에서 컷
-    // lm.descent가 0일 수도 있어 fallback
     final descent = (lm.descent.isFinite && lm.descent > 0) ? lm.descent : 2.0;
-
-    // used = 마지막 줄까지 누적 높이(= 그 줄의 bottom 근처)
-    // 여기서 descent+epsilon 만큼 위로 당겨 텍스트 꼬리 잘림 방지
     final safeY = (used - descent - 1.0).clamp(0.0, available);
-
     final safeX = math.max(0.0, maxWidth - 4);
-
     final pos = tp.getPositionForOffset(Offset(safeX, safeY));
     return pos.offset;
   }
@@ -3262,7 +3108,7 @@ sealed class _DrawCommand {
     required Future<ui.Image?> Function(String src, {int? targetWidthPx})
     loadImage,
     required double maxImageHeight,
-    required double renderScale, // ✅ 추가
+    required double renderScale,
   });
 }
 
@@ -3300,7 +3146,6 @@ class _ParagraphDrawCommand extends _DrawCommand {
   final String? markerText;
   final bool isListContinuation;
 
-  // ===== Cached layout =====
   List<_PreparedLine>? _prepared;
   double? _totalHCache;
   double? _firstVisibleFontSizeCache;
@@ -3336,8 +3181,6 @@ class _ParagraphDrawCommand extends _DrawCommand {
       final visible = line.runs.any(
         (r) => r.text.replaceAll('\n', '').trim().isNotEmpty,
       );
-
-      // 빈 줄 높이 보정
       if (h <= 0.1) {
         final fs = baseStyle.fontSize ?? 14.0;
         final lh = (baseStyle.height ?? 1.0);
@@ -3399,8 +3242,6 @@ class _ParagraphDrawCommand extends _DrawCommand {
 
     final y0 = origin.dy + y + padding.topDecoration;
     final contentW = width + padding.left + padding.right;
-
-    // ---- decoration rect ----
     final paraRect = Rect.fromLTWH(
       origin.dx,
       origin.dy + y,
@@ -3409,7 +3250,6 @@ class _ParagraphDrawCommand extends _DrawCommand {
     );
     padding.paintDecoration(canvas, paraRect);
 
-    // ---- list marker ----
     if (isList && !isListContinuation) {
       final marker =
           blockStyle.listType == _ListType.bullet ? '•' : (markerText ?? '');
@@ -3529,7 +3369,6 @@ class _ImageDrawCommand extends _DrawCommand {
     required double maxImageHeight,
     required double renderScale,
   }) async {
-    // ✅ 한 번만 로드: 실제 그려질 폭 * renderScale 기준
     final int targetPx = (width * renderScale).round().clamp(64, 4096);
 
     final ui.Image? img = await loadImage(src, targetWidthPx: targetPx);
@@ -3537,12 +3376,8 @@ class _ImageDrawCommand extends _DrawCommand {
 
     final double iw = img.width.toDouble();
     final double ih = img.height.toDouble();
-
-    // 폭은 content width에 맞추고, 높이는 비율 유지
     double drawW = width;
     double drawH = ih * (width / iw);
-
-    // 최대 높이 제한
     if (drawH > maxImageHeight) {
       final double s = maxImageHeight / drawH;
       drawH = maxImageHeight;
@@ -3588,8 +3423,6 @@ class _BlockPadding {
 
   static _BlockPadding of(_BlockStyle s) {
     final baseIndent = 14.0 * s.indent;
-
-    // ✅ chapter_write_page.dart 느낌의 header 들여쓰기
     double headerLeftIndent = 0;
     if (s.header == 2) headerLeftIndent = 6;
     if (s.header == 3) headerLeftIndent = 10;
@@ -3601,8 +3434,6 @@ class _BlockPadding {
 
     final quote = s.blockQuote;
     final code = s.codeBlock;
-
-    // ✅ header 위/아래 여백을 "decoration padding"으로 처리
     double headerTop = 0, headerBottom = 0;
     if (s.header == 1) {
       headerTop = 24;
@@ -3649,7 +3480,6 @@ class _BlockPadding {
 
   double get listMarkerX => (left - 18).clamp(0, 10000);
 
-  // paragraphRect 전체 높이 기반으로 데코를 그림
   void paintDecoration(Canvas canvas, Rect paragraphRect) {
     if (!quote && !code) return;
 
@@ -3706,7 +3536,6 @@ class _BlockTextStyle {
       fontFamilyFallback:
           isCode
               ? const [
-                // iOS
                 'SF Mono',
                 'Menlo',
                 'Courier New',

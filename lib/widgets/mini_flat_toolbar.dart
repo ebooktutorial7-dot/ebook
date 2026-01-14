@@ -14,13 +14,20 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:flex_color_picker/flex_color_picker.dart';
 
 import '../theme/glass_theme.dart';
 import '../widgets/glass/glass_container.dart';
 
-/// =============================================================
-///  공통: Quill 서식 유틸 (inline/block + cycle)
-/// =============================================================
+String _aarrggbbFromColor(Color c) {
+  final a = ((c.a) * 255.0).round().clamp(0, 255);
+  final r = ((c.r) * 255.0).round().clamp(0, 255);
+  final g = ((c.g) * 255.0).round().clamp(0, 255);
+  final b = ((c.b) * 255.0).round().clamp(0, 255);
+
+  String h(int v) => v.toRadixString(16).padLeft(2, '0').toUpperCase();
+  return '#${h(a)}${h(r)}${h(g)}${h(b)}'; // #AARRGGBB
+}
 
 bool _hasAttr(quill.QuillController c, quill.Attribute a) {
   return c.getSelectionStyle().attributes.containsKey(a.key);
@@ -28,7 +35,8 @@ bool _hasAttr(quill.QuillController c, quill.Attribute a) {
 
 bool _clearedRecently = false;
 
-/// inline 속성 토글 (bold/italic/underline/strike/color/background/size 등)
+const String kBgAlphaKey = 'bgAlpha';
+
 void toggleInlineAttr(
   quill.QuillController c,
   quill.Attribute attr, {
@@ -40,7 +48,7 @@ void toggleInlineAttr(
   final has = attrs.containsKey(key);
 
   if (has) {
-    c.formatSelection(quill.Attribute(key, scope, null)); // 명시적 해제
+    c.formatSelection(quill.Attribute(key, scope, null));
   } else {
     final v = enableValue ?? attr.value ?? true;
     c.formatSelection(quill.Attribute(key, scope, v));
@@ -58,10 +66,8 @@ void _toggleExclusiveInline(
   final otherOn = attrs.containsKey(other.key);
 
   if (mineOn) {
-    // 내 거 켜져 있으면 끔
     c.formatSelection(quill.Attribute(mine.key, mine.scope, null));
   } else {
-    // 내 거 켜기 전에 상대 거가 켜져 있으면 먼저 끔
     if (otherOn) {
       c.formatSelection(quill.Attribute(other.key, other.scope, null));
     }
@@ -69,7 +75,6 @@ void _toggleExclusiveInline(
   }
 }
 
-/// block 속성 토글 (blockquote, ul, ol, codeblock 등)
 void toggleBlockAttr(quill.QuillController c, quill.Attribute attr) {
   final attrs = c.getSelectionStyle().attributes;
   final key = attr.key;
@@ -77,13 +82,12 @@ void toggleBlockAttr(quill.QuillController c, quill.Attribute attr) {
   final has = attrs.containsKey(key);
 
   if (has) {
-    c.formatSelection(quill.Attribute(key, scope, null)); // 명시적 해제
+    c.formatSelection(quill.Attribute(key, scope, null));
   } else {
     c.formatSelection(attr);
   }
 }
 
-/// 정렬 순환: left(null) -> center -> right -> left(null)
 void cycleAlign(quill.QuillController c) {
   final cur =
       c.getSelectionStyle().attributes[quill.Attribute.align.key]?.value
@@ -94,35 +98,26 @@ void cycleAlign(quill.QuillController c) {
   } else if (cur == 'center') {
     c.formatSelection(quill.Attribute.rightAlignment);
   } else {
-    // right -> left(null)
     const a = quill.Attribute.align;
     c.formatSelection(quill.Attribute(a.key, a.scope, null));
   }
 }
 
 void setExclusiveList(quill.QuillController c, {required bool ordered}) {
-  // 1) 반대 리스트는 무조건 해제
   final other = ordered ? quill.Attribute.ul : quill.Attribute.ol;
   c.formatSelection(quill.Attribute(other.key, other.scope, null));
-
-  // 2) 본 리스트는 토글
   final mine = ordered ? quill.Attribute.ol : quill.Attribute.ul;
   toggleBlockAttr(c, mine);
 }
 
 void cycleHeader(quill.QuillController c, {required bool clearedRecently}) {
-  // 1) inline size 제거 (기존 유지)
   const size = quill.Attribute.size;
   c.formatSelection(quill.Attribute(size.key, size.scope, null));
-
-  // ✅ 해제 직후에만 검정으로 보정
   if (clearedRecently) {
     c.formatSelection(
       const quill.Attribute('color', quill.AttributeScope.inline, '#000000'),
     );
   }
-
-  // 2) 기존 헤더 순환 로직 그대로
   final cur =
       c.getSelectionStyle().attributes[quill.Attribute.header.key]?.value
           as int?;
@@ -139,23 +134,16 @@ void cycleHeader(quill.QuillController c, {required bool clearedRecently}) {
   }
 }
 
-/// =============================================================
-///  공통: 페이지네이션 트리거 (딜레이 + 최소 변경)
-/// =============================================================
-
 Timer? _paginationTimer;
 
-/// 페이지 영향 있는 스타일 변경 후 이 함수만 호출하면 됨.
 void schedulePagination(quill.QuillController c) {
   _paginationTimer?.cancel();
   _paginationTimer = Timer(const Duration(milliseconds: 120), () {
     final sel = c.selection;
-    // controller.changes 를 확실히 발생시키는 최소 no-op
     c.replaceText(sel.baseOffset, 0, '', sel);
   });
 }
 
-/// 필요하면 바로 쓰고 싶을 때 호출 (지연 없이)
 void triggerPaginationNow(quill.QuillController c) {
   final sel = c.selection;
   c.replaceText(sel.baseOffset, 0, '', sel);
@@ -179,7 +167,6 @@ class MiniFlatToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 기본 Splash 제거한 테마
     final ThemeData noSplash = Theme.of(context).copyWith(
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
@@ -190,7 +177,6 @@ class MiniFlatToolbar extends StatelessWidget {
       ).colorScheme.copyWith(primary: Colors.black),
     );
 
-    /// 공통 버튼 빌더
     Widget btn(
       Widget icon,
       VoidCallback onTap, {
@@ -204,7 +190,7 @@ class MiniFlatToolbar extends StatelessWidget {
           onTap();
           if (affectLayout) {
             schedulePagination(controller);
-            onLayoutChanged?.call(); // ✅ 추가
+            onLayoutChanged?.call();
           }
         },
 
@@ -242,7 +228,7 @@ class MiniFlatToolbar extends StatelessWidget {
                 const Icon(Icons.title),
                 () {
                   cycleHeader(controller, clearedRecently: _clearedRecently);
-                  _clearedRecently = false; // ✅ 한 번 쓰고 바로 해제
+                  _clearedRecently = false;
                 },
                 affectLayout: true,
                 tooltip: 'H1',
@@ -268,14 +254,11 @@ class MiniFlatToolbar extends StatelessWidget {
               // ----------------------------------------------------
               _ColorButton(
                 controller: controller,
+                theme: theme,
                 forBackground: false,
                 icon: Icons.format_color_text,
                 tooltip: '글자 색상',
-                onChanged: () {
-                  // 색상 변경으로 줄바꿈이 달라지는 경우는 드물어서
-                  // 꼭 필요할 때만 유지하고 싶으면 주석처리 가능
-                  // schedulePagination(controller);
-                },
+                onChanged: () {},
               ),
               const SizedBox(width: 7),
 
@@ -284,13 +267,11 @@ class MiniFlatToolbar extends StatelessWidget {
               // ----------------------------------------------------
               _ColorButton(
                 controller: controller,
+                theme: theme,
                 forBackground: true,
                 icon: Icons.format_color_fill,
                 tooltip: '하이라이트',
-                onChanged: () {
-                  // 필요시만
-                  // schedulePagination(controller);
-                },
+                onChanged: () {},
               ),
               const SizedBox(width: 7),
 
@@ -324,8 +305,6 @@ class MiniFlatToolbar extends StatelessWidget {
                 child: _AlignCycleButton(
                   controller: controller,
                   onChanged: () {
-                    // ❌ 제거: schedulePagination(controller);
-                    // ✅ ChapterWritePage에 레이아웃 변경 알림만
                     onLayoutChanged?.call();
                   },
                 ),
@@ -383,15 +362,7 @@ class MiniFlatToolbar extends StatelessWidget {
               // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_list_numbered),
-                () {
-                  debugPrint(
-                    'LIST(OL) before: ${controller.document.toDelta().toJson()}',
-                  );
-                  setExclusiveList(controller, ordered: true);
-                  debugPrint(
-                    'LIST(OL) after : ${controller.document.toDelta().toJson()}',
-                  );
-                },
+                () {},
                 selected: _hasAttr(controller, quill.Attribute.ol),
                 affectLayout: true,
                 tooltip: '번호 목록',
@@ -433,7 +404,7 @@ class MiniFlatToolbar extends StatelessWidget {
                 const Icon(Icons.format_clear),
                 () {
                   _clearFormats(controller);
-                  _clearedRecently = true; // ✅ 해제 직후 표시
+                  _clearedRecently = true;
                 },
                 affectLayout: true,
                 tooltip: '서식 초기화',
@@ -474,7 +445,7 @@ class MiniFlatToolbar extends StatelessWidget {
 }
 
 /// =============================================================
-///  글자 크기 버튼 (Overlay + Provider 연동)
+///  글자 크기 버튼
 /// =============================================================
 
 class _FontSizeButton extends StatefulWidget {
@@ -514,7 +485,6 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
 
         return Stack(
           children: [
-            // 뒷배경 클릭 → 닫기
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -561,7 +531,6 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                             bgColor: bgColor,
                             borderColor: borderColor,
                             onTap: () {
-                              // 선택 영역에 size 적용
                               widget.controller.formatSelection(
                                 quill.Attribute(
                                   'size',
@@ -570,7 +539,6 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                                 ),
                               );
 
-                              // Provider에 기본 폰트 사이즈 반영
                               final sizePt =
                                   double.tryParse(_FontSizeButton._sizes[i]) ??
                                   16.0;
@@ -650,37 +618,262 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
 }
 
 /// =============================================================
-///  Color Button (텍스트/배경색 + Provider 연동)
+///  Color Button
 /// =============================================================
 
 class _ColorButton extends StatelessWidget {
+  static Color _lastTextColor = const ui.Color.fromARGB(255, 183, 217, 248);
+  static Color _lastBgColor = const ui.Color.fromARGB(255, 183, 217, 248);
   final quill.QuillController controller;
+  final GlassTheme theme;
   final bool forBackground;
   final IconData icon;
   final String? tooltip;
-  final VoidCallback? onChanged; // 필요시 페이지네이션
+  final VoidCallback? onChanged;
 
   const _ColorButton({
     required this.controller,
+    required this.theme,
     required this.forBackground,
     required this.icon,
     this.tooltip,
     this.onChanged,
   });
 
-  static const _palette = <Color>[
-    Colors.black,
-    Colors.white,
-    Colors.red,
-    Colors.orange,
-    Colors.amber,
-    Colors.green,
-    Colors.teal,
-    Colors.blue,
-    Colors.indigo,
-    Colors.purple,
-    Colors.pink,
-  ];
+  Color? _colorFromHex(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    final s = hex.replaceAll('#', '').trim();
+
+    int? v = int.tryParse(s, radix: 16);
+    if (v == null) return null;
+
+    if (s.length == 6) {
+      return Color(0xFF000000 | v);
+    }
+    if (s.length == 8) {
+      return Color(v);
+    }
+    return null;
+  }
+
+  String _hexFromColor(Color c) {
+    final int r = ((c.r) * 255.0).round() & 0xff;
+    final int g = ((c.g) * 255.0).round() & 0xff;
+    final int b = ((c.b) * 255.0).round() & 0xff;
+
+    return '#'
+        '${r.toRadixString(16).padLeft(2, '0')}'
+        '${g.toRadixString(16).padLeft(2, '0')}'
+        '${b.toRadixString(16).padLeft(2, '0')}';
+  }
+
+  Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
+    BuildContext context, {
+    required String title,
+    required GlassTheme theme,
+    required Color initial,
+    double wheelSize = 190,
+  }) async {
+    Color current = initial;
+
+    return showModalBottomSheet<_ColorSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
+      builder: (ctx) {
+        final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+        final sheetBorder = Colors.white.withValues(alpha: theme.borderOpacity);
+
+        Widget handle() => Center(
+          child: Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 10),
+            width: 44,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        );
+
+        Widget inputCard(StateSetter setState) => Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: current,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black12, width: 1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _hexFromColor(current),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        Widget alphaCard(StateSetter setState) {
+          final v = (current.a).clamp(0.0, 1.0);
+
+          const double sliderW = 350;
+          const double thumbR = 6;
+
+          return Center(
+            child: SizedBox(
+              width: sliderW,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: thumbR),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '투명도',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        Text('${(v * 100).round()}%'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 1.0,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: thumbR,
+                      ),
+                      overlayShape: SliderComponentShape.noOverlay,
+                    ),
+                    child: Slider(
+                      value: v,
+                      onChanged: (nv) {
+                        final a = (nv * 255).round().clamp(0, 255);
+                        setState(() => current = current.withAlpha(a));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        Widget wheelCard(StateSetter setState) => Padding(
+          padding: const EdgeInsets.all(12),
+          child: Center(
+            child: SizedBox(
+              width: wheelSize,
+              height: wheelSize,
+              child: ColorWheelPicker(
+                color: current,
+                onWheel: (_) {},
+                onChanged: (c) => setState(() => current = c),
+                wheelWidth: 18,
+                wheelSquarePadding: 20,
+                wheelSquareBorderRadius: 999,
+                hasBorder: true,
+                borderColor: Colors.black12,
+              ),
+            ),
+          ),
+        );
+
+        Widget actions() => Row(
+          children: [
+            TextButton.icon(
+              onPressed:
+                  () => Navigator.pop(ctx, const _ColorSheetResult.clear()),
+              icon: const Icon(Icons.block),
+              label: const Text('해제'),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed:
+                  () => Navigator.pop(ctx, const _ColorSheetResult.cancel()),
+              child: const Text('취소'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1F3A56),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed:
+                  () => Navigator.pop(ctx, _ColorSheetResult.apply(current)),
+              child: const Text(
+                '적용',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        );
+
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                decoration: BoxDecoration(
+                  color: const ui.Color.fromARGB(70, 207, 232, 255),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(22),
+                  ),
+                  border: Border.all(color: sheetBorder, width: 1),
+                ),
+                child: StatefulBuilder(
+                  builder: (ctx, setState) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        handle(),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1F3A56),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        inputCard(setState),
+                        const SizedBox(height: 10),
+                        wheelCard(setState),
+                        if (forBackground) ...[
+                          const SizedBox(height: 15),
+                          alphaCard(setState),
+                        ],
+                        const SizedBox(height: 15),
+                        actions(),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ).then((v) => v ?? const _ColorSheetResult.cancel());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -688,108 +881,108 @@ class _ColorButton extends StatelessWidget {
       icon: Icon(icon, size: 18, color: Colors.black87),
       tooltip: tooltip,
       onPressed: () async {
-        final ws = context.read<WritingSettingsController>();
+        final attrs = controller.getSelectionStyle().attributes;
+        final key =
+            forBackground
+                ? quill.Attribute.background.key
+                : quill.Attribute.color.key;
 
-        final picked = await showModalBottomSheet<Color?>(
-          context: context,
-          backgroundColor: Colors.white,
-          showDragHandle: true,
+        final curHex = attrs[key]?.value as String?;
+        Color? curColor = _colorFromHex(curHex);
 
-          barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
-
-          builder: (ctx) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final c in _palette)
-                      GestureDetector(
-                        onTap: () => Navigator.pop(ctx, c),
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: forBackground ? c : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color:
-                                  c == Colors.white
-                                      ? const ui.Color.fromARGB(
-                                        255,
-                                        241,
-                                        235,
-                                        235,
-                                      )
-                                      : c.withValues(alpha: 0.5),
-                              width: 1.2,
-                            ),
-                          ),
-                          child:
-                              forBackground
-                                  ? null
-                                  : Center(
-                                    child: Icon(
-                                      Icons.circle,
-                                      size: 16,
-                                      color:
-                                          c == Colors.white
-                                              ? const ui.Color.fromARGB(
-                                                255,
-                                                241,
-                                                235,
-                                                235,
-                                              ) // 화이트용 가시성 색
-                                              : c,
-                                    ),
-                                  ),
-                        ),
-                      ),
-                    TextButton.icon(
-                      onPressed:
-                          () => Navigator.pop(ctx, const Color(0x00000000)),
-                      icon: const Icon(Icons.block),
-                      label: const Text('해제'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-
-        if (picked == null) return;
-
-        final bool isTransparent = picked.a == 0;
-
-        String? hex;
-        if (!isTransparent) {
-          final int r = (picked.r * 255.0).round() & 0xff;
-          final int g = (picked.g * 255.0).round() & 0xff;
-          final int b = (picked.b * 255.0).round() & 0xff;
-
-          hex =
-              '#'
-              '${r.toRadixString(16).padLeft(2, "0")}'
-              '${g.toRadixString(16).padLeft(2, "0")}'
-              '${b.toRadixString(16).padLeft(2, "0")}';
+        // ✅ background 현재값이 #AARRGGBB면 그대로
+        if (forBackground &&
+            curHex != null &&
+            curHex.startsWith('#') &&
+            curHex.length == 9) {
+          curColor = _colorFromHex(curHex);
         }
+        // ✅ 저장 포맷(#RRGGBB + bgAlpha)면 합쳐서 프리필
+        else if (forBackground && curColor != null) {
+          final dynA = attrs[kBgAlphaKey]?.value;
+          int a = 255;
+          if (dynA is int) a = dynA.clamp(0, 255);
+          if (dynA is num) a = dynA.toInt().clamp(0, 255);
+          curColor = curColor.withAlpha(a);
+        }
+
+        final fallback =
+            forBackground
+                ? _ColorButton._lastBgColor
+                : _ColorButton._lastTextColor;
+
+        final result = await _showPrettyWheelBottomSheet(
+          context,
+          title: forBackground ? '배경 색' : '글자 색',
+          theme: theme,
+          initial: curColor ?? fallback,
+          wheelSize: 190,
+        );
 
         final baseAttr =
             forBackground ? quill.Attribute.background : quill.Attribute.color;
 
-        controller.formatSelection(
-          quill.Attribute(baseAttr.key, baseAttr.scope, hex),
-        );
+        // 0 = cancel
+        if (result.kind == 0) return;
 
-        if (!forBackground) {
-          if (isTransparent) {
-            ws.resetTextColorToThemeDefault();
-          } else {
-            ws.updateTextColor(picked);
+        // 1 = clear
+        if (result.kind == 1) {
+          controller.formatSelection(
+            quill.Attribute(baseAttr.key, baseAttr.scope, null),
+          );
+
+          // ✅ background 투명도 분리키도 같이 해제
+          if (forBackground) {
+            controller.formatSelection(
+              const quill.Attribute(
+                kBgAlphaKey,
+                quill.AttributeScope.inline,
+                null,
+              ),
+            );
           }
+
+          onChanged?.call();
+          return;
+        }
+
+        // 2 = apply
+        final picked = result.color!;
+        if (forBackground) {
+          _ColorButton._lastBgColor = picked;
+        } else {
+          _ColorButton._lastTextColor = picked;
+        }
+
+        if (forBackground) {
+          // ✅ 즉시 반영용: #AARRGGBB 로 넣기
+          final aarrggbb = _aarrggbbFromColor(picked);
+
+          controller.formatSelection(
+            quill.Attribute(
+              quill.Attribute.background.key,
+              quill.Attribute.background.scope,
+              aarrggbb,
+            ),
+          );
+
+          // ✅ editor에서는 bgAlpha 남겨두면 꼬일 수 있으니 제거
+          controller.formatSelection(
+            const quill.Attribute(
+              kBgAlphaKey,
+              quill.AttributeScope.inline,
+              null,
+            ),
+          );
+        } else {
+          final hex = _hexFromColor(picked); // #RRGGBB
+          controller.formatSelection(
+            quill.Attribute(
+              quill.Attribute.color.key,
+              quill.Attribute.color.scope,
+              hex,
+            ),
+          );
         }
 
         onChanged?.call();
@@ -798,8 +991,19 @@ class _ColorButton extends StatelessWidget {
   }
 }
 
+class _ColorSheetResult {
+  final int kind;
+  final Color? color;
+
+  const _ColorSheetResult._(this.kind, this.color);
+
+  const _ColorSheetResult.cancel() : this._(0, null);
+  const _ColorSheetResult.clear() : this._(1, null);
+  const _ColorSheetResult.apply(Color c) : this._(2, c);
+}
+
 /// =============================================================
-///  정렬 순환 버튼
+///  정렬
 /// =============================================================
 class _AlignCycleButton extends StatelessWidget {
   final quill.QuillController controller;
@@ -816,7 +1020,6 @@ class _AlignCycleButton extends StatelessWidget {
                 ?.value
             as String?;
 
-    // 🔽 정렬 버튼만 아이콘 크기 축소
     const double kAlignIconSize = 19;
 
     Icon icon = const Icon(
@@ -843,15 +1046,9 @@ class _AlignCycleButton extends StatelessWidget {
       icon: icon,
       onPressed: () {
         cycleAlign(controller);
-
-        // ✅ 정렬은 레이아웃/페이지에 영향
         schedulePagination(controller);
-
-        // ✅ PNG revision / 페이지바 갱신 트리거
         onChanged?.call();
       },
-
-      // ✅ 다른 버튼과 동일한 터치 영역 유지
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       splashColor: Colors.transparent,
@@ -891,7 +1088,11 @@ void _clearFormats(quill.QuillController c) {
   for (final a in attrsToCheck) {
     if (m.containsKey(a.key)) unset(a);
   }
-
+  if (m.containsKey(kBgAlphaKey)) {
+    toUnset.add(
+      const quill.Attribute(kBgAlphaKey, quill.AttributeScope.inline, null),
+    );
+  }
   if (m.containsKey('script')) {
     toUnset.add(
       const quill.Attribute('script', quill.AttributeScope.inline, null),
@@ -905,10 +1106,6 @@ void _clearFormats(quill.QuillController c) {
   schedulePagination(c);
 }
 
-/// =============================================================
-///  이미지 + HR 삽입 공통 코드
-/// =============================================================
-
 Future<ui.Image> _loadUiImage(File file) async {
   final bytes = await file.readAsBytes();
   final completer = Completer<ui.Image>();
@@ -916,7 +1113,6 @@ Future<ui.Image> _loadUiImage(File file) async {
   return completer.future;
 }
 
-/// HR 공통 삽입
 void _insertEmbedNextLine(quill.QuillController c, {required String embedKey}) {
   final sel = c.selection;
   final cur = sel.isValid ? sel.end : c.document.length;
@@ -964,7 +1160,6 @@ void _insertSolidHrNextLine(quill.QuillController c) =>
 void _insertDashedHrNextLine(quill.QuillController c) =>
     _insertEmbedNextLine(c, embedKey: 'hr');
 
-/// 이미지 삽입
 Future<void> _insertImageFromSource(
   quill.QuillController c,
   ImageSource source,
@@ -983,9 +1178,7 @@ Future<void> _insertImageFromSource(
 
   try {
     await _loadUiImage(tmpFile);
-  } catch (_) {
-    // 해상도 체크 실패해도 그냥 진행
-  }
+  } catch (_) {}
 
   try {
     final appDocDir = await getApplicationDocumentsDirectory();
@@ -1051,7 +1244,6 @@ Future<void> _showImageMenu(
     ancestor: overlayBox,
   );
 
-  // ✅ 위치 계산은 기존 그대로
   final RelativeRect position = RelativeRect.fromRect(
     Rect.fromPoints(
       Offset(buttonTopLeft.dx, buttonBottomRight.dy + 4),
@@ -1093,7 +1285,7 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
   const double pad = 12;
   const double gap = 7;
 
-  const double popupH = (pad * 2) + (itemH * 2) + gap; // 버튼 2개 + 간격
+  const double popupH = (pad * 2) + (itemH * 2) + gap;
 
   const Color kPngDimColor = Color(0xFF0F2238);
   const double kPngDimAlpha = 0.16;
@@ -1168,7 +1360,6 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
 
   entry = OverlayEntry(
     builder: (ctx) {
-      // ✅ build 중 size getter 금지 → MediaQuery만 사용
       final Size overlaySize = MediaQuery.of(ctx).size;
 
       final double rawLeft = position.left;
@@ -1204,11 +1395,8 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ✅ 상단 오른쪽 X
                     Row(children: [const Spacer(), closeX()]),
                     const SizedBox(height: 6),
-
-                    // ✅ 액션 2개만
                     item(label: '카메라로 촬영', value: _ImageMenuAction.camera),
                     const SizedBox(height: gap),
                     item(label: '앨범에서 선택', value: _ImageMenuAction.gallery),

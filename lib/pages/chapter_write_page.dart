@@ -23,6 +23,97 @@ import 'package:ebook_tutorial_app/models/writing_settings.dart';
 
 import 'package:ebook_tutorial_app/pages/png.dart';
 
+const String kBgAlphaKey = 'bgAlpha';
+String _intToAarrggbb(int argb) {
+  final hex =
+      (argb & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
+  return '#$hex'; // #AARRGGBB
+}
+
+String _rgbHexToAarrggbb(String rrggbb, int a) {
+  final aa = (a & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
+  return '#$aa${rrggbb.toUpperCase()}';
+}
+
+List<Map<String, dynamic>> _mergeBgAlphaIntoBackgroundForEditor(
+  List<Map<String, dynamic>> delta,
+) {
+  return delta
+      .map((op) {
+        final m = Map<String, dynamic>.from(op);
+        final attrsRaw = m['attributes'];
+        if (attrsRaw is! Map) return m;
+
+        final attrs = Map<String, dynamic>.from(attrsRaw);
+
+        final bg = attrs['background'];
+        final dynA = attrs[kBgAlphaKey];
+
+        // ✅ (1) background가 int로 들어온 경우: String으로 변환
+        if (bg is int) {
+          attrs['background'] = _intToAarrggbb(bg);
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        // ✅ (2) 이미 #AARRGGBB면 그대로(저장/분리 로직과도 잘 맞음)
+        if (bg is String && bg.startsWith('#') && bg.length == 9) {
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        // ✅ (3) #RRGGBB + bgAlpha => #AARRGGBB로 합치기 (int로 만들지 말 것!)
+        if (bg is String &&
+            bg.startsWith('#') &&
+            bg.length == 7 &&
+            dynA != null) {
+          int a = 255;
+          if (dynA is int) a = dynA;
+          if (dynA is num) a = dynA.toInt();
+
+          final rrggbb = bg.substring(1); // RRGGBB
+          attrs['background'] = _rgbHexToAarrggbb(rrggbb, a);
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        return m;
+      })
+      .toList(growable: true);
+}
+
+List<Map<String, dynamic>> _splitEditorBackgroundToBgAlpha(
+  List<Map<String, dynamic>> delta,
+) {
+  return delta
+      .map((op) {
+        final m = Map<String, dynamic>.from(op);
+        final attrsRaw = m['attributes'];
+        if (attrsRaw is! Map) return m;
+
+        final attrs = Map<String, dynamic>.from(attrsRaw);
+
+        final bg = attrs['background'];
+        if (bg is String && bg.startsWith('#') && bg.length == 9) {
+          final aaHex = bg.substring(1, 3);
+          final rrggbb = bg.substring(3);
+
+          final a = int.tryParse(aaHex, radix: 16) ?? 255;
+
+          attrs['background'] = '#$rrggbb';
+          attrs[kBgAlphaKey] = a;
+
+          m['attributes'] = attrs;
+        }
+
+        return m;
+      })
+      .toList(growable: true);
+}
+
 class ChapterWritePage extends StatefulWidget {
   final String chapterTitle;
   final List<Map<String, dynamic>> initialDeltaJson;
@@ -115,8 +206,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: true);
 
+    final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(safeInitialDelta);
+
     _controller = quill.QuillController(
-      document: quill.Document.fromJson(safeInitialDelta),
+      document: quill.Document.fromJson(editorDelta),
       selection: const TextSelection.collapsed(offset: 0),
     );
 
@@ -362,12 +455,15 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   void _save() {
     final delta = _controller.document.toDelta().toJson();
 
-    // ✅ 결과도 복사해서 넘기면 다음 페이지에서 add/수정해도 안전
+    // ✅ 결과도 복사해서 안전하게
     final safeDeltaJson = List<Map<String, dynamic>>.from(
       delta.map((e) => Map<String, dynamic>.from(e as Map)),
     );
 
-    final result = {'title': _titleCtrl.text.trim(), 'delta': safeDeltaJson};
+    // ✅ 편집기용 #AARRGGBB → 저장/엔진용 background + bgAlpha 로 변환
+    final normalized = _splitEditorBackgroundToBgAlpha(safeDeltaJson);
+
+    final result = {'title': _titleCtrl.text.trim(), 'delta': normalized};
 
     Navigator.of(context).pop(result);
   }
@@ -928,6 +1024,12 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                       ),
                                     );
 
+                                // ✅ PNG용으로 background + bgAlpha → #AARRGGBB 변환
+                                final mergedForEditor =
+                                    _mergeBgAlphaIntoBackgroundForEditor(
+                                      deltaJson,
+                                    );
+
                                 final ep = _titleCtrl.text.trim();
 
                                 Navigator.of(context).push(
@@ -936,7 +1038,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                         (_) => PngPage(
                                           title: ep.isEmpty ? 'PNG 미리보기' : ep,
                                           episodeTitle: ep.isEmpty ? null : ep,
-                                          deltaJson: deltaJson,
+                                          deltaJson: mergedForEditor, // ✅ 여기
                                           revision: _pngRevision,
                                           horizontalMargin:
                                               settings.horizontalMargin,

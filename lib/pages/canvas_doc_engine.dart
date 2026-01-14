@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
-/// Settings to paginate a "document chunk" into multiple pages.
+const String kBgAlphaKey = 'bgAlpha';
+
 @immutable
 class CanvasDocSettings {
   const CanvasDocSettings({
@@ -18,15 +19,10 @@ class CanvasDocSettings {
   final TextStyle baseStyle;
   final double contentWidth;
   final double contentHeight;
-
-  /// image src -> original image size (width/height in px).
   final Map<String, Size> imageSizes;
-
-  /// Clamp image draw height.
   final double maxImageHeight;
 }
 
-/// Result: one page contains draw commands in order.
 class CanvasPagePlan {
   final List<CanvasDrawCommand> commands;
   CanvasPagePlan({required this.commands});
@@ -43,7 +39,6 @@ sealed class CanvasDrawCommand {
   });
 }
 
-/// Core engine.
 class CanvasDocEngine {
   CanvasDocEngine(this.settings);
 
@@ -56,6 +51,49 @@ class CanvasDocEngine {
   static const int _hardTokenGraphemeThreshold = 28;
   static const int _hardTokenInsertEvery = 8;
 
+  List<Map<String, dynamic>> stripThemeBaseColorFromDelta(
+    List<Map<String, dynamic>> delta, {
+    String themeBaseColorHex = '#ffffff',
+    bool stripBackgroundToo = false,
+  }) {
+    final target = themeBaseColorHex.trim().toLowerCase();
+
+    bool isTarget(dynamic v) {
+      if (v is! String) return false;
+      return v.trim().toLowerCase() == target;
+    }
+
+    return delta
+        .map((op) {
+          final m = Map<String, dynamic>.from(op);
+
+          final attrsRaw = m['attributes'];
+          if (attrsRaw is Map) {
+            final attrs = Map<String, dynamic>.from(attrsRaw);
+            var changed = false;
+
+            if (isTarget(attrs['color'])) {
+              attrs.remove('color');
+              changed = true;
+            }
+            if (stripBackgroundToo && isTarget(attrs['background'])) {
+              attrs.remove('background');
+              changed = true;
+            }
+
+            if (changed) {
+              if (attrs.isEmpty) {
+                m.remove('attributes');
+              } else {
+                m['attributes'] = attrs;
+              }
+            }
+          }
+          return m;
+        })
+        .toList(growable: true);
+  }
+
   // -----------------------------
   // Public
   // -----------------------------
@@ -64,7 +102,17 @@ class CanvasDocEngine {
   ) async {
     _sliceHeightCache.clear();
 
-    final blocks = _DeltaParser().parse(deltaJson);
+    var safeDelta = deltaJson
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: true);
+
+    safeDelta = stripThemeBaseColorFromDelta(
+      safeDelta,
+      themeBaseColorHex: '#ffffff',
+      stripBackgroundToo: false,
+    );
+
+    final blocks = _DeltaParser().parse(safeDelta);
     final pages = <CanvasPagePlan>[];
 
     var current = CanvasPagePlan(commands: []);
@@ -80,36 +128,6 @@ class CanvasDocEngine {
     }
 
     for (final b in blocks) {
-      // NOTE: delta chunks are already split by page_break outside
-      // (DeltaPageBreakSplitter in book_builder_page.dart), but we keep support anyway.
-
-      if (b is _TitleBlock) {
-        final titleStyle = settings.baseStyle.copyWith(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          height: 1.2,
-        );
-
-        final tp = TextPainter(
-          text: TextSpan(text: b.text, style: titleStyle),
-          textDirection: TextDirection.ltr,
-          textWidthBasis: TextWidthBasis.parent,
-        )..layout(maxWidth: settings.contentWidth);
-
-        final titleH = tp.height;
-        const gapAfter = 10.0;
-        final blockH = titleH + gapAfter;
-
-        if (y + blockH > settings.contentHeight && y > 0) newPage();
-
-        current.commands.add(
-          CanvasTitleDrawCommand(y: y, text: b.text, style: titleStyle),
-        );
-
-        y += blockH;
-        continue;
-      }
-
       if (b is _PageBreakBlock) {
         if (current.commands.isNotEmpty) {
           newPage();
@@ -270,7 +288,6 @@ class CanvasDocEngine {
           }
 
           if (pageSlices.isEmpty && cursor < slices.length) {
-            // Single giant line: split by line metrics
             final s = slices[cursor];
 
             final tp = _buildTextPainterForRuns(s.runs, paraStyle, s.align);
@@ -742,8 +759,6 @@ class CanvasParagraphDrawCommand extends CanvasDrawCommand {
 
     final y0 = origin.dy + y + padding.topDecoration;
     final contentW = width + padding.left + padding.right;
-
-    // decoration rect
     final paraRect = Rect.fromLTWH(
       origin.dx,
       origin.dy + y,
@@ -752,7 +767,6 @@ class CanvasParagraphDrawCommand extends CanvasDrawCommand {
     );
     padding.paintDecoration(canvas, paraRect);
 
-    // list marker
     if (isList && !isListContinuation) {
       final marker =
           blockStyle.listType == ListType.bullet ? '•' : (markerText ?? '');
@@ -795,7 +809,6 @@ class CanvasParagraphDrawCommand extends CanvasDrawCommand {
       }
     }
 
-    // text lines
     double dy = y0;
     final xBase = origin.dx + padding.left;
 
@@ -948,7 +961,6 @@ class _DeltaParser {
       }
 
       if (insert is Map) {
-        // both pageBreak (ppng.dart) and page_break (your splitter usage) support
         if (insert['pageBreak'] == true || insert['page_break'] == true) {
           if (currentRuns.isNotEmpty) flushLine(const {});
           lines.add(_Line.pageBreak());
@@ -984,12 +996,18 @@ class _DeltaParser {
           }
           continue;
         }
-
         if (insert.containsKey('title')) {
           final v = insert['title'];
-          if (v is String && v.trim().isNotEmpty) {
+          final text = (v is String) ? v.trim() : '';
+          if (text.isNotEmpty) {
             if (currentRuns.isNotEmpty) flushLine(const {});
-            lines.add(_Line.title(v.trim()));
+
+            currentRuns.add(
+              Run(text: text, inline: InlineStyle.fromDeltaAttrs(const {})),
+            );
+
+            flushLine({'header': 3});
+            flushLine(const {});
           }
           continue;
         }
@@ -1026,12 +1044,6 @@ class _DeltaParser {
         continue;
       }
 
-      if (l.kind == _LineKind.title) {
-        current = null;
-        blocks.add(_TitleBlock(l.title!));
-        continue;
-      }
-
       final isListLine = l.style.listType != ListType.none;
 
       if (isListLine) {
@@ -1053,7 +1065,7 @@ class _DeltaParser {
   }
 }
 
-enum _LineKind { text, image, hr, pageBreak, chapterTitle, title }
+enum _LineKind { text, image, hr, pageBreak, chapterTitle }
 
 class LineSlice {
   final List<Run> runs;
@@ -1069,22 +1081,19 @@ class _Line {
   final String? imageSource;
   final bool? hrSolid;
   final String? chapterTitle;
-  final String? title;
 
   _Line({required this.runs, required this.style})
     : kind = _LineKind.text,
       imageSource = null,
       hrSolid = null,
-      chapterTitle = null,
-      title = null;
+      chapterTitle = null;
 
   _Line.image(this.imageSource)
     : kind = _LineKind.image,
       runs = const [],
       style = const BlockStyle(),
       hrSolid = null,
-      chapterTitle = null,
-      title = null;
+      chapterTitle = null;
 
   _Line.hr({required bool solid})
     : kind = _LineKind.hr,
@@ -1092,8 +1101,7 @@ class _Line {
       style = const BlockStyle(),
       imageSource = null,
       hrSolid = solid,
-      chapterTitle = null,
-      title = null;
+      chapterTitle = null;
 
   _Line.pageBreak()
     : kind = _LineKind.pageBreak,
@@ -1101,24 +1109,14 @@ class _Line {
       style = const BlockStyle(),
       imageSource = null,
       hrSolid = null,
-      chapterTitle = null,
-      title = null;
+      chapterTitle = null;
 
   _Line.chapterTitle(this.chapterTitle)
     : kind = _LineKind.chapterTitle,
       runs = const [],
       style = const BlockStyle(),
       imageSource = null,
-      hrSolid = null,
-      title = null;
-
-  _Line.title(this.title)
-    : kind = _LineKind.title,
-      runs = const [],
-      style = const BlockStyle(),
-      imageSource = null,
-      hrSolid = null,
-      chapterTitle = null;
+      hrSolid = null;
 }
 
 class Run {
@@ -1168,13 +1166,25 @@ class InlineStyle {
       return null;
     }
 
+    Color? bg = parseHex(attrs['background'] as String?);
+
+    if (bg != null) {
+      final dynA = attrs[kBgAlphaKey];
+
+      int a = 255;
+      if (dynA is int) a = dynA.clamp(0, 255);
+      if (dynA is num) a = dynA.toInt().clamp(0, 255);
+
+      bg = bg.withAlpha(a);
+    }
+
     return InlineStyle(
       bold: b('bold'),
       italic: b('italic'),
       underline: b('underline'),
       strike: b('strike'),
       color: parseHex(attrs['color'] as String?),
-      background: parseHex(attrs['background'] as String?),
+      background: bg,
       sizePt: parseSize(attrs['size']),
     );
   }
@@ -1272,11 +1282,6 @@ class BlockStyle {
 enum ListType { none, bullet, ordered }
 
 sealed class _Block {}
-
-class _TitleBlock extends _Block {
-  final String text;
-  _TitleBlock(this.text);
-}
 
 class _ChapterTitleBlock extends _Block {
   final String text;
