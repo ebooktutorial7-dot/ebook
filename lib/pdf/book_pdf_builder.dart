@@ -11,25 +11,17 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:ebook_tutorial_app/pages/book_builder_page.dart'
     show ChapterItem;
 
-/// =========================
-/// 기본 색 (테마 완전 제외)
-/// =========================
 const PdfColor kTextColor = PdfColor(0.12, 0.12, 0.13);
 const PdfColor kHeaderColor = PdfColor(0.08, 0.08, 0.09);
 const PdfColor kListMarkerColor = PdfColor(0.35, 0.35, 0.38);
 const PdfColor kHighlightColor = PdfColor(1.0, 0.96, 0.55);
 const PdfColor kQuoteBorderColor = PdfColor(0.65, 0.65, 0.68);
 
-/// 링크 컬러(고정)
+const String kBgAlphaKey = 'bgAlpha';
 const PdfColor kLinkBlue = PdfColor(0.0, 0.48, 1.0);
-
-/// 코드블록 박스 스타일(1번 장점)
 const PdfColor kCodeBg = PdfColor(0.96, 0.96, 0.965);
 const PdfColor kCodeBorder = PdfColor(0.86, 0.86, 0.88);
 
-/// =========================
-/// TextStyle 비교 (span 병합 최적화)
-/// =========================
 bool sameTextStyle(pw.TextStyle? a, pw.TextStyle? b) {
   if (identical(a, b)) return true;
   if (a == null || b == null) return false;
@@ -45,9 +37,6 @@ bool sameTextStyle(pw.TextStyle? a, pw.TextStyle? b) {
       a.color == b.color;
 }
 
-/// =========================
-/// UTF-16 안전 처리 (고아 surrogate -> U+FFFD)
-/// =========================
 String _sanitizeUtf16(String s) {
   final out = StringBuffer();
   final units = s.codeUnits;
@@ -73,9 +62,6 @@ String _sanitizeUtf16(String s) {
   return out.toString();
 }
 
-/// =========================
-/// PDF 엔트리
-/// =========================
 Future<Uint8List> buildBookPdf({
   required List<ChapterItem> chapters,
   bool showChapterTitle = true,
@@ -181,7 +167,6 @@ Future<Uint8List> buildBookPdf({
     return doc.save();
   }
 
-  // chapterPerPage == false : 여러 회차를 하나의 흐름으로
   final widgets = <pw.Widget>[];
   for (final chapter in chapters) {
     final title = _sanitizeUtf16(chapter.title).trim();
@@ -240,16 +225,13 @@ Future<Uint8List> buildBookPdf({
   return doc.save();
 }
 
-/// =========================
-/// Emoji → PNG (Twemoji)
-/// =========================
 final Map<String, Uint8List> _emojiCache = {};
 final Map<String, Future<Uint8List?>> _emojiInflight = {};
 
 bool _isEmojiCluster(String c) {
   for (final r in c.runes) {
-    if (r == 0xFE0F || r == 0x200D) return true; // VS16, ZWJ
-    if (r >= 0x1F1E6 && r <= 0x1F1FF) return true; // flags
+    if (r == 0xFE0F || r == 0x200D) return true;
+    if (r >= 0x1F1E6 && r <= 0x1F1FF) return true;
     if (r >= 0x1F300 && r <= 0x1FAFF) return true;
     if (r >= 0x2600 && r <= 0x27BF) return true;
   }
@@ -289,9 +271,6 @@ Future<Uint8List?> _loadEmojiPng(String cluster) {
   return fut;
 }
 
-/// =========================
-/// 이미지 로더 (로컬/네트워크)
-/// =========================
 String? _normalizeImageSource(dynamic raw) {
   if (raw is String) return raw;
   if (raw is Map && raw['source'] is String) return raw['source'] as String;
@@ -314,29 +293,38 @@ Future<Uint8List?> _loadImageBytes(String source) async {
   }
 }
 
-/// =========================
-/// 내부 Piece
-/// =========================
+double? parseBgOpacity(Map<String, dynamic>? attrs) {
+  final dynA = attrs?[kBgAlphaKey];
+  if (dynA == null) return null;
+
+  int a255 = 255;
+  if (dynA is int) a255 = dynA.clamp(0, 255);
+  if (dynA is num) a255 = dynA.toInt().clamp(0, 255);
+
+  return a255 / 255.0;
+}
+
 class _Piece {
-  _Piece({this.text, this.emoji, required this.style, this.link, this.bg});
+  _Piece({
+    this.text,
+    this.emoji,
+    required this.style,
+    this.link,
+    this.bg,
+    this.bgOpacity,
+  });
 
   final String? text;
   final Uint8List? emoji;
   final pw.TextStyle style;
   final String? link;
   final PdfColor? bg;
+  final double? bgOpacity;
 
   bool get isEmoji => emoji != null;
   bool get hasLink => link != null && link!.trim().isNotEmpty;
 }
 
-/// =========================
-/// Delta → PDF (합본 버전)
-/// - 블록 속성은 원칙적으로 '\n'에서 확정(2번 장점)
-/// - 하지만 insert 문자열 안에 여러 줄이 섞여 들어오는 경우 split('\n')로 커버(1번 장점)
-/// - code-block은 여러 줄을 버퍼링해서 박스 형태로 렌더(1번 장점)
-/// - 고정 컬러/하이라이트/줄 단위 정렬 보정(2번 장점)
-/// =========================
 Future<List<pw.Widget>> _deltaToPdfWidgets({
   required List<Map<String, dynamic>> delta,
   required pw.Font fontKr,
@@ -346,14 +334,9 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
 }) async {
   final out = <pw.Widget>[];
   final linePieces = <_Piece>[];
-
-  // ordered 리스트 번호(들여쓰기 레벨별)
   final orderedCounterByIndent = <int, int>{};
-
-  // code-block 여러 줄 누적
   final codeLinesBuf = <List<_Piece>>[];
 
-  // 현재 블록 속성(align/list/header/blockquote/indent/code-block)
   Map<String, dynamic>? currentBlockAttrs;
 
   bool hasBlockKeys(Map<String, dynamic> a) =>
@@ -370,12 +353,12 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       case 'center':
         return pw.TextAlign.center;
       case 'right':
-      case 'end': // ✅ 추가
+      case 'end':
         return pw.TextAlign.right;
       case 'justify':
         return pw.TextAlign.justify;
       case 'left':
-      case 'start': // ✅ 추가
+      case 'start':
       default:
         return pw.TextAlign.left;
     }
@@ -411,10 +394,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     if (isUnderline) decors.add(pw.TextDecoration.underline);
     if (isStrike) decors.add(pw.TextDecoration.lineThrough);
 
-    // ✅ 텍스트 색: attrs color가 있으면 반영, 없으면 kTextColor 고정
     final fg = parseHexColor(a?['color']) ?? kTextColor;
-
-    // inline code는 크기만 살짝 다르게
     final baseSize = isCode ? 11.0 : 12.0;
 
     return pw.TextStyle(
@@ -457,8 +437,8 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     );
   }
 
-  pw.Widget highlightWrap(PdfColor bg, pw.Widget child) {
-    return pw.Container(
+  pw.Widget highlightWrap(PdfColor bg, double opacity, pw.Widget child) {
+    final box = pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 1.5, vertical: 0.8),
       decoration: pw.BoxDecoration(
         color: bg,
@@ -466,6 +446,8 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       ),
       child: child,
     );
+
+    return pw.Opacity(opacity: opacity.clamp(0.0, 1.0), child: box);
   }
 
   pw.Widget buildCheckBoxMarker({required bool checked}) {
@@ -531,12 +513,10 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     );
   }
 
-  // RichText inline spans (텍스트/이모지/링크/하이라이트)
   List<pw.InlineSpan> piecesToSpans(
     List<_Piece> pieces, {
     required pw.TextStyle baseStyle,
-    required bool
-    forceCodeStyle, // code-block이면 true (링크/하이라이트를 허용해도 되지만, 스타일은 code base)
+    required bool forceCodeStyle,
   }) {
     final spans = <pw.InlineSpan>[];
 
@@ -544,26 +524,30 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     pw.TextStyle? bufStyle;
     String? bufLink;
     PdfColor? bufBg;
+    double? bufBgOpacity;
 
     void flushBuf() {
       if (buf == null) return;
+
       final txt = buf!.toString();
       if (txt.isNotEmpty) {
         final mergedStyle = (bufStyle ?? baseStyle);
-
         final hasLink = bufLink != null && bufLink!.trim().isNotEmpty;
 
         pw.Widget w = pw.Text(
           txt,
           style: mergedStyle.copyWith(
-            // 링크면 파란색 + underline
             color: hasLink ? kLinkBlue : (mergedStyle.color ?? kTextColor),
             decoration:
                 hasLink ? pw.TextDecoration.underline : mergedStyle.decoration,
           ),
         );
 
-        if (bufBg != null) w = highlightWrap(bufBg!, w);
+        if (bufBg != null) {
+          final opacity = (bufBgOpacity ?? 1.0);
+          w = highlightWrap(bufBg!, opacity, w);
+        }
+
         if (hasLink) {
           w = pw.UrlLink(destination: bufLink!.trim(), child: w);
         }
@@ -575,14 +559,16 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       bufStyle = null;
       bufLink = null;
       bufBg = null;
+      bufBgOpacity = null;
     }
 
     for (final p in pieces) {
       final link = p.hasLink ? p.link!.trim() : null;
-      final bg = p.bg;
 
-      final base = forceCodeStyle ? baseStyle : baseStyle;
-      final style = base.merge(p.style);
+      final bg = p.bg;
+      final op = p.bgOpacity;
+
+      final style = baseStyle.merge(p.style);
 
       if (p.isEmoji) {
         flushBuf();
@@ -597,7 +583,11 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
           fit: pw.BoxFit.contain,
         );
 
-        if (bg != null) w = highlightWrap(bg, w);
+        if (bg != null) {
+          final opacity = op ?? 1.0;
+          w = highlightWrap(bg, opacity, w);
+        }
+
         if (link != null && link.isNotEmpty) {
           w = pw.UrlLink(destination: link, child: w);
         }
@@ -605,7 +595,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
         spans.add(pw.WidgetSpan(child: w));
         continue;
       }
-
       final t = p.text ?? '';
       if (t.isEmpty) continue;
 
@@ -613,6 +602,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
           buf != null &&
           bufLink == link &&
           bufBg == bg &&
+          bufBgOpacity == op &&
           sameTextStyle(bufStyle, style);
 
       if (!sameRun) {
@@ -621,6 +611,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
         bufStyle = style;
         bufLink = link;
         bufBg = bg;
+        bufBgOpacity = op;
       } else {
         buf!.write(t);
       }
@@ -675,7 +666,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
                   color: kTextColor,
                 ));
 
-    // ✅ 텍스트는 “자기 영역”에서 align만으로 정렬 (PNG와 동일)
     pw.Widget text = pw.Container(
       width: double.infinity,
       child: buildInlineLine(
@@ -686,26 +676,20 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       ),
     );
 
-    // indent 적용 (줄 전체)
     final leftPad = indentLevel * 14.0;
 
-    // ✅ 리스트면: 마커는 고정 위치, 텍스트는 마커폭 만큼 밀고 정렬
     if (listType != null) {
       final marker = buildMarker(listType: listType, indentLevel: indentLevel);
       final markerBoxWidth = (listType == 'ordered') ? 22.0 : 18.0;
 
-      // 마커가 첫 줄과 대충 맞게 보이도록 아주 약간만 내림(필요 시 1~3 조절)
       const double markerTop = 1.5;
 
       text = pw.Stack(
         children: [
-          // 1) 텍스트 영역 (마커폭만큼 왼쪽 패딩)
           pw.Padding(
             padding: pw.EdgeInsets.only(left: leftPad + markerBoxWidth),
             child: text,
           ),
-
-          // 2) 마커 (고정 위치)
           pw.Positioned(
             left: leftPad,
             top: markerTop,
@@ -713,17 +697,12 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
           ),
         ],
       );
-
-      // quote는 아래에서 공통으로 감싸니까 여기서는 return 하지 않음
     } else {
-      // 리스트 아니면 기존처럼 leftPad만 적용
       text = pw.Padding(
         padding: pw.EdgeInsets.only(left: leftPad),
         child: text,
       );
     }
-
-    // blockquote (전체 줄을 감싸기)
     if (isQuote) {
       text = pw.Container(
         decoration: const pw.BoxDecoration(
@@ -736,7 +715,6 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       );
     }
 
-    // justify는 width infinity 유지가 중요
     if (align == pw.TextAlign.justify) {
       return pw.Container(width: double.infinity, child: text);
     }
@@ -780,9 +758,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     final isCodeBlock = blockAttrs?['code-block'] == true;
 
     if (isCodeBlock) {
-      // code-block은 버퍼에 누적
       if (linePieces.isEmpty) {
-        // 빈 code line도 줄 유지 (원하면 제거 가능)
         codeLinesBuf.add(const <_Piece>[]);
       } else {
         codeLinesBuf.add(List<_Piece>.from(linePieces));
@@ -790,11 +766,8 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       linePieces.clear();
       return;
     }
-
-    // code-block이 끝나는 순간 박스 출력
     flushCodeBlockIfAny();
 
-    // 빈 줄도 간격 유지
     if (linePieces.isEmpty) {
       out.add(pw.SizedBox(height: 10));
       return;
@@ -814,6 +787,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
     if (textPart.isEmpty) return;
 
     final bg = parseHexColor(attrs?['background']);
+    final bgOpacity = parseBgOpacity(attrs);
     final style = inlineStyle(attrs);
     final String? link =
         (attrs?['link'] is String) ? attrs!['link'] as String : null;
@@ -830,47 +804,48 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
             style: style,
             link: link,
             bg: bg,
+            bgOpacity: bgOpacity,
           ),
         );
       } else {
-        linePieces.add(_Piece(text: c, style: style, link: link, bg: bg));
+        linePieces.add(
+          _Piece(
+            text: c,
+            style: style,
+            link: link,
+            bg: bg,
+            bgOpacity: bgOpacity,
+          ),
+        );
       }
     }
   }
 
-  // ========= 메인 루프 =========
   for (final op in delta) {
     final insert = op['insert'];
     final attrs = (op['attributes'] as Map?)?.cast<String, dynamic>();
 
     if (insert is String && insert == '\n') {
-      // 블록 속성은 개행에서 확정
       if (attrs != null && attrs.isNotEmpty && hasBlockKeys(attrs)) {
         currentBlockAttrs = attrs;
       } else {
-        // ✅ 왼쪽 정렬(= align 제거) 같은 “속성 없음” 케이스면 이전 값 유지하지 말고 초기화
         currentBlockAttrs = null;
       }
 
       flushLine(currentBlockAttrs);
       continue;
     }
-
-    // (B) 문자열 insert: 1번 방식으로 split('\n') 커버
     if (insert is String) {
       final parts = _sanitizeUtf16(insert).split('\n');
 
       for (int i = 0; i < parts.length; i++) {
         final part = parts[i];
-
-        // 텍스트 누적
         await absorbTextPart(part, attrs);
 
         if (i != parts.length - 1) {
           if (attrs != null && attrs.isNotEmpty && hasBlockKeys(attrs)) {
             currentBlockAttrs = attrs;
           } else {
-            // ✅ 여기서도 동일하게 초기화
             currentBlockAttrs = null;
           }
 
@@ -880,9 +855,7 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       continue;
     }
 
-    // (C) 이미지 insert
     if (insert is Map && insert.containsKey('image')) {
-      // code-block 끝 처리
       flushCodeBlockIfAny();
 
       if (linePieces.isNotEmpty) {
@@ -915,12 +888,9 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       continue;
     }
   }
-
-  // 마지막 줄 처리
   if (linePieces.isNotEmpty) {
     flushLine(currentBlockAttrs);
   }
   flushCodeBlockIfAny();
-
   return out;
 }

@@ -2,14 +2,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
-/// A4 미니 카드
 class A4MiniCard extends StatelessWidget {
   const A4MiniCard({
     super.key,
     required this.title,
     required this.preview,
     this.selected = false,
-    this.coverPath, // 🔹 표지 사진
+    this.coverPath,
   });
 
   final String title;
@@ -17,10 +16,8 @@ class A4MiniCard extends StatelessWidget {
   final bool selected;
   final String? coverPath;
 
-  // 📌 표지 커버
   static const Color _border = Color.fromARGB(221, 159, 188, 208);
 
-  // 📌 2:3 비율 (width : height = 2 : 3) — 기준값(스케일용)
   static const double a4Height = 150;
   static const double a4AspectWH = 2 / 3;
   static const double a4Width = a4Height * a4AspectWH;
@@ -37,12 +34,9 @@ class A4MiniCard extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 📏 그리드 셀 / 부모가 주는 최대 폭 사용
         final maxW = constraints.maxWidth;
-        final cardW =
-            (maxW.isFinite && maxW > 0) ? maxW : a4Width; // fallback: 기존 고정값
+        final cardW = (maxW.isFinite && maxW > 0) ? maxW : a4Width;
 
-        // 기준(width=a4Width) 대비 스케일 비율
         final scale = cardW / a4Width;
         final cardH = a4Height * scale;
         final capH = captionHeight * scale;
@@ -52,7 +46,6 @@ class A4MiniCard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔹 표지 카드 영역
             AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               height: cardH,
@@ -60,7 +53,6 @@ class A4MiniCard extends StatelessWidget {
               clipBehavior: Clip.hardEdge,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(radius),
-                // 🔥 표지 있을 때는 border 삭제, 없으면 기존 border 유지
                 border:
                     hasCover
                         ? null
@@ -70,7 +62,6 @@ class A4MiniCard extends StatelessWidget {
                         ),
               ),
 
-              // 🔹 표지 이미지 or 기본 아이콘
               child:
                   hasCover
                       ? Image.file(File(coverPath!), fit: BoxFit.cover)
@@ -85,7 +76,6 @@ class A4MiniCard extends StatelessWidget {
 
             SizedBox(height: gap),
 
-            // 🔹 제목 + 프리뷰 영역
             SizedBox(
               width: cardW,
               height: capH,
@@ -128,7 +118,6 @@ class A4MiniCard extends StatelessWidget {
   }
 }
 
-/// 정사각형 Add 카드
 class AddSquareCard extends StatelessWidget {
   const AddSquareCard({super.key, required this.onTap});
 
@@ -180,7 +169,6 @@ class AddSquareCard extends StatelessWidget {
   }
 }
 
-/// 메모 미리보기 카드
 class MemoSquareCard extends StatelessWidget {
   const MemoSquareCard({super.key, required this.text, required this.onTap});
 

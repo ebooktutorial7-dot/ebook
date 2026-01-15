@@ -11,14 +11,13 @@ Future<void> showGenreDialog(
   required GlassTheme theme,
   required GenreTap onTap,
 }) {
-  // ✅ 버튼/다이얼로그 전용: 스윕/하이라이트 제거, 내부 가장자리 효과 약화
   final buttonTheme = theme.copyWith(
     sweepOpacity: 0.0,
     highlightOpacity: 0.0,
     innerEdgeOpacity: 0.02,
   );
 
-  const genres = ['자유 서식', '소설', '시', '자기 계발', '과학 책', '그림 책', '에세이', '수업 과제'];
+  const genres = ['자유 서식', '소설', '시', '자기 계발', '과학 책', '그림 책', '수업 과제'];
 
   return showDialog(
     context: context,
@@ -31,7 +30,7 @@ Future<void> showGenreDialog(
             vertical: 24,
           ),
           child: GlassContainer(
-            theme: buttonTheme, // ✅ 전용 테마 적용
+            theme: buttonTheme,
             borderRadius: 20,
             padding: const EdgeInsets.only(
               top: 16,
@@ -83,7 +82,6 @@ Future<void> showGenreDialog(
                             );
 
                             return ElevatedButton(
-                              // 잉크/오버레이 제거
                               style: baseStyle.merge(
                                 ButtonStyle(
                                   splashFactory: NoSplash.splashFactory,
@@ -134,7 +132,6 @@ Future<void> showMoreDialog({
   required VoidCallback onPickMode,
   required VoidCallback onLogout,
 }) {
-  // ✅ 버튼/다이얼로그 전용: 스윕/하이라이트 제거, 내부 가장자리 효과 약화
   final buttonTheme = theme.copyWith(
     sweepOpacity: 0.0,
     highlightOpacity: 0.0,
@@ -152,7 +149,7 @@ Future<void> showMoreDialog({
             vertical: 24,
           ),
           child: GlassContainer(
-            theme: buttonTheme, // ✅ 전용 테마 적용
+            theme: buttonTheme,
             borderRadius: 20,
             padding: const EdgeInsets.only(
               top: 16,
@@ -174,9 +171,8 @@ Future<void> showMoreDialog({
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // GlassActionButton 내부가 GlassContainer를 사용한다면 전용 테마 전달 필요
                   GlassActionButton(
-                    theme: buttonTheme, // ✅ 전용 테마 적용
+                    theme: buttonTheme,
                     icon: Icons.checklist_rtl,
                     label: '책 선택',
                     onPressed: () {
@@ -186,7 +182,7 @@ Future<void> showMoreDialog({
                   ),
                   const SizedBox(height: 10),
                   GlassActionButton(
-                    theme: buttonTheme, // ✅ 전용 테마 적용
+                    theme: buttonTheme,
                     icon: Icons.logout,
                     label: '로그아웃',
                     onPressed: () {

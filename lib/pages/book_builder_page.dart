@@ -16,8 +16,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart' as quill;
-import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:intl/intl.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter_write_page.dart';
@@ -59,107 +57,6 @@ String? resolveFontFamily(String key) {
     case 'system':
     default:
       return 'Inter';
-  }
-}
-
-class A4Page extends StatelessWidget {
-  final EdgeInsetsGeometry margins;
-  final Widget child;
-  final double widthFactor;
-  final double heightFactor;
-
-  const A4Page({
-    super.key,
-    required this.child,
-    this.margins = EdgeInsets.zero,
-    this.widthFactor = 0.95,
-    this.heightFactor = 0.90,
-  });
-
-  static const double _a4 = 210 / 297;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final availW = c.maxWidth * widthFactor;
-        final availH = c.maxHeight * heightFactor;
-
-        final m = margins.resolve(Directionality.of(context));
-        final innerAvailW = (availW - m.horizontal).clamp(0.0, double.infinity);
-        final innerAvailH = (availH - m.vertical).clamp(0.0, double.infinity);
-
-        final hByW = innerAvailW / _a4;
-        final wByH = innerAvailH * _a4;
-
-        final double innerW, innerH;
-        if (hByW <= innerAvailH) {
-          innerW = innerAvailW;
-          innerH = hByW;
-        } else {
-          innerW = wByH;
-          innerH = innerAvailH;
-        }
-
-        final outerW = innerW + m.horizontal;
-        final outerH = innerH + m.vertical;
-
-        return Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: outerW,
-            height: outerH,
-            child: Padding(
-              padding: m,
-              child: SizedBox(
-                width: innerW,
-                height: innerH,
-                child: AspectRatio(
-                  aspectRatio: _a4,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      border: Border.all(
-                        color: const Color.fromARGB(255, 138, 176, 201),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _MeasureSize extends StatefulWidget {
-  final Widget child;
-  final ValueChanged<Size> onChange;
-  const _MeasureSize({required this.child, required this.onChange});
-
-  @override
-  State<_MeasureSize> createState() => _MeasureSizeState();
-}
-
-class _MeasureSizeState extends State<_MeasureSize> {
-  Size? _old;
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final rb = context.findRenderObject();
-      if (rb is! RenderBox || !rb.hasSize) return;
-      final sz = rb.size;
-      if (_old == sz) return;
-      _old = sz;
-      widget.onChange(sz);
-    });
-    return widget.child;
   }
 }
 
@@ -333,7 +230,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   late final TextEditingController _penNameCtrl;
   late List<Map<String, dynamic>> _delta;
   late List<Map<String, dynamic>> _drawings;
-  late final quill.QuillController _previewCtrl;
   final LayerLink _pdfPreviewLink = LayerLink();
   OverlayEntry? _pdfSubmenuEntry;
 
@@ -372,7 +268,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   List<CanvasPagePlan> _pagePlans = const [];
   int _pageCount = 1;
-  final Map<int, Uint8List> _pngCache = <int, Uint8List>{};
   final Map<String, ui.Image> _imageCache = <String, ui.Image>{};
   final Map<String, Size> _imageSizeCache = <String, Size>{};
 
@@ -456,7 +351,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _paginating = false;
     _pagePlans = const [];
 
-    _pngCache.clear();
     _imageSizeCache.clear();
     _disposeImages();
     _pageCount = 1;
@@ -542,8 +436,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         _pageCount = _pagePlans.length.clamp(1, 1 << 30);
         _currentIndex = _currentIndex.clamp(0, _pageCount - 1);
       });
-
-      await _ensurePngForPage(_currentIndex + 1);
     } finally {
       if (mounted && epoch == _paginateEpoch) _paginating = false;
       _decLoading();
@@ -635,19 +527,19 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     return s.verticalMargin * (_pageHeightPx / _kA4H);
   }
 
-  Future<Uint8List> _ensurePngForPage(int pageNumber) async {
-    final cached = _pngCache[pageNumber];
-    if (cached != null) return cached;
-    if (_pagePlans.isEmpty) return Uint8List(0);
+  Future<ui.Image?> _renderImageForPage(int pageNumber) async {
+    if (_pagePlans.isEmpty) return null;
+
     final s = _settingsController.settings;
     final hm = _effectiveHorizontalMarginPx(s);
     final vm = _effectiveVerticalMarginPx(s);
     final idx = (pageNumber - 1).clamp(0, _pagePlans.length - 1);
 
     final plan = _pagePlans[idx];
-    const renderScale = 2.8;
+    const renderScale = 2.2; // 2.0~3.0 사이에서 조절
     final int outW = (_pageWidthPx * renderScale).round();
     final int outH = (_pageHeightPx * renderScale).round();
+
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
@@ -655,8 +547,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       Rect.fromLTWH(0, 0, outW.toDouble(), outH.toDouble()),
       Paint()..color = Colors.transparent,
     );
+
     canvas.scale(renderScale, renderScale);
     final origin = Offset(hm, vm);
+
     for (final cmd in plan.commands) {
       await cmd.paint(
         canvas: canvas,
@@ -666,13 +560,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         renderScale: renderScale,
       );
     }
+
     final picture = recorder.endRecording();
     final img = await picture.toImage(outW, outH);
-    final bd = await img.toByteData(format: ui.ImageByteFormat.png);
-    img.dispose();
-    final bytes = bd?.buffer.asUint8List() ?? Uint8List(0);
-    _pngCache[pageNumber] = bytes;
-    return bytes;
+    picture.dispose();
+    return img;
   }
 
   String _buildPaginationSignature(WritingSettings s) {
@@ -736,11 +628,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _categoryCtrl = TextEditingController();
     _ageRatingCtrl = TextEditingController();
 
-    _previewCtrl = quill.QuillController(
-      document: quill.Document.fromJson(_delta),
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -778,7 +665,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _cloudSubmenuOpenVN.dispose();
     _epubSubmenuOpenVN.dispose();
     _settingsController.removeListener(_onSettingsChanged);
-    _previewCtrl.dispose();
     _titleCtrl.dispose();
     _penNameCtrl.dispose();
     _summaryCtrl.dispose();
@@ -1325,8 +1211,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (merged.isEmpty) merged.add({'insert': '\n'});
 
     _delta = merged;
-    _previewCtrl.document = quill.Document.fromJson(_delta);
-
     _rebuildPagination();
   }
 
@@ -3716,19 +3600,23 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                             child: CustomPaint(painter: _SunRayPainter()),
                           ),
                         ],
-
                         Positioned.fill(
-                          child: FutureBuilder<Uint8List>(
-                            future: _ensurePngForPage(index + 1),
+                          child: FutureBuilder<ui.Image?>(
+                            future: _renderImageForPage(index + 1),
                             builder: (context, snap) {
-                              final bytes = snap.data;
-                              if (bytes == null || bytes.isEmpty) {
-                                return const SizedBox.expand();
-                              }
-                              return Image.memory(
-                                bytes,
+                              final img = snap.data;
+                              if (img == null) return const SizedBox.expand();
+
+                              return FittedBox(
                                 fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
+                                child: SizedBox(
+                                  width: img.width.toDouble(),
+                                  height: img.height.toDouble(),
+                                  child: RawImage(
+                                    image: img,
+                                    filterQuality: FilterQuality.high,
+                                  ),
+                                ),
                               );
                             },
                           ),
@@ -4230,198 +4118,6 @@ class _MiniCoverCard extends StatelessWidget {
   }
 }
 
-class _PageQuillView extends StatefulWidget {
-  final dq.Delta delta;
-  final WritingSettings settings;
-  const _PageQuillView({required this.delta, required this.settings});
-  @override
-  State<_PageQuillView> createState() => _PageQuillViewState();
-}
-
-class _PageQuillViewState extends State<_PageQuillView>
-    with AutomaticKeepAliveClientMixin {
-  late quill.QuillController _controller;
-  final ScrollController _scrollCtrl = ScrollController();
-  late final FocusNode _focusNode;
-  @override
-  bool get wantKeepAlive => true;
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode(skipTraversal: true, canRequestFocus: false);
-    _controller = quill.QuillController(
-      document: quill.Document.fromDelta(widget.delta),
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _PageQuillView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.delta != widget.delta) {
-      _controller.dispose();
-      _controller = quill.QuillController(
-        document: quill.Document.fromDelta(widget.delta),
-        selection: const TextSelection.collapsed(offset: 0),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollCtrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final s = widget.settings;
-    Color textColor;
-    switch (s.themeId) {
-      case 'dark':
-        textColor = Colors.white.withValues(alpha: 0.92);
-        break;
-      case 'darkGreen':
-        textColor = const Color.fromARGB(255, 255, 255, 255);
-        break;
-      case 'space':
-        textColor = Colors.white.withValues(alpha: 0.96);
-        break;
-      case 'lightSky':
-        textColor = const Color(0xFF1E293B);
-        break;
-
-      default:
-        textColor = const Color(0xFF222222);
-    }
-    final baseStyles = quill.DefaultStyles.getInstance(context);
-
-    final quill.DefaultTextBlockStyle baseParagraph =
-        baseStyles.paragraph ??
-        const quill.DefaultTextBlockStyle(
-          TextStyle(),
-          quill.HorizontalSpacing.zero,
-          quill.VerticalSpacing.zero,
-          quill.VerticalSpacing.zero,
-          null,
-        );
-
-    final defaultEmbeds = FlutterQuillEmbeds.editorBuilders();
-    final safeEmbeds = defaultEmbeds.where((b) => b.key != 'image').toList();
-
-    final customParagraph = baseParagraph.copyWith(
-      style: baseParagraph.style.copyWith(
-        fontSize: s.fontSize,
-        height: s.lineHeight,
-        letterSpacing: s.letterSpacing,
-        fontFamily: resolveFontFamily(s.fontFamily),
-        color: textColor,
-      ),
-
-      verticalSpacing: quill.VerticalSpacing.zero,
-    );
-
-    final customStyles = baseStyles.merge(
-      quill.DefaultStyles(paragraph: customParagraph),
-    );
-    return RepaintBoundary(
-      child: ClipRect(
-        child: quill.QuillEditor(
-          controller: _controller,
-          scrollController: _scrollCtrl,
-          focusNode: _focusNode,
-          config: quill.QuillEditorConfig(
-            enableInteractiveSelection: false,
-            showCursor: false,
-            autoFocus: false,
-            scrollable: false,
-            padding: EdgeInsets.zero,
-            expands: false,
-            scrollPhysics: const ClampingScrollPhysics(),
-            embedBuilders: [
-              _SafeImageEmbedBuilder(),
-              _HrSolidEmbedBuilder(),
-
-              _HrEmbedBuilder(),
-              ...safeEmbeds,
-            ],
-            customStyles: customStyles,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HrSolidEmbedBuilder extends quill.EmbedBuilder {
-  @override
-  String get key => 'hr_solid';
-  @override
-  Widget build(BuildContext context, quill.EmbedContext embedContext) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Divider(
-        thickness: 1,
-        height: 17,
-        color: ui.Color.fromARGB(255, 129, 147, 182),
-      ),
-    );
-  }
-}
-
-class _HrEmbedBuilder extends quill.EmbedBuilder {
-  @override
-  String get key => 'hr';
-  @override
-  Widget build(BuildContext context, quill.EmbedContext embedContext) {
-    return const _DashedDivider(
-      thickness: 0.5,
-      dashWidth: 5,
-      dashSpace: 5,
-      color: ui.Color.fromARGB(255, 129, 147, 182),
-      padding: EdgeInsets.symmetric(vertical: 8),
-    );
-  }
-}
-
-class _DashedDivider extends StatelessWidget {
-  final double thickness;
-  final double dashWidth;
-  final double dashSpace;
-  final Color color;
-  final EdgeInsetsGeometry padding;
-  const _DashedDivider({
-    this.thickness = 0.5,
-    this.dashWidth = 5,
-    this.dashSpace = 5,
-    this.color = const Color(0xFFBDBDBD),
-
-    this.padding = const EdgeInsets.symmetric(vertical: 8),
-  });
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: padding,
-      child: SizedBox(
-        height: thickness,
-        width: double.infinity,
-        child: CustomPaint(
-          painter: _DashedLinePainter(
-            color: color,
-            thickness: thickness,
-            dashWidth: dashWidth,
-            dashSpace: dashSpace,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class DeltaPageBreakSplitter {
   static List<dq.Delta> splitByPageBreak(dq.Delta full) {
     final out = <dq.Delta>[];
@@ -4455,87 +4151,6 @@ class DeltaPageBreakSplitter {
 
     pushCurrent();
     return out;
-  }
-}
-
-class _DashedLinePainter extends CustomPainter {
-  final double thickness;
-  final double dashWidth;
-  final double dashSpace;
-  final Color color;
-  _DashedLinePainter({
-    required this.thickness,
-    required this.dashWidth,
-    required this.dashSpace,
-    required this.color,
-  });
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..strokeWidth = thickness
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.square;
-    double x = 0;
-    final y = size.height / 2;
-    while (x < size.width) {
-      final x2 = (x + dashWidth).clamp(0, size.width).toDouble();
-      canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
-      x += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedLinePainter old) =>
-      old.color != color ||
-      old.thickness != thickness ||
-      old.dashWidth != dashWidth ||
-      old.dashSpace != dashSpace;
-}
-
-class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
-  @override
-  String get key => 'image';
-  @override
-  Widget build(BuildContext context, quill.EmbedContext embedContext) {
-    final dynamic data = embedContext.node.value.data;
-    String? source;
-    if (data is String) {
-      source = data;
-    } else if (data is Map && data['source'] is String) {
-      source = data['source'] as String;
-    }
-    if (source == null || source.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    if (source.startsWith('http://') || source.startsWith('https://')) {
-      return Image.network(
-        source,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stack) {
-          return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
-        },
-      );
-    }
-
-    final file = File(source);
-
-    if (!file.existsSync()) {
-      return const SizedBox.shrink();
-    }
-    return Image.file(
-      file,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stack) {
-        return const Icon(
-          Icons.broken_image,
-          size: 32,
-          color: ui.Color.fromARGB(255, 95, 124, 139),
-        );
-      },
-    );
   }
 }
 

@@ -27,7 +27,7 @@ const String kBgAlphaKey = 'bgAlpha';
 String _intToAarrggbb(int argb) {
   final hex =
       (argb & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
-  return '#$hex'; // #AARRGGBB
+  return '#$hex';
 }
 
 String _rgbHexToAarrggbb(String rrggbb, int a) {
@@ -49,7 +49,6 @@ List<Map<String, dynamic>> _mergeBgAlphaIntoBackgroundForEditor(
         final bg = attrs['background'];
         final dynA = attrs[kBgAlphaKey];
 
-        // ✅ (1) background가 int로 들어온 경우: String으로 변환
         if (bg is int) {
           attrs['background'] = _intToAarrggbb(bg);
           attrs.remove(kBgAlphaKey);
@@ -57,14 +56,12 @@ List<Map<String, dynamic>> _mergeBgAlphaIntoBackgroundForEditor(
           return m;
         }
 
-        // ✅ (2) 이미 #AARRGGBB면 그대로(저장/분리 로직과도 잘 맞음)
         if (bg is String && bg.startsWith('#') && bg.length == 9) {
           attrs.remove(kBgAlphaKey);
           m['attributes'] = attrs;
           return m;
         }
 
-        // ✅ (3) #RRGGBB + bgAlpha => #AARRGGBB로 합치기 (int로 만들지 말 것!)
         if (bg is String &&
             bg.startsWith('#') &&
             bg.length == 7 &&
@@ -73,7 +70,7 @@ List<Map<String, dynamic>> _mergeBgAlphaIntoBackgroundForEditor(
           if (dynA is int) a = dynA;
           if (dynA is num) a = dynA.toInt();
 
-          final rrggbb = bg.substring(1); // RRGGBB
+          final rrggbb = bg.substring(1);
           attrs['background'] = _rgbHexToAarrggbb(rrggbb, a);
           attrs.remove(kBgAlphaKey);
           m['attributes'] = attrs;
@@ -149,7 +146,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   double _a4PageStridePx = 1000;
   double _pngLikeContentHeightPx = 1000;
 
-  // ---- Persist/restore state ----
   double? _restoredOffset;
   bool _restoreTried = false;
   Timer? _saveDebounce;
@@ -172,7 +168,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     }
   }
 
-  // ---- UI chrome show/hide ----
   bool _chromeVisible = true;
   static const _tapRevealZone = 56.0;
 
@@ -219,8 +214,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     _controller.changes.listen((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 스크롤 포지션 기준으로 pageCount 업데이트
-        // (contentHeight는 LayoutBuilder에서 항상 최신값 유지)
         _recomputePaginationFromStoredHeight();
       });
       if (mounted) setState(() {});
@@ -243,7 +236,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     });
 
     _applySystemUi();
-    // ✅ 추가: 하드웨어 Enter 감지(빈 리스트면 종료)
     HardwareKeyboard.instance.addHandler(_handleHardwareEnterToExitList);
   }
 
@@ -253,9 +245,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         return const Color.fromARGB(255, 0, 0, 0);
       case 'darkGreen':
         return const Color.fromARGB(255, 10, 30, 26);
-      case 'space': // 🌌 우주 테마 기본 배경
+      case 'space':
         return const Color(0xFF05081A);
-      case 'lightSky': // 🌤
+      case 'lightSky':
         return const Color(0xFF1E293B);
       default:
         return Colors.white;
@@ -268,10 +260,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         return Colors.white.withValues(alpha: 0.92);
       case 'darkGreen':
         return Colors.white.withValues(alpha: 0.92);
-      case 'space': // 🌌 우주 테마 텍스트
+      case 'space':
         return Colors.white.withValues(alpha: 0.96);
-      case 'lightSky': // 🌤
-        return const Color(0xFF1E293B); // 짙은 남색(가독성용)
+      case 'lightSky':
+        return const Color(0xFF1E293B);
       default:
         return Colors.black87;
     }
@@ -286,9 +278,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final cupertino = CupertinoTheme.of(context);
 
     return CupertinoTheme(
-      data: cupertino.copyWith(
-        primaryColor: primaryColor, // ✅ iOS tint(리스트 마커 포함) 고정
-      ),
+      data: cupertino.copyWith(primaryColor: primaryColor),
       child: Theme(
         data: base.copyWith(
           primaryColor: primaryColor,
@@ -297,7 +287,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
             secondary: primaryColor,
           ),
 
-          // ✅ Tooltip
           tooltipTheme: const TooltipThemeData(
             preferBelow: true,
             verticalOffset: 12,
@@ -394,7 +383,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     setState(() => _reduceTransparencyFlag = flag);
   }
 
-  // ---- Persist ----
   Future<void> _loadSavedPosition() async {
     final prefs = await SharedPreferences.getInstance();
     _restoredOffset = prefs.getDouble(_prefsKeyScroll);
@@ -454,21 +442,15 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   void _save() {
     final delta = _controller.document.toDelta().toJson();
-
-    // ✅ 결과도 복사해서 안전하게
     final safeDeltaJson = List<Map<String, dynamic>>.from(
       delta.map((e) => Map<String, dynamic>.from(e as Map)),
     );
-
-    // ✅ 편집기용 #AARRGGBB → 저장/엔진용 background + bgAlpha 로 변환
     final normalized = _splitEditorBackgroundToBgAlpha(safeDeltaJson);
-
     final result = {'title': _titleCtrl.text.trim(), 'delta': normalized};
 
     Navigator.of(context).pop(result);
   }
 
-  // ---- 선택 시 툴바 노출 ----
   void _showAndLockToolbarDebounced() {
     if (_isFocusWriting) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -638,21 +620,16 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
   }
 
-  // ✅ flutter_quill 11.5.0 호환: HorizontalSpacing/VerticalSpacing는 positional 2개만 받음
   quill.DefaultTextBlockStyle _headerBlockStyle({
     required quill.DefaultTextBlockStyle base,
     required WritingSettings settings,
     required String? fontFamily,
-
-    // 제목 크기/굵기
     required double fontSize,
     required FontWeight fontWeight,
-
-    // 여백/들여쓰기(간접 구현)
     required double vTop,
     required double vBottom,
-    required double hMargin, // 좌/우 여백
-    required double leftIndent, // 블록 전체 왼쪽으로 더 밀기(=left spacing에 더함)
+    required double hMargin,
+    required double leftIndent,
   }) {
     return quill.DefaultTextBlockStyle(
       base.style.copyWith(
@@ -661,13 +638,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         height: settings.lineHeight,
         letterSpacing: settings.letterSpacing,
         fontFamily: fontFamily,
-        color: null, // ✅ 테마 색상 상속
+        color: null,
         decorationStyle: TextDecorationStyle.solid,
-        decorationColor: _textColorFromSettings(settings), // ✅ 헤더에서도 방지
+        decorationColor: _textColorFromSettings(settings),
       ),
-      // ✅ HorizontalSpacing(left, right)
       quill.HorizontalSpacing(hMargin + leftIndent, hMargin),
-      // ✅ VerticalSpacing(top, bottom)
       quill.VerticalSpacing(vTop, vBottom),
       base.lineSpacing,
       base.decoration,
@@ -702,12 +677,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   double _calcPngLikeContentHeightPx(BoxConstraints constraints) {
-    final pageWidth = constraints.maxWidth * 0.95; // ✅ PNG와 동일
+    final pageWidth = constraints.maxWidth * 0.95;
     final pageHeight = pageWidth * 297 / 210;
-    return pageHeight - (_a4VerticalMargin * 2); // ✅ verticalMargin=18과 일치
+    return pageHeight - (_a4VerticalMargin * 2);
   }
 
-  // ✅ PNG처럼 contentHeight로 페이지 수 계산
   int _calcPageCountLikePng(ScrollPosition pos, double contentHeight) {
     final total = pos.maxScrollExtent + pos.viewportDimension;
     return math.max(1, (total / contentHeight).ceil());
@@ -760,7 +734,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     return plain.replaceAll(RegExp(r'\s+'), '').length;
   }
 
-  // ✅ 빈 리스트 항목에서 Enter 한번 더 누르면 리스트 종료 (메모 앱처럼)
   bool _handleHardwareEnterToExitList(KeyEvent event) {
     if (!_focusNode.hasFocus) return false;
 
@@ -769,7 +742,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     if (_isInListAtCursor(_controller) && _isCurrentLineEmpty(_controller)) {
       _exitListLikeMemo(_controller);
-      return true; // Enter 기본 동작(새 줄 생성) 막기
+      return true;
     }
     return false;
   }
@@ -783,7 +756,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         v == 'unchecked';
   }
 
-  // ✅ queryLine 없이 "현재 줄" 텍스트를 뽑아서 비었는지 확인
   bool _isCurrentLineEmpty(quill.QuillController c) {
     final sel = c.selection;
     if (!sel.isCollapsed) return false;
@@ -806,7 +778,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   void _exitListLikeMemo(quill.QuillController c) {
-    // ✅ flutter_quill 11.x : unset 대신 fromKeyValue(key, null)로 해제
     c.formatSelection(
       quill.Attribute.fromKeyValue(quill.Attribute.list.key, null),
     );
@@ -818,8 +789,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   @override
   Widget build(BuildContext context) {
     final bool isImmersive = _isFocusWriting;
-
-    // Provider 에서 설정 읽기
     final settings = context.watch<WritingSettingsController>().settings;
     final primary = _textColorFromSettings(settings);
     final textColor = primary;
@@ -828,18 +797,14 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final bool isLightSkyTheme = settings.themeId == 'lightSky';
     final Color pageBg = _backgroundColorFromSettings(settings);
 
-    // 🔹 Quill 기본 스타일 가져오기
     final baseStyles = quill.DefaultStyles.getInstance(context);
     final paragraph = baseStyles.paragraph;
     final baseLists = baseStyles.lists;
 
     final defaultEmbeds = FlutterQuillEmbeds.editorBuilders();
     final safeEmbeds = defaultEmbeds.where((b) => b.key != 'image').toList();
-
-    // 🔹 customStyles
     final fontFamily = _resolveFontFamily(settings.fontFamily);
 
-    // 본문(Paragraph)
     final customParagraph = quill.DefaultTextBlockStyle(
       (paragraph?.style ?? const TextStyle()).copyWith(
         fontSize: 15.0,
@@ -857,7 +822,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       paragraph?.decoration,
     );
 
-    // 리스트(Lists)
     final customLists = (baseLists ?? baseStyles.lists!).copyWith(
       style: (baseLists?.style ?? const TextStyle()).copyWith(
         fontSize: 15.0,
@@ -917,10 +881,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       ),
     );
 
-    // ✅ 테마 래핑은 딱 1번만!
     return _wrapEditorTheme(
       context: context,
-      primaryColor: primary, // ✅ iOS tint / list marker 기준
+      primaryColor: primary,
       child: LayoutBuilder(
         builder: (context, constraints) {
           _pngLikeContentHeightPx = _calcPngLikeContentHeightPx(constraints);
@@ -962,6 +925,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                             _persistFocus();
                             _save();
                           },
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          focusColor: Colors.transparent,
                         ),
                         titleSpacing: 0,
                         title: TextField(
@@ -1023,8 +990,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                             Map<String, dynamic>.from(e as Map),
                                       ),
                                     );
-
-                                // ✅ PNG용으로 background + bgAlpha → #AARRGGBB 변환
                                 final mergedForEditor =
                                     _mergeBgAlphaIntoBackgroundForEditor(
                                       deltaJson,
@@ -1038,7 +1003,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                         (_) => PngPage(
                                           title: ep.isEmpty ? 'PNG 미리보기' : ep,
                                           episodeTitle: ep.isEmpty ? null : ep,
-                                          deltaJson: mergedForEditor, // ✅ 여기
+                                          deltaJson: mergedForEditor,
                                           revision: _pngRevision,
                                           horizontalMargin:
                                               settings.horizontalMargin,
@@ -1392,13 +1357,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                             theme: _glassTheme,
                             onLayoutChanged: () {
                               if (!mounted) return;
-
-                              // ✅ PNG 페이지 강제 리빌드 트리거
                               setState(() {
                                 _pngRevision++;
                               });
-
-                              // ✅ 페이지바도 즉시 갱신 (postFrame 없이도 보통 충분)
                               _recomputePaginationFromStoredHeight();
                             },
                           ),
@@ -1414,9 +1375,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                           currentPage: _currentPage,
                           pageCount: _pageCount,
                           charCount: _getCharCount(),
-                          onPageChanged: (p) => _jumpToPage(p), // 끝났을 때 animate
-                          onPagePreviewChanged:
-                              (p) => _jumpToPagePreview(p), // ✅ 드래그 중 jump
+                          onPageChanged: (p) => _jumpToPage(p),
+                          onPagePreviewChanged: (p) => _jumpToPagePreview(p),
                           backgroundColor: Colors.white,
                         ),
                       ),
@@ -1534,7 +1494,6 @@ class _PageJumpBarState extends State<_PageJumpBar> {
 
                               setState(() => _dragValue = v);
 
-                              // ✅ 드래그 중에도 스크롤 이동(미리보기)
                               widget.onPagePreviewChanged?.call(pg);
                             },
                             onChangeEnd: (v) {
@@ -1600,10 +1559,9 @@ class _PageJumpBarState extends State<_PageJumpBar> {
   }
 }
 
-/// ===== 솔리드 HR(구분선) 임베드 빌더 =====
 class _HrSolidEmbedBuilder extends quill.EmbedBuilder {
   @override
-  String get key => 'hr_solid'; // 툴바에서 삽입하는 키와 정확히 일치해야 합니다.
+  String get key => 'hr_solid';
 
   @override
   Widget build(BuildContext context, quill.EmbedContext embedContext) {
@@ -1654,7 +1612,7 @@ class _DashedDivider extends StatelessWidget {
     return Padding(
       padding: padding,
       child: SizedBox(
-        height: 18, // ✅ PNG와 동일
+        height: 18,
         width: double.infinity,
         child: CustomPaint(
           painter: _DashedLinePainter(
@@ -1691,7 +1649,7 @@ class _DashedLinePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.square;
 
-    const y = 8.0; // ✅ PNG와 동일한 기준선
+    const y = 8.0;
 
     double x = 0;
     while (x < size.width) {
@@ -1709,12 +1667,10 @@ class _DashedLinePainter extends CustomPainter {
       old.dashSpace != dashSpace;
 }
 
-/// ===== 드래그 리사이즈 가능한 이미지 임베드 빌더 =====
 class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
   @override
   String get key => 'image';
 
-  // 리사이즈 범위(원하시면 조절)
   static const double _minWidth = 90.0;
 
   bool _isImageEmbedAt(quill.QuillController c, int offset) {
@@ -1805,7 +1761,7 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
                 return;
               }
               if (!_isImageEmbedAt(embedContext.controller, offset)) {
-                return; // ✅ 추가
+                return;
               }
               final Map<String, dynamic> newData = <String, dynamic>{
                 'source': src,
@@ -1853,9 +1809,7 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
     required quill.QuillController controller,
     required int offset,
   }) {
-    // 이미지 embed는 길이 1
     controller.replaceText(offset, 1, '', null);
-    // 커서를 삭제 위치로 이동
     controller.updateSelection(
       TextSelection.collapsed(offset: offset),
       quill.ChangeSource.local,
@@ -1873,12 +1827,10 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
       quill.CustomBlockEmbed('image', payload),
     );
 
-    // ✅ 현재 버전: replaceText(index, len, data, selection) 4개만 지원
     controller.replaceText(offset, 1, embed, null);
   }
 }
 
-/// 실제 리사이즈 UI(핸들 드래그) 박스
 class _ResizableImageBox extends StatefulWidget {
   const _ResizableImageBox({
     required this.controller,
@@ -1929,12 +1881,10 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
   void didUpdateWidget(covariant _ResizableImageBox oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // width 동기화
     if ((oldWidget.width - widget.width).abs() > 0.5) {
       _w = widget.width;
     }
 
-    // controller가 바뀌면 리스너 재연결
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_syncSelectedFromController);
       widget.controller.addListener(_syncSelectedFromController);
@@ -1951,7 +1901,6 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
 
     final sel = widget.controller.selection;
 
-    // embed는 길이 1이므로 [off, off+1] 범위를 점유한다고 보고 판단
     final int s = sel.start;
     final int e = sel.end;
 
@@ -1970,7 +1919,6 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
     final off = widget.offset;
     if (off == null) return;
 
-    // 보통 embed 뒤로 커서를 두면 편합니다.
     widget.controller.updateSelection(
       TextSelection.collapsed(offset: off + 1),
       quill.ChangeSource.local,
@@ -1986,22 +1934,18 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // ✅ 이미지 영역: 탭은 선택(커서 이동), 드래그/롱프레스는 여기서 소모
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _requestCursorNearEmbed,
-
-            // ❌ GestureDetector 만으로는 데스크톱 드래그 못 막음
             onPanDown: (_) {},
             onPanStart: (_) {},
             onPanUpdate: (_) {},
             onPanEnd: (_) {},
 
             child: Listener(
-              behavior: HitTestBehavior.opaque, // ✅ 추가
+              behavior: HitTestBehavior.opaque,
               onPointerDown: (_) {},
               onPointerMove: (_) {
-                // ✅ 선택 여부 상관없이 이미지 위 드래그 자체를 무력화
                 final off = widget.offset;
                 if (off == null) return;
                 widget.controller.updateSelection(
@@ -2017,10 +1961,9 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
             ),
           ),
 
-          // ✅ 하단 가운데 + / − (Stack 영역 "안쪽"으로)
           if (_selected)
             Positioned(
-              bottom: 6, // ❗️ -28 같은 음수 금지 (탭 안 잡힘)
+              bottom: 6,
               left: 0,
               right: 0,
               child: Center(
@@ -2116,15 +2059,11 @@ class _AnimatedStarFieldState extends State<_AnimatedStarField>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700), // 반짝이는 데 걸리는 시간
+      duration: const Duration(milliseconds: 700),
     );
     _curve = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
-
-    // 첫 반짝임
     _twinkleIndex = _rnd.nextInt(widget.starCount);
     _controller.forward(from: 0);
-
-    // 5초마다 새로운 별 하나 반짝이게
     _timer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted || widget.starCount <= 0) return;
       setState(() {
@@ -2168,17 +2107,14 @@ class _StarFieldPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rnd = math.Random(12345);
     final basePaint = Paint()..style = PaintingStyle.fill;
-
-    // 0 → 1 → 0으로 가는 부드러운 펄스
     final double t = twinkleProgress.value.clamp(0.0, 1.0);
-    final double pulse = math.sin(t * math.pi); // 0~1~0
+    final double pulse = math.sin(t * math.pi);
 
     for (int i = 0; i < starCount; i++) {
       final dx = rnd.nextDouble() * size.width;
       final dy = rnd.nextDouble() * size.height;
       final center = Offset(dx, dy);
 
-      // === 기본 별 세팅 ===
       final double baseRadius = rnd.nextDouble() * 0.2 + 0.1;
       final bool bigGlow = rnd.nextBool();
       final double baseGlowRadius = baseRadius * (bigGlow ? 4.0 : 3.0);
@@ -2191,7 +2127,6 @@ class _StarFieldPainter extends CustomPainter {
         255,
       ).withValues(alpha: baseAlpha);
 
-      // 1) 기본 glow
       final RadialGradient baseGlow = RadialGradient(
         colors: [baseColor, baseColor.withValues(alpha: 0.0)],
         stops: const [0.0, 1.0],
@@ -2206,17 +2141,12 @@ class _StarFieldPainter extends CustomPainter {
             ..blendMode = BlendMode.plus;
 
       canvas.drawCircle(center, baseGlowRadius, baseGlowPaint);
-
-      // 2) 기본 중심 별
       basePaint.color = baseColor;
       canvas.drawCircle(center, baseRadius, basePaint);
 
-      // === twinkle 대상이면, "같은 별"에만 하이라이트 추가 ===
       if (twinkleIndex != null && i == twinkleIndex) {
-        // 밝기/halo를 살짝 더 키운다 (크기 변화는 과하지 않게)
-        final double extraAlpha = 0.5 * pulse; // 0 ~ 0.4
-        final double extraRadius =
-            baseGlowRadius * (1.5 + 0.7 * pulse); // 1.2~1.6배 정도
+        final double extraAlpha = 0.5 * pulse;
+        final double extraRadius = baseGlowRadius * (1.5 + 0.7 * pulse);
 
         final Color highlightColor = const Color.fromARGB(
           255,
@@ -2239,8 +2169,6 @@ class _StarFieldPainter extends CustomPainter {
             Paint()
               ..shader = highlight.createShader(highlightRect)
               ..blendMode = BlendMode.plus;
-
-        // base 위에 살짝 더 밝게 덮어 씌우는 느낌
         canvas.drawCircle(center, extraRadius, highlightPaint);
       }
     }
@@ -2259,18 +2187,11 @@ class _StarFieldPainter extends CustomPainter {
 // ----------------------
 
 class _ShootingStarSpec {
-  /// 0~1 비율 기준 시작 위치 (살짝 바깥 허용)
   final double startX;
   final double startY;
-
-  /// 진행 방향 벡터 (정규화 X, 비율 기반)
   final double dx;
   final double dy;
-
-  /// 꼬리 길이 (화면 짧은 변 비율)
   final double length;
-
-  /// 선 두께
   final double thickness;
 
   const _ShootingStarSpec({
@@ -2303,10 +2224,9 @@ class _ShootingStarLayerState extends State<_ShootingStarLayer>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600), // 별똥별 수명(약 0.9초)
+      duration: const Duration(milliseconds: 600),
     )..addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        // 애니메이션 끝나면 별 제거 + 예약
         setState(() => _currentStar = null);
         _scheduleNext();
       }
@@ -2316,7 +2236,6 @@ class _ShootingStarLayerState extends State<_ShootingStarLayer>
   }
 
   void _scheduleNext({bool initial = false}) {
-    // 10초 ± 4초 정도 랜덤
     const double baseSeconds = 10.0;
     const double jitter = 2.0;
     final double seconds =
@@ -2336,21 +2255,16 @@ class _ShootingStarLayerState extends State<_ShootingStarLayer>
   }
 
   _ShootingStarSpec _randomSpec() {
-    // 화면보다 약간 바깥까지 포함하는 시작 위치 (-0.1 ~ 1.1 비율)
     final double startX = _rnd.nextDouble() * 1.2 - 0.1;
     final double startY = _rnd.nextDouble() * 1.2 - 0.1;
-
-    // 대각선 아래로 흘러가게, 좌/우 방향 랜덤
     final bool toRight = _rnd.nextBool();
-    final double angleDeg = 20 + _rnd.nextDouble() * 40; // 20~60도
+    final double angleDeg = 20 + _rnd.nextDouble() * 40;
     final double angleRad = angleDeg * math.pi / 180.0;
 
     final double dx = (toRight ? 1.0 : -1.0) * math.cos(angleRad);
-    final double dy = math.sin(angleRad); // 아래 방향
-
-    // 진짜 얇은 느낌
-    final double length = 0.25 + _rnd.nextDouble() * 0.10; // 25~35%
-    final double thickness = 0.4 + _rnd.nextDouble() * 0.2; // 0.4~0.6
+    final double dy = math.sin(angleRad);
+    final double length = 0.25 + _rnd.nextDouble() * 0.10;
+    final double thickness = 0.4 + _rnd.nextDouble() * 0.2;
 
     return _ShootingStarSpec(
       startX: startX,
@@ -2388,8 +2302,6 @@ class _ShootingStarPainter extends CustomPainter {
     if (star == null) return;
 
     final double t = animation.value.clamp(0.0, 1.0);
-
-    // 끝으로 갈수록 사라지게
     final double opacity = (1.0 - t) * 0.9;
     if (opacity <= 0) return;
 
@@ -2407,16 +2319,12 @@ class _ShootingStarPainter extends CustomPainter {
 
     final double baseLengthPx =
         star!.length * math.min(size.width, size.height);
-
-    // 시작점 (비율 → 실제 좌표)
     final Offset start = Offset(
       star!.startX * size.width,
       star!.startY * size.height,
     );
 
     final Offset dir = Offset(star!.dx, star!.dy).normalize();
-
-    // 머리(head)는 진행 방향으로, 꼬리(tail)는 뒤로
     final Offset head = start + dir * (baseLengthPx * (0.3 + 0.7 * t));
     final Offset tail = head - dir * (baseLengthPx * 0.7);
 
@@ -2429,7 +2337,6 @@ class _ShootingStarPainter extends CustomPainter {
   }
 }
 
-// Offset 확장 메서드
 extension _OffsetNormalize on Offset {
   Offset normalize() {
     final double len = distance;
@@ -2439,7 +2346,7 @@ extension _OffsetNormalize on Offset {
 }
 
 // ----------------------
-// 🌞 한낮 하늘 테마용 태양빛 페인터 (무지개 스펙트럼 추가)
+// 🌞 한낮 하늘 테마용 태양빛 페인터
 // ----------------------
 class _SunRayPainter extends CustomPainter {
   const _SunRayPainter();
@@ -2451,7 +2358,6 @@ class _SunRayPainter extends CustomPainter {
     final double haloRadius = size.longestSide * 0.7;
     final Rect fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
 
-    // 🌞 눈부신 코어 핫스팟
     final Paint hotspot =
         Paint()
           ..shader = const RadialGradient(
@@ -2463,7 +2369,6 @@ class _SunRayPainter extends CustomPainter {
           ..blendMode = BlendMode.plus;
     canvas.drawCircle(sunCenter, coreRadius * 1.6, hotspot);
 
-    // 🌕 태양 코어
     final Paint sunCore =
         Paint()
           ..shader = RadialGradient(
@@ -2479,7 +2384,6 @@ class _SunRayPainter extends CustomPainter {
           ..blendMode = BlendMode.plus;
     canvas.drawCircle(sunCenter, coreRadius, sunCore);
 
-    // 🌤 주변 퍼짐
     final Paint halo =
         Paint()
           ..shader = RadialGradient(
@@ -2493,28 +2397,24 @@ class _SunRayPainter extends CustomPainter {
           ..blendMode = BlendMode.softLight;
     canvas.drawCircle(sunCenter, haloRadius, halo);
 
-    // 🌈 무지개 스펙트럼 얇은 빛줄기
     final List<Color> spectrumColors = [
-      const Color(0xFFFF3B3B), // red
-      const Color(0xFFFFA500), // orange
-      const Color(0xFFFFFF00), // yellow
-      const Color(0xFF00FF00), // green
-      const Color(0xFF00BFFF), // sky blue
-      const Color(0xFF4169E1), // royal blue
-      const Color(0xFF9932CC), // violet
+      const Color(0xFFFF3B3B),
+      const Color(0xFFFFA500),
+      const Color(0xFFFFFF00),
+      const Color(0xFF00FF00),
+      const Color(0xFF00BFFF),
+      const Color(0xFF4169E1),
+      const Color(0xFF9932CC),
     ];
 
-    final math.Random random = math.Random(7); // 시드 고정 → 일관된 패턴
-    final int rayCount = 70 + random.nextInt(15); // 25 광선
+    final math.Random random = math.Random(7);
+    final int rayCount = 70 + random.nextInt(15);
 
     for (int i = 0; i < rayCount; i++) {
-      final double angle =
-          (random.nextDouble() * math.pi / 3) + (math.pi / 6); // 태양에서 우상향 범위
+      final double angle = (random.nextDouble() * math.pi / 3) + (math.pi / 6);
       final double len =
           (haloRadius * 0.4) + random.nextDouble() * (haloRadius * 0.3);
       final double thickness = 0.5 + random.nextDouble() * 0.6;
-
-      // 랜덤 스펙트럼 색
       final Color c = spectrumColors[random.nextInt(spectrumColors.length)]
           .withValues(alpha: 0.28);
 
@@ -2538,7 +2438,6 @@ class _SunRayPainter extends CustomPainter {
       canvas.drawLine(start, end, rayPaint);
     }
 
-    // 🌤 대각선 햇살
     final Paint diagonal =
         Paint()
           ..shader = LinearGradient(
@@ -2553,7 +2452,6 @@ class _SunRayPainter extends CustomPainter {
           ..blendMode = BlendMode.screen;
     canvas.drawRect(fullRect, diagonal);
 
-    // ☀️ 전체 밝기
     final Paint overlay =
         Paint()
           ..shader = LinearGradient(

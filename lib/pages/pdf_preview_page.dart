@@ -1222,8 +1222,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     return _exportInFlight[key]!;
   }
 
-  // ===== export prefetch =====
-
   void _enqueueExportPrefetch({
     required int center,
     required Iterable<int> pages,
@@ -1306,13 +1304,11 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     _pageImgPrefetchRunning = 0;
   }
 
-  // ===== Thumb prefetch (near pages) =====
   final List<int> _thumbPrefetchQueue = <int>[];
   final Set<int> _thumbPrefetchQueued = <int>{};
   int _thumbPrefetchRunning = 0;
   static const int _thumbPrefetchConcurrency = 2;
 
-  // ===== Slider state =====
   double? _sliderDragValue;
   bool get _isSliderDragging => _sliderDragValue != null;
   int _lastPreviewPage = 1;
@@ -1330,7 +1326,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     setState(() => _page = p);
   }
 
-  // ===== Drag thumbnail cache =====
   final Map<int, Future<Uint8List>> _thumbInFlight = <int, Future<Uint8List>>{};
   static const int _maxThumbCachePages = 32;
   late final LruCache<int, Uint8List> _thumbCacheLru = LruCache<int, Uint8List>(
@@ -1351,7 +1346,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   GlassTheme get _glassTheme =>
       GlassTheme.fromFlags(reduceTransparency: widget.reduceTransparency);
 
-  // ===== Toast (PNG와 동일 컨셉: 한 군데에서만 호출) =====
   void _toast(String msg) {
     AppToast.show(context, msg);
   }
@@ -1395,7 +1389,6 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     _zoomCtrl.dispose();
     _pageCtrl.dispose();
 
-    // 📌 pending 이미지 즉시 dispose
     for (final p in _pendingDisposeImages) {
       try {
         p.image.dispose();
@@ -2541,7 +2534,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
             },
           ),
 
-          // ===== 카드 위 아이콘: 좌/우 분리 =====
+          // ===== 카드 위 아이콘: 좌/우 =====
 
           // 왼쪽: 목차
           Positioned(
