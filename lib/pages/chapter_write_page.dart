@@ -12,6 +12,8 @@ import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
+import 'package:ebook_tutorial_app/pages/world.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:ebook_tutorial_app/quill/custom_leading.dart';
 
@@ -24,6 +26,27 @@ import 'package:ebook_tutorial_app/models/writing_settings.dart';
 import 'package:ebook_tutorial_app/pages/png.dart';
 
 const String kBgAlphaKey = 'bgAlpha';
+
+const String kWorldCharacterPrefsKey = 'world_character_mumu';
+
+Future<Character?> _loadWorldCharacter() async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.getString(kWorldCharacterPrefsKey);
+  if (raw == null || raw.isEmpty) return null;
+
+  try {
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return Character.fromJson(map);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _saveWorldCharacter(Character c) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(kWorldCharacterPrefsKey, jsonEncode(c.toJson()));
+}
+
 String _intToAarrggbb(int argb) {
   final hex =
       (argb & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
@@ -146,6 +169,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   double _a4PageStridePx = 1000;
   double _pngLikeContentHeightPx = 1000;
 
+  Character? _worldCharacter;
+
   double? _restoredOffset;
   bool _restoreTried = false;
   Timer? _saveDebounce;
@@ -209,6 +234,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
 
     _titleCtrl.text = widget.chapterTitle;
+    _loadWorldCharacter().then((c) {
+      if (!mounted) return;
+      setState(() => _worldCharacter = c);
+    });
 
     _initReduceTransparency();
 
@@ -975,6 +1004,39 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                               highlightColor: Colors.transparent,
                             ),
                           ),
+                          Semantics(
+                            label: '세계관',
+                            button: true,
+                            child: IconButton(
+                              tooltip: '세계관',
+                              icon: const Icon(
+                                Icons.terrain,
+                                color: Colors.black87,
+                              ),
+                              splashColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                              onPressed: () async {
+                                final nav = Navigator.of(context);
+
+                                final result = await nav.push(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => WorldPage(
+                                          initialCharacter: _worldCharacter,
+                                        ),
+                                  ),
+                                );
+
+                                if (!mounted) return;
+
+                                if (result is Character) {
+                                  await _saveWorldCharacter(result);
+                                  setState(() => _worldCharacter = result);
+                                }
+                              },
+                            ),
+                          ),
+
                           Semantics(
                             label: 'PNG 변환',
                             button: true,
