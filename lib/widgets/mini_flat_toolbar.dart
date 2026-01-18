@@ -26,7 +26,7 @@ String _aarrggbbFromColor(Color c) {
   final b = ((c.b) * 255.0).round().clamp(0, 255);
 
   String h(int v) => v.toRadixString(16).padLeft(2, '0').toUpperCase();
-  return '#${h(a)}${h(r)}${h(g)}${h(b)}'; // #AARRGGBB
+  return '#${h(a)}${h(r)}${h(g)}${h(b)}';
 }
 
 bool _hasAttr(quill.QuillController c, quill.Attribute a) {
@@ -890,15 +890,12 @@ class _ColorButton extends StatelessWidget {
         final curHex = attrs[key]?.value as String?;
         Color? curColor = _colorFromHex(curHex);
 
-        // ✅ background 현재값이 #AARRGGBB면 그대로
         if (forBackground &&
             curHex != null &&
             curHex.startsWith('#') &&
             curHex.length == 9) {
           curColor = _colorFromHex(curHex);
-        }
-        // ✅ 저장 포맷(#RRGGBB + bgAlpha)면 합쳐서 프리필
-        else if (forBackground && curColor != null) {
+        } else if (forBackground && curColor != null) {
           final dynA = attrs[kBgAlphaKey]?.value;
           int a = 255;
           if (dynA is int) a = dynA.clamp(0, 255);
@@ -922,16 +919,13 @@ class _ColorButton extends StatelessWidget {
         final baseAttr =
             forBackground ? quill.Attribute.background : quill.Attribute.color;
 
-        // 0 = cancel
         if (result.kind == 0) return;
 
-        // 1 = clear
         if (result.kind == 1) {
           controller.formatSelection(
             quill.Attribute(baseAttr.key, baseAttr.scope, null),
           );
 
-          // ✅ background 투명도 분리키도 같이 해제
           if (forBackground) {
             controller.formatSelection(
               const quill.Attribute(
@@ -946,7 +940,6 @@ class _ColorButton extends StatelessWidget {
           return;
         }
 
-        // 2 = apply
         final picked = result.color!;
         if (forBackground) {
           _ColorButton._lastBgColor = picked;
@@ -955,7 +948,6 @@ class _ColorButton extends StatelessWidget {
         }
 
         if (forBackground) {
-          // ✅ 즉시 반영용: #AARRGGBB 로 넣기
           final aarrggbb = _aarrggbbFromColor(picked);
 
           controller.formatSelection(
@@ -966,7 +958,6 @@ class _ColorButton extends StatelessWidget {
             ),
           );
 
-          // ✅ editor에서는 bgAlpha 남겨두면 꼬일 수 있으니 제거
           controller.formatSelection(
             const quill.Attribute(
               kBgAlphaKey,
@@ -975,7 +966,7 @@ class _ColorButton extends StatelessWidget {
             ),
           );
         } else {
-          final hex = _hexFromColor(picked); // #RRGGBB
+          final hex = _hexFromColor(picked);
           controller.formatSelection(
             quill.Attribute(
               quill.Attribute.color.key,

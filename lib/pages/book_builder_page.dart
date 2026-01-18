@@ -18,7 +18,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
-import 'package:ebook_tutorial_app/pages/chapter_write_page.dart';
+import 'package:ebook_tutorial_app/pages/chapter/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ebook_tutorial_app/pages/pdf_preview_page.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart';
@@ -536,7 +536,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     final idx = (pageNumber - 1).clamp(0, _pagePlans.length - 1);
 
     final plan = _pagePlans[idx];
-    const renderScale = 2.2; // 2.0~3.0 사이에서 조절
+    const renderScale = 2.2;
     final int outW = (_pageWidthPx * renderScale).round();
     final int outH = (_pageHeightPx * renderScale).round();
 
@@ -1381,6 +1381,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             (_) => ChangeNotifierProvider.value(
               value: settingsController,
               child: ChapterWritePage(
+                documentId: widget.documentId ?? 'local',
                 chapterTitle: c.title,
                 initialDeltaJson: c.delta,
                 enableGlass: _glass,
@@ -3085,18 +3086,18 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child:
               _chapters.isEmpty
-                  ? Column(
+                  ? const Column(
                     children: [
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       Text(
                         '우측 상단의 + 버튼을 눌러 회차를 추가하세요.',
                         style: TextStyle(
-                          color: Colors.black.withValues(alpha: 0.55),
+                          color: Color.fromARGB(221, 83, 129, 159),
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                     ],
                   )
                   : _reorderMode

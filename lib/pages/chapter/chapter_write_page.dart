@@ -12,8 +12,10 @@ import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
-import 'package:ebook_tutorial_app/pages/world.dart';
-
+import 'package:ebook_tutorial_app/pages/chapter/character.dart'
+    hide GlassTheme;
+import 'package:ebook_tutorial_app/pages/chapter/world_seat.dart';
+import 'package:ebook_tutorial_app/pages/chapter/world_prefs.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:ebook_tutorial_app/quill/custom_leading.dart';
 
@@ -26,26 +28,6 @@ import 'package:ebook_tutorial_app/models/writing_settings.dart';
 import 'package:ebook_tutorial_app/pages/png.dart';
 
 const String kBgAlphaKey = 'bgAlpha';
-
-const String kWorldCharacterPrefsKey = 'world_character_mumu';
-
-Future<Character?> _loadWorldCharacter() async {
-  final prefs = await SharedPreferences.getInstance();
-  final raw = prefs.getString(kWorldCharacterPrefsKey);
-  if (raw == null || raw.isEmpty) return null;
-
-  try {
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    return Character.fromJson(map);
-  } catch (_) {
-    return null;
-  }
-}
-
-Future<void> _saveWorldCharacter(Character c) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString(kWorldCharacterPrefsKey, jsonEncode(c.toJson()));
-}
 
 String _intToAarrggbb(int argb) {
   final hex =
@@ -135,6 +117,7 @@ List<Map<String, dynamic>> _splitEditorBackgroundToBgAlpha(
 }
 
 class ChapterWritePage extends StatefulWidget {
+  final String documentId;
   final String chapterTitle;
   final List<Map<String, dynamic>> initialDeltaJson;
   final bool enableGlass;
@@ -142,6 +125,7 @@ class ChapterWritePage extends StatefulWidget {
 
   const ChapterWritePage({
     super.key,
+    required this.documentId,
     required this.chapterTitle,
     required this.initialDeltaJson,
     required this.enableGlass,
@@ -168,8 +152,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   static const double _a4VerticalMargin = 18.0;
   double _a4PageStridePx = 1000;
   double _pngLikeContentHeightPx = 1000;
-
-  Character? _worldCharacter;
 
   double? _restoredOffset;
   bool _restoreTried = false;
@@ -234,10 +216,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
 
     _titleCtrl.text = widget.chapterTitle;
-    _loadWorldCharacter().then((c) {
-      if (!mounted) return;
-      setState(() => _worldCharacter = c);
-    });
 
     _initReduceTransparency();
 
@@ -264,7 +242,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _attemptRestoreScroll();
     });
 
-    _applySystemUi();
+    unawaited(_applySystemUi());
+
     HardwareKeyboard.instance.addHandler(_handleHardwareEnterToExitList);
   }
 
@@ -568,13 +547,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     }
 
     _hadSelection = hasSelection;
-    _applySystemUi();
+    unawaited(_applySystemUi());
   }
 
   void _setChromeVisible(bool visible) {
     if (_chromeVisible == visible) return;
     setState(() => _chromeVisible = visible);
-    _applySystemUi();
+    unawaited(_applySystemUi());
   }
 
   void _revealChrome() => _setChromeVisible(true);
@@ -591,7 +570,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         _toolbarLocked = !_toolbarLocked;
         _chromeVisible = true;
       });
-      _applySystemUi();
+      unawaited(_applySystemUi());
     } else {
       if (!_toolbarLocked) _revealChrome();
     }
@@ -629,7 +608,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     return isDouble;
   }
 
-  void _onFocusChanged() => _applySystemUi();
+  void _onFocusChanged() => unawaited(_applySystemUi());
 
   Future<void> _applySystemUi() async {
     final bool wantImmersive = _isFocusWriting;
@@ -694,7 +673,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _chromeVisible = false;
     });
     _focusNode.requestFocus();
-    _applySystemUi();
+    unawaited(_applySystemUi());
   }
 
   void _exitFocusWritingMode() {
@@ -702,7 +681,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _isFocusWriting = false;
       _chromeVisible = true;
     });
-    _applySystemUi();
+    unawaited(_applySystemUi());
   }
 
   double _calcPngLikeContentHeightPx(BoxConstraints constraints) {
@@ -1018,25 +997,26 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                               onPressed: () async {
                                 final nav = Navigator.of(context);
 
-                                final result = await nav.push(
+                                final result = await nav.push<Character>(
                                   MaterialPageRoute(
                                     builder:
-                                        (_) => WorldPage(
-                                          initialCharacter: _worldCharacter,
+                                        (_) => WorldSeatPage(
+                                          documentId: widget.documentId,
                                         ),
                                   ),
                                 );
 
                                 if (!mounted) return;
 
-                                if (result is Character) {
-                                  await _saveWorldCharacter(result);
-                                  setState(() => _worldCharacter = result);
+                                if (result != null) {
+                                  await saveWorldCharacterForBook(
+                                    widget.documentId,
+                                    result,
+                                  );
                                 }
                               },
                             ),
                           ),
-
                           Semantics(
                             label: 'PNG 변환',
                             button: true,

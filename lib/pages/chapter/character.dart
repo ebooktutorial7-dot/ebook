@@ -1,11 +1,262 @@
-// world.dart
-
-import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
-
+// character.dart
 import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flex_color_picker/flex_color_picker.dart';
 
 enum KeywordInputMode { hashtag, phrase }
+
+enum CharacterKind { protagonist, supporting }
+
+extension CharacterKindX on CharacterKind {
+  String get key => switch (this) {
+    CharacterKind.protagonist => 'protagonist',
+    CharacterKind.supporting => 'supporting',
+  };
+
+  static CharacterKind fromKey(String? v) {
+    if (v == 'supporting') return CharacterKind.supporting;
+    return CharacterKind.protagonist;
+  }
+}
+
+class _ColorSheetResult {
+  final int kind;
+  final Color? color;
+
+  const _ColorSheetResult._(this.kind, this.color);
+
+  const _ColorSheetResult.cancel() : this._(0, null);
+  const _ColorSheetResult.clear() : this._(1, null);
+  const _ColorSheetResult.apply(Color c) : this._(2, c);
+}
+
+Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
+  BuildContext context, {
+  required String title,
+  required GlassTheme theme,
+  required Color initial,
+  double wheelSize = 190,
+  bool forBackground = false,
+}) async {
+  Color current = initial;
+
+  return showModalBottomSheet<_ColorSheetResult>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.transparent,
+    builder: (ctx) {
+      final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+      final sheetBorder = Colors.white.withValues(alpha: theme.borderOpacity);
+
+      Widget handle() => Center(
+        child: Container(
+          margin: const EdgeInsets.only(top: 10, bottom: 10),
+          width: 44,
+          height: 5,
+          decoration: BoxDecoration(
+            color: Colors.black12,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      );
+
+      Widget inputCard(StateSetter setState) => Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: current,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black12, width: 1),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              _hexFromColor(current),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      Widget alphaCard(StateSetter setState) {
+        final v = (current.a).clamp(0.0, 1.0);
+
+        const double sliderW = 350;
+        const double thumbR = 6;
+
+        return Center(
+          child: SizedBox(
+            width: sliderW,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: thumbR),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '투명도',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      Text('${(v * 100).round()}%'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 1.0,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: thumbR,
+                    ),
+                    overlayShape: SliderComponentShape.noOverlay,
+                  ),
+                  child: Slider(
+                    value: v,
+                    onChanged: (nv) {
+                      final a = (nv * 255).round().clamp(0, 255);
+                      setState(() => current = current.withAlpha(a));
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      Widget wheelCard(StateSetter setState) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Center(
+          child: SizedBox(
+            width: wheelSize,
+            height: wheelSize,
+            child: ColorWheelPicker(
+              color: current,
+              onWheel: (_) {},
+              onChanged: (c) => setState(() => current = c),
+              wheelWidth: 18,
+              wheelSquarePadding: 20,
+              wheelSquareBorderRadius: 999,
+              hasBorder: true,
+              borderColor: Colors.black12,
+            ),
+          ),
+        ),
+      );
+
+      Widget actions() => Row(
+        children: [
+          TextButton.icon(
+            onPressed:
+                () => Navigator.pop(ctx, const _ColorSheetResult.clear()),
+            icon: const Icon(Icons.block),
+            label: const Text('해제'),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed:
+                () => Navigator.pop(ctx, const _ColorSheetResult.cancel()),
+            child: const Text('취소'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1F3A56),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            onPressed:
+                () => Navigator.pop(ctx, _ColorSheetResult.apply(current)),
+            child: const Text(
+              '적용',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      );
+
+      return SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              decoration: BoxDecoration(
+                color: const ui.Color.fromARGB(70, 207, 232, 255),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+                border: Border.all(color: sheetBorder, width: 1),
+              ),
+              child: StatefulBuilder(
+                builder: (ctx, setState) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      handle(),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1F3A56),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      inputCard(setState),
+                      const SizedBox(height: 10),
+                      wheelCard(setState),
+                      if (forBackground) ...[
+                        const SizedBox(height: 15),
+                        alphaCard(setState),
+                      ],
+                      const SizedBox(height: 15),
+                      actions(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  ).then((v) => v ?? const _ColorSheetResult.cancel());
+}
+
+String _hexFromColor(Color c) {
+  final int r = ((c.r) * 255.0).round() & 0xff;
+  final int g = ((c.g) * 255.0).round() & 0xff;
+  final int b = ((c.b) * 255.0).round() & 0xff;
+
+  return '#'
+      '${r.toRadixString(16).padLeft(2, '0')}'
+      '${g.toRadixString(16).padLeft(2, '0')}'
+      '${b.toRadixString(16).padLeft(2, '0')}';
+}
+
+@immutable
+class GlassTheme {
+  final double borderOpacity;
+  const GlassTheme({this.borderOpacity = 0.28});
+}
 
 const double kCoverRadius = 13;
 
@@ -156,7 +407,9 @@ class _MiniLabeledField extends StatelessWidget {
 
 class WorldPage extends StatefulWidget {
   final Character? initialCharacter;
-  const WorldPage({super.key, this.initialCharacter});
+  final CharacterKind? initialKind;
+
+  const WorldPage({super.key, this.initialCharacter, this.initialKind});
 
   @override
   State<WorldPage> createState() => _WorldPageState();
@@ -252,6 +505,63 @@ class FrostedContainer extends StatelessWidget {
 class _FrostedKeywordBoxState extends State<_FrostedKeywordBox> {
   late final TextEditingController _keywordInputCtrl;
   late List<String> _keywords;
+
+  @override
+  void initState() {
+    super.initState();
+    _keywordInputCtrl = TextEditingController();
+    _keywords =
+        widget.initialKeywords
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+  }
+
+  @override
+  void dispose() {
+    _keywordInputCtrl.dispose();
+    super.dispose();
+  }
+
+  void _emit() => widget.onChanged(_keywords.toList(growable: false));
+
+  String _sanitize(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return '';
+
+    if (widget.mode == KeywordInputMode.hashtag) {
+      if (s.startsWith('#')) s = s.substring(1);
+      s = s.replaceAll(RegExp(r'[^0-9A-Za-z가-힣_ ]+'), '');
+      s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+      return s;
+    }
+    return s;
+  }
+
+  void _addKeyword(String raw) {
+    final input = raw.trim();
+    if (input.isEmpty) return;
+
+    final toAdd = <String>[];
+    final t = _sanitize(input);
+    if (t.isNotEmpty) toAdd.add(t);
+    if (toAdd.isEmpty) return;
+
+    setState(() {
+      for (final x in toAdd) {
+        if (!_keywords.contains(x)) _keywords.add(x);
+      }
+    });
+
+    _keywordInputCtrl.clear();
+    _emit();
+  }
+
+  void _removeKeyword(String k) {
+    setState(() => _keywords.remove(k));
+    _emit();
+  }
+
   Widget _buildChip(String k) {
     final isHash = widget.mode == KeywordInputMode.hashtag;
     final text = isHash ? '#$k' : k;
@@ -296,66 +606,6 @@ class _FrostedKeywordBoxState extends State<_FrostedKeywordBox> {
         ),
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _keywordInputCtrl = TextEditingController();
-    _keywords =
-        widget.initialKeywords
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-  }
-
-  @override
-  void dispose() {
-    _keywordInputCtrl.dispose();
-    super.dispose();
-  }
-
-  void _emit() => widget.onChanged(_keywords.toList(growable: false));
-
-  String _sanitize(String raw) {
-    var s = raw.trim();
-    if (s.isEmpty) return '';
-
-    if (widget.mode == KeywordInputMode.hashtag) {
-      if (s.startsWith('#')) s = s.substring(1);
-      s = s.replaceAll(RegExp(r'[^0-9A-Za-z가-힣_ ]+'), '');
-      s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-      return s;
-    }
-    return s;
-  }
-
-  void _addKeyword(String raw) {
-    final input = raw.trim();
-    if (input.isEmpty) return;
-
-    final parts = <String>[input];
-
-    final toAdd = <String>[];
-    for (final p in parts) {
-      final t = _sanitize(p);
-      if (t.isNotEmpty) toAdd.add(t);
-    }
-    if (toAdd.isEmpty) return;
-
-    setState(() {
-      for (final t in toAdd) {
-        if (!_keywords.contains(t)) _keywords.add(t);
-      }
-    });
-
-    _keywordInputCtrl.clear();
-    _emit();
-  }
-
-  void _removeKeyword(String k) {
-    setState(() => _keywords.remove(k));
-    _emit();
   }
 
   @override
@@ -405,18 +655,17 @@ class _FrostedKeywordBoxState extends State<_FrostedKeywordBox> {
               if (isSingleLine) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _keywords.map((k) => _buildChip(k)).toList(),
+                  children: _keywords.map(_buildChip).toList(),
                 );
               }
 
               return Wrap(
                 spacing: 5,
                 runSpacing: 5,
-                children: _keywords.map((k) => _buildChip(k)).toList(),
+                children: _keywords.map(_buildChip).toList(),
               );
             },
           ),
-
           const SizedBox(height: 10),
           Row(
             children: [
@@ -484,9 +733,7 @@ class _InlineLabeledField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text('$label :', style: labelStyle),
-
         const SizedBox(width: 5),
-
         Expanded(
           child: TextField(
             controller: controller,
@@ -505,69 +752,73 @@ class _InlineLabeledField extends StatelessWidget {
 }
 
 class _WorldPageState extends State<WorldPage> {
+  static const Color _defaultCharacterColor = ui.Color.fromARGB(
+    182,
+    255,
+    247,
+    180,
+  );
+
   late Character _character;
+
   late final TextEditingController _bloodTypeCtrl;
   late final TextEditingController _specialNoteCtrl;
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _aliasCtrl;
   late final TextEditingController _birthdayCtrl;
-  late final TextEditingController _genderCtrl;
-  late final TextEditingController _speciesCtrl;
   late final TextEditingController _heightCtrl;
 
   String? _coverPath;
+
+  late Color _charColor;
 
   late final List<TextEditingController> _personalityCtrls;
   late final List<TextEditingController> _likeCtrls;
   late final List<TextEditingController> _dislikeCtrls;
   late final List<TextEditingController> _physicalNoteCtrls;
-  late final List<DetailPairCtrls> _detailCtrls;
 
   @override
   void initState() {
     super.initState();
+    final base = widget.initialCharacter ?? Character.empty();
+    _character =
+        (base.id.trim().isEmpty)
+            ? base.copyWith(
+              kind: widget.initialKind ?? CharacterKind.protagonist,
+            )
+            : base;
 
-    _character = widget.initialCharacter ?? Character.empty();
+    _charColor = _character.color ?? _defaultCharacterColor;
 
     _nameCtrl = TextEditingController(text: _character.name);
-    _aliasCtrl = TextEditingController(text: _character.alias);
     _birthdayCtrl = TextEditingController(text: _character.birthday);
-    _genderCtrl = TextEditingController(text: _character.gender);
-    _speciesCtrl = TextEditingController(text: _character.species);
     _heightCtrl = TextEditingController(text: _character.height);
     _bloodTypeCtrl = TextEditingController(text: _character.bloodType);
     _specialNoteCtrl = TextEditingController(text: _character.specialNote);
+
     _personalityCtrls =
         _character.personalityKeywords
             .map((e) => TextEditingController(text: e))
             .toList();
-
     _likeCtrls =
         _character.likes.map((e) => TextEditingController(text: e)).toList();
-
     _dislikeCtrls =
         _character.dislikes.map((e) => TextEditingController(text: e)).toList();
-
     _physicalNoteCtrls =
         _character.physicalNotes
             .map((e) => TextEditingController(text: e))
             .toList();
 
-    _detailCtrls =
-        _character.detailNotes.map((p) => DetailPairCtrls.from(p)).toList();
     _coverPath = _character.coverPath;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _aliasCtrl.dispose();
     _birthdayCtrl.dispose();
-    _genderCtrl.dispose();
-    _speciesCtrl.dispose();
     _heightCtrl.dispose();
     _bloodTypeCtrl.dispose();
     _specialNoteCtrl.dispose();
+
     for (final c in _personalityCtrls) {
       c.dispose();
     }
@@ -580,24 +831,18 @@ class _WorldPageState extends State<WorldPage> {
     for (final c in _physicalNoteCtrls) {
       c.dispose();
     }
-    for (final c in _detailCtrls) {
-      c.dispose();
-    }
-
     super.dispose();
   }
 
   Character _buildCharacterFromControllers() {
     return _character.copyWith(
       name: _nameCtrl.text.trim(),
-      alias: _aliasCtrl.text.trim(),
       birthday: _birthdayCtrl.text.trim(),
-      gender: _genderCtrl.text.trim(),
-      species: _speciesCtrl.text.trim(),
       height: _heightCtrl.text.trim(),
       bloodType: _bloodTypeCtrl.text.trim(),
       specialNote: _specialNoteCtrl.text.trim(),
       coverPath: _coverPath,
+      color: _charColor,
       personalityKeywords:
           _personalityCtrls
               .map((c) => c.text.trim())
@@ -618,16 +863,16 @@ class _WorldPageState extends State<WorldPage> {
               .map((c) => c.text.trim())
               .where((t) => t.isNotEmpty)
               .toList(),
-      detailNotes:
-          _detailCtrls
-              .map((c) => c.toDetailPair())
-              .where(
-                (p) =>
-                    p.title.trim().isNotEmpty ||
-                    p.description.trim().isNotEmpty,
-              )
-              .toList(),
     );
+  }
+
+  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
+
+  Character _finalizeForPop(Character c) {
+    if (c.id.trim().isEmpty) {
+      return c.copyWith(id: _newId());
+    }
+    return c;
   }
 
   void _syncState() {
@@ -636,18 +881,47 @@ class _WorldPageState extends State<WorldPage> {
     });
   }
 
+  Future<void> _pickCharacterColor() async {
+    final result = await _showPrettyWheelBottomSheet(
+      context,
+      title: '캐릭터 색상',
+      theme: const GlassTheme(borderOpacity: 0.28),
+      initial: _charColor,
+      wheelSize: 190,
+      forBackground: true,
+    );
+
+    if (!mounted) return;
+    if (result.kind == 0) return;
+
+    setState(() {
+      if (result.kind == 1) {
+        _charColor = _defaultCharacterColor;
+      } else {
+        _charColor = result.color ?? _defaultCharacterColor;
+      }
+      _syncState();
+    });
+  }
+
+  Widget _colorLine(Color c) {
+    return Container(height: 15, decoration: BoxDecoration(color: c));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('World'),
-        centerTitle: false,
+        title: const Text(
+          'Character',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
         actions: [
           IconButton(
-            tooltip: '저장(닫기)',
             icon: const Icon(Icons.check),
             onPressed: () {
-              final result = _buildCharacterFromControllers();
+              final result = _finalizeForPop(_buildCharacterFromControllers());
               Navigator.of(context).pop(result);
             },
           ),
@@ -686,7 +960,7 @@ class _WorldPageState extends State<WorldPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '탭: 추가/변경 · 길게: 미리보기',
+                            '탭 : 추가/변경',
                             style: Theme.of(
                               context,
                             ).textTheme.bodySmall?.copyWith(
@@ -696,9 +970,7 @@ class _WorldPageState extends State<WorldPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(width: 24),
-
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -732,7 +1004,7 @@ class _WorldPageState extends State<WorldPage> {
                           ),
                           const SizedBox(height: 10),
                           _MiniLabeledField(
-                            label: '특이사항',
+                            label: 'Profile',
                             controller: _specialNoteCtrl,
                             hint: '예) 낮에는 잠이 많음',
                             maxLines: null,
@@ -745,6 +1017,36 @@ class _WorldPageState extends State<WorldPage> {
                 ),
               ),
 
+              const SizedBox(height: 16),
+
+              const _SectionTitle(title: 'color'),
+              const SizedBox(height: 8),
+              FrostedContainer(
+                enableGlass: true,
+                borderRadius: 10,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                backgroundColor: Colors.white.withValues(alpha: 0.96),
+                showBorder: false,
+                child: InkWell(
+                  onTap: _pickCharacterColor,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Row(
+                    children: [
+                      SizedBox(width: 50, child: _colorLine(_charColor)),
+                      const SizedBox(width: 12),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: Color.fromARGB(221, 83, 129, 159),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 20),
 
               const _SectionTitle(title: '성격'),
@@ -752,7 +1054,6 @@ class _WorldPageState extends State<WorldPage> {
               _FrostedKeywordBox(
                 enableGlass: true,
                 title: '성격 키워드',
-                helper: '#로맨스 #성장물 #판타지 처럼 자유롭게 추가하세요.',
                 hintText: '키워드 입력 후 Enter',
                 mode: KeywordInputMode.hashtag,
                 initialKeywords:
@@ -770,10 +1071,13 @@ class _WorldPageState extends State<WorldPage> {
                   _syncState();
                 },
               ),
+
               const SizedBox(height: 20),
+
               const _SectionTitle(title: '좋아/싫어'),
               const SizedBox(height: 8),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start, // ✅ 시작 위치(윗줄) 고정
                 children: [
                   Expanded(
                     child: _FrostedKeywordBox(
@@ -826,11 +1130,12 @@ class _WorldPageState extends State<WorldPage> {
               ),
 
               const SizedBox(height: 20),
-              const _SectionTitle(title: '신체/외형'),
+
+              const _SectionTitle(title: '신체 / 외형'),
               const SizedBox(height: 8),
               _FrostedKeywordBox(
                 enableGlass: true,
-                title: '신체/외형 메모',
+                title: '신체 / 외형 메모',
                 helper: '예) 인간형일 때 투명하게 빛나는 귀와 꼬리',
                 hintText: '메모 입력 후 Enter',
                 mode: KeywordInputMode.phrase,
@@ -857,8 +1162,6 @@ class _WorldPageState extends State<WorldPage> {
   }
 }
 
-// ================== 모델 + JSON ==================
-
 extension _ColorJson on Color {
   int toArgbInt() => toARGB32();
   static Color fromArgbInt(int v) => Color(v);
@@ -867,12 +1170,12 @@ extension _ColorJson on Color {
 @immutable
 class Character {
   final String id;
+  final CharacterKind kind;
+
+  final Color? color;
 
   final String name;
-  final String alias;
   final String birthday;
-  final String gender;
-  final String species;
   final String height;
   final String bloodType;
   final String specialNote;
@@ -883,25 +1186,24 @@ class Character {
   final List<String> dislikes;
 
   final List<String> physicalNotes;
-  final List<DetailPair> detailNotes;
 
   final List<PaletteGroup> palette;
   final List<CharacterImage> images;
   final String? sheetAssetPath;
 
+  static String newId() => 'c_${DateTime.now().microsecondsSinceEpoch}';
+
   const Character({
     required this.id,
+    this.kind = CharacterKind.protagonist,
+    this.color,
     required this.name,
-    required this.alias,
     required this.birthday,
-    required this.gender,
-    required this.species,
     required this.height,
     required this.personalityKeywords,
     required this.likes,
     required this.dislikes,
     required this.physicalNotes,
-    required this.detailNotes,
     required this.palette,
     required this.images,
     required this.bloodType,
@@ -911,17 +1213,16 @@ class Character {
   });
 
   Character copyWith({
+    String? id,
+    CharacterKind? kind,
+    Color? color,
     String? name,
-    String? alias,
     String? birthday,
-    String? gender,
-    String? species,
     String? height,
     List<String>? personalityKeywords,
     List<String>? likes,
     List<String>? dislikes,
     List<String>? physicalNotes,
-    List<DetailPair>? detailNotes,
     List<PaletteGroup>? palette,
     List<CharacterImage>? images,
     String? sheetAssetPath,
@@ -930,18 +1231,16 @@ class Character {
     String? coverPath,
   }) {
     return Character(
-      id: id,
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      color: color ?? this.color,
       name: name ?? this.name,
-      alias: alias ?? this.alias,
       birthday: birthday ?? this.birthday,
-      gender: gender ?? this.gender,
-      species: species ?? this.species,
       height: height ?? this.height,
       personalityKeywords: personalityKeywords ?? this.personalityKeywords,
       likes: likes ?? this.likes,
       dislikes: dislikes ?? this.dislikes,
       physicalNotes: physicalNotes ?? this.physicalNotes,
-      detailNotes: detailNotes ?? this.detailNotes,
       palette: palette ?? this.palette,
       images: images ?? this.images,
       bloodType: bloodType ?? this.bloodType,
@@ -953,17 +1252,15 @@ class Character {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'kind': kind.key,
+    'color': color?.toArgbInt(),
     'name': name,
-    'alias': alias,
     'birthday': birthday,
-    'gender': gender,
-    'species': species,
     'height': height,
     'personalityKeywords': personalityKeywords,
     'likes': likes,
     'dislikes': dislikes,
     'physicalNotes': physicalNotes,
-    'detailNotes': detailNotes.map((e) => e.toJson()).toList(),
     'palette': palette.map((e) => e.toJson()).toList(),
     'images': images.map((e) => e.toJson()).toList(),
     'bloodType': bloodType,
@@ -972,74 +1269,79 @@ class Character {
     'sheetAssetPath': sheetAssetPath,
   };
 
-  factory Character.fromJson(Map<String, dynamic> json) => Character(
-    id: (json['id'] ?? 'mumu').toString(),
-    name: (json['name'] ?? '').toString(),
-    alias: (json['alias'] ?? '').toString(),
-    birthday: (json['birthday'] ?? '').toString(),
-    gender: (json['gender'] ?? '').toString(),
-    species: (json['species'] ?? '').toString(),
-    height: (json['height'] ?? '').toString(),
-    personalityKeywords:
-        (json['personalityKeywords'] is List)
-            ? (json['personalityKeywords'] as List)
-                .map((e) => e.toString())
-                .toList()
-            : const <String>[],
-    likes:
-        (json['likes'] is List)
-            ? (json['likes'] as List).map((e) => e.toString()).toList()
-            : const <String>[],
-    dislikes:
-        (json['dislikes'] is List)
-            ? (json['dislikes'] as List).map((e) => e.toString()).toList()
-            : const <String>[],
-    physicalNotes:
-        (json['physicalNotes'] is List)
-            ? (json['physicalNotes'] as List).map((e) => e.toString()).toList()
-            : const <String>[],
-    detailNotes:
-        (json['detailNotes'] is List)
-            ? (json['detailNotes'] as List)
-                .whereType<Map>()
-                .map((m) => DetailPair.fromJson(Map<String, dynamic>.from(m)))
-                .toList()
-            : const <DetailPair>[],
-    palette:
-        (json['palette'] is List)
-            ? (json['palette'] as List)
-                .whereType<Map>()
-                .map((m) => PaletteGroup.fromJson(Map<String, dynamic>.from(m)))
-                .toList()
-            : const <PaletteGroup>[],
-    images:
-        (json['images'] is List)
-            ? (json['images'] as List)
-                .whereType<Map>()
-                .map(
-                  (m) => CharacterImage.fromJson(Map<String, dynamic>.from(m)),
-                )
-                .toList()
-            : const <CharacterImage>[],
-    bloodType: (json['bloodType'] ?? '').toString(),
-    specialNote: (json['specialNote'] ?? '').toString(),
-    coverPath: json['coverPath']?.toString(),
-    sheetAssetPath: json['sheetAssetPath']?.toString(),
-  );
+  factory Character.fromJson(Map<String, dynamic> json) {
+    final rawId = (json['id'] ?? '').toString().trim();
+
+    Color? parsedColor;
+    final c = json['color'];
+    if (c is int) parsedColor = _ColorJson.fromArgbInt(c);
+    if (c is num) parsedColor = _ColorJson.fromArgbInt(c.toInt());
+
+    return Character(
+      id: (rawId.isEmpty || rawId == 'new') ? Character.newId() : rawId,
+      kind: CharacterKindX.fromKey(json['kind']?.toString()),
+      color: parsedColor,
+      name: (json['name'] ?? '').toString(),
+      birthday: (json['birthday'] ?? '').toString(),
+      height: (json['height'] ?? '').toString(),
+      personalityKeywords:
+          (json['personalityKeywords'] is List)
+              ? (json['personalityKeywords'] as List)
+                  .map((e) => e.toString())
+                  .toList()
+              : const <String>[],
+      likes:
+          (json['likes'] is List)
+              ? (json['likes'] as List).map((e) => e.toString()).toList()
+              : const <String>[],
+      dislikes:
+          (json['dislikes'] is List)
+              ? (json['dislikes'] as List).map((e) => e.toString()).toList()
+              : const <String>[],
+      physicalNotes:
+          (json['physicalNotes'] is List)
+              ? (json['physicalNotes'] as List)
+                  .map((e) => e.toString())
+                  .toList()
+              : const <String>[],
+      palette:
+          (json['palette'] is List)
+              ? (json['palette'] as List)
+                  .whereType<Map>()
+                  .map(
+                    (m) => PaletteGroup.fromJson(Map<String, dynamic>.from(m)),
+                  )
+                  .toList()
+              : const <PaletteGroup>[],
+      images:
+          (json['images'] is List)
+              ? (json['images'] as List)
+                  .whereType<Map>()
+                  .map(
+                    (m) =>
+                        CharacterImage.fromJson(Map<String, dynamic>.from(m)),
+                  )
+                  .toList()
+              : const <CharacterImage>[],
+      bloodType: (json['bloodType'] ?? '').toString(),
+      specialNote: (json['specialNote'] ?? '').toString(),
+      coverPath: json['coverPath']?.toString(),
+      sheetAssetPath: json['sheetAssetPath']?.toString(),
+    );
+  }
+
   factory Character.empty() {
     return const Character(
-      id: 'new',
+      id: '',
+      kind: CharacterKind.protagonist,
+      color: null,
       name: '',
-      alias: '',
       birthday: '',
-      gender: '',
-      species: '',
       height: '',
       personalityKeywords: [],
       likes: [],
       dislikes: [],
       physicalNotes: [],
-      detailNotes: [],
       palette: [],
       images: [],
       bloodType: '',
@@ -1132,8 +1434,6 @@ class CharacterImage {
     assetPath: (json['assetPath'] ?? '').toString(),
   );
 }
-
-// ================== UI ==================
 
 class _SectionTitle extends StatelessWidget {
   final String title;
