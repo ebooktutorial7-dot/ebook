@@ -1883,7 +1883,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
     _hideImageSubmenu();
     _hideEpubSubmenu();
-    final overlay = Overlay.of(context);
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
     _cloudSubmenuOpenVN.value = true;
     _cloudSubmenuEntry = OverlayEntry(
       builder: (_) {
@@ -1901,6 +1904,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           _measuredCloudSubmenuHeight = newH;
           _cloudSubmenuEntry!.markNeedsBuild();
         });
+
         return Stack(
           children: [
             Positioned.fill(
@@ -1918,7 +1922,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               offset: const Offset(0, 0),
               child: Material(
                 color: Colors.transparent,
-
                 child: KeyedSubtree(
                   key: _cloudSubmenuKey,
                   child: FrostedContainer(
@@ -2002,7 +2005,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
 
     _hideCloudSubmenu();
-    final overlay = Overlay.of(context);
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
     _epubSubmenuOpenVN.value = true;
     _epubSubmenuEntry = OverlayEntry(
       builder: (_) {
@@ -2020,6 +2026,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           _measuredEpubSubmenuHeight = newH;
           _epubSubmenuEntry!.markNeedsBuild();
         });
+
         return Stack(
           children: [
             Positioned.fill(
@@ -2127,12 +2134,16 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   }
 
   static const double _previewPopupWidth = 165;
+
   void _showPdfSubmenu() {
     if (_pdfSubmenuEntry != null) {
       _hidePdfSubmenu();
       return;
     }
-    final overlay = Overlay.of(context);
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
     _pdfSubmenuOpenVN.value = true;
     _pdfSubmenuEntry = OverlayEntry(
       builder: (_) {
@@ -2150,6 +2161,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           _measuredSubmenuHeight = newH;
           _pdfSubmenuEntry!.markNeedsBuild();
         });
+
         return Stack(
           children: [
             Positioned.fill(
@@ -2162,12 +2174,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             CompositedTransformFollower(
               link: _pdfPreviewLink,
               showWhenUnlinked: false,
-
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
-
               offset: const Offset(0, -105),
-
               child: Material(
                 color: Colors.transparent,
                 child: KeyedSubtree(
@@ -3524,7 +3533,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: const Color.fromARGB(255, 138, 176, 201),
-                        width: 0.5,
+                        width: 0.4,
                       ),
                     ),
                     child: Stack(
@@ -4677,6 +4686,7 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
               controller: _controller,
               focusNode: _focus,
               placeholder: '메모를 입력하세요',
+              style: const TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
               autofocus: false,
               scrollPadding: EdgeInsets.zero,
               maxLines: null,

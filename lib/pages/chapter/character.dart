@@ -1077,7 +1077,7 @@ class _WorldPageState extends State<WorldPage> {
               const _SectionTitle(title: '좋아/싫어'),
               const SizedBox(height: 8),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start, // ✅ 시작 위치(윗줄) 고정
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: _FrostedKeywordBox(
