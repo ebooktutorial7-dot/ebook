@@ -76,7 +76,9 @@ class TimelineSeatTab extends StatelessWidget {
 
 class WorldSeatPage extends StatefulWidget {
   final String documentId;
-  const WorldSeatPage({super.key, required this.documentId});
+  final ValueChanged<Character>? onPicked;
+
+  const WorldSeatPage({super.key, required this.documentId, this.onPicked});
 
   static const _tabs = [
     Tab(text: 'Character'),
@@ -216,7 +218,10 @@ class _WorldSeatPageState extends State<WorldSeatPage>
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      return FactionPage(isar: snapshot.data!);
+                      return FactionPage(
+                        isar: snapshot.data!,
+                        documentId: widget.documentId,
+                      );
                     },
                   ),
                   TimelineSeatTab(documentId: widget.documentId),
@@ -960,6 +965,26 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
     });
   }
 
+  Future<MemoEntity> _upsertMemo({
+    MemoEntity? existing,
+    required String text,
+  }) async {
+    final isar = await WorldSeatIsar.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final e = existing ?? MemoEntity();
+    e.documentId = widget.documentId;
+    e.uid = existing?.uid ?? _newUid();
+    e.text = text;
+    e.updatedAt = now;
+
+    await isar.writeTxn(() async {
+      await isar.memoEntitys.putByUid(e);
+    });
+
+    return e;
+  }
+
   Future<void> _loadMemos() async {
     final isar = await WorldSeatIsar.instance;
 
@@ -1001,21 +1026,6 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
     return 'm_${widget.documentId}_$now';
   }
 
-  Future<void> _upsertMemo({MemoEntity? existing, required String text}) async {
-    final isar = await WorldSeatIsar.instance;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    final e = existing ?? MemoEntity();
-    e.documentId = widget.documentId;
-    e.uid = existing?.uid ?? _newUid();
-    e.text = text;
-    e.updatedAt = now;
-
-    await isar.writeTxn(() async {
-      await isar.memoEntitys.putByUid(e);
-    });
-  }
-
   Future<void> _deleteMemo(MemoEntity e) async {
     final isar = await WorldSeatIsar.instance;
     await isar.writeTxn(() async {
@@ -1024,18 +1034,28 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
   }
 
   Future<void> _openMemoEditor({MemoEntity? existing}) async {
-    final initial = existing?.text ?? '';
-
     final edited = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => _MemoEditorPage(initialText: initial)),
+      MaterialPageRoute(
+        builder: (_) => _MemoEditorPage(initialText: existing?.text ?? ''),
+      ),
     );
-
     if (edited == null) return;
 
     final text = edited.trim();
     if (text.isEmpty) return;
 
-    await _upsertMemo(existing: existing, text: text);
+    final saved = await _upsertMemo(existing: existing, text: text);
+
+    if (!mounted) return;
+    setState(() {
+      final idx = _memos.indexWhere((m) => m.uid == saved.uid);
+      if (idx >= 0) {
+        _memos[idx] = saved;
+      } else {
+        _memos.insert(0, saved);
+      }
+      _memos.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    });
   }
 
   Future<void> _confirmDeleteMemo(MemoEntity e) async {
@@ -1047,6 +1067,11 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
     if (!ok) return;
 
     await _deleteMemo(e);
+
+    if (!mounted) return;
+    setState(() {
+      _memos.removeWhere((x) => x.uid == e.uid);
+    });
   }
 
   Widget _buildMemoSectionsByIndex(List<int> indexes) {
@@ -1400,7 +1425,10 @@ class _MemoSquareCard extends StatelessWidget {
 
 class CharacterSeatTab extends StatefulWidget {
   final String documentId;
-  const CharacterSeatTab({super.key, required this.documentId});
+
+  final ValueChanged<Character>? onPicked;
+
+  const CharacterSeatTab({super.key, required this.documentId, this.onPicked});
 
   @override
   State<CharacterSeatTab> createState() => _CharacterSeatTabState();
@@ -1590,6 +1618,13 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     if (!mounted) return;
     if (result == null) return;
 
+    // ✅ 드로어 모드면 바깥으로 넘기고 여기서 종료
+    if (widget.onPicked != null) {
+      widget.onPicked!(result);
+      return;
+    }
+
+    // ✅ 기존 모드면 내부 저장 + 리스트 갱신
     await _store.upsert(result);
 
     setState(() {
@@ -1600,6 +1635,7 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
         _characters = [result, ..._characters];
       }
     });
+
     _restoreTried = false;
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _attemptRestoreScroll(),

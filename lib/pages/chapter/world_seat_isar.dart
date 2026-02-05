@@ -137,8 +137,13 @@ class TimelineEventE {
 
 @collection
 class FactionDocEntity {
-  Id id = 0;
+  Id id = Isar.autoIncrement;
 
+  @Index(unique: true)
+  late String documentId;
+
+  late int schemaVersion;
+  late int updatedAt;
   late double canvasW;
   late double canvasH;
 

@@ -1,4 +1,5 @@
 // simple_memo_page.dart
+
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -7,10 +8,12 @@ import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
 import 'package:ebook_tutorial_app/models/memo.dart';
 import 'package:ebook_tutorial_app/data/memo_storage.dart';
+import 'package:ebook_tutorial_app/models/genre.dart';
 
 class SimpleMemoPage extends StatefulWidget {
-  const SimpleMemoPage({super.key});
-  static const String resultEnterPickMode = 'enter_pick_mode';
+  const SimpleMemoPage({super.key, required this.genre});
+
+  final Genre genre;
 
   @override
   State<SimpleMemoPage> createState() => _SimpleMemoPageState();
@@ -34,6 +37,14 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
   Map<String, List<_SectionItem>> _grouped = {};
   List<String> _sectionKeys = [];
 
+  static const Color _selectedBorderColor = Color.fromARGB(255, 91, 179, 255);
+  static const double _selectedBorderWidth = 1.7;
+
+  static const Color _normalBorderColor = Color.fromARGB(221, 117, 198, 255);
+  static const double _normalBorderWidth = 0.5;
+
+  String get storageKey => 'memo_${widget.genre.name}';
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +52,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
   }
 
   Future<void> _loadMemos() async {
-    final loaded = await MemoStorage.load();
+    final loaded = await MemoStorage.load(key: storageKey);
     if (!mounted) return;
     setState(() {
       _memos
@@ -60,13 +71,12 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
     final map = <String, List<_SectionItem>>{};
     for (var i = 0; i < _memos.length; i++) {
       final memo = _memos[i];
-      final key = _dateKey(memo.updatedAt); // 표시용 키 (월/일)
+      final key = _dateKey(memo.updatedAt);
       (map[key] ??= <_SectionItem>[]).add(
         _SectionItem(index: i, memo: memo, title: _extractTitle(memo.text)),
       );
     }
 
-    // 🔹
     final keys =
         map.keys.toList()..sort((a, b) {
           final now = DateTime.now().year;
@@ -75,10 +85,9 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
           final bm = int.parse(b.substring(0, 2));
           final bd = int.parse(b.substring(3, 5));
 
-          // 실제 비교는 연도 포함 (연도 다르면 뒤로)
           final adt = DateTime(now, am, ad);
           final bdt = DateTime(now, bm, bd);
-          return bdt.compareTo(adt); // 최신 날짜가 위로
+          return bdt.compareTo(adt);
         });
 
     _grouped = map;
@@ -190,8 +199,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
         _memos.add(Memo(result.trim(), DateTime.now()));
         _rebuildSections();
       });
-
-      unawaited(MemoStorage.save(_memos));
+      unawaited(MemoStorage.save(_memos, key: storageKey));
     }
   }
 
@@ -207,7 +215,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
         _memos[index] = Memo(result.trim(), DateTime.now());
         _rebuildSections();
       });
-      unawaited(MemoStorage.save(_memos));
+      unawaited(MemoStorage.save(_memos, key: storageKey));
     }
   }
 
@@ -235,7 +243,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                     _rebuildSections();
                   });
                   Navigator.pop(context);
-                  unawaited(MemoStorage.save(_memos));
+                  unawaited(MemoStorage.save(_memos, key: storageKey));
                 },
                 child: const Text('삭제'),
               ),
@@ -291,42 +299,61 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
               final memo = item.memo;
               final title = item.title;
               final text = memo.text;
-
+              final selected =
+                  _selectionMode && _selectedIndices.contains(memoIndex);
               final card = Column(
                 key: ValueKey(memoIndex),
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AspectRatio(
                     aspectRatio: 1,
-                    child: Material(
-                      color: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color:
-                              (_selectionMode &&
-                                      _selectedIndices.contains(memoIndex))
-                                  ? Colors.blue.shade100
-                                  : const Color.fromARGB(221, 117, 160, 191),
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            text,
-                            maxLines: 10,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              fontSize: 11,
-                              height: 1.3,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Material(
+                          color: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(
+                              color:
+                                  selected
+                                      ? Colors.transparent
+                                      : _normalBorderColor,
+                              width: _normalBorderWidth,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Text(
+                                text,
+                                maxLines: 10,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 11,
+                                  height: 1.3,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                        if (selected)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: _selectedBorderColor,
+                                    width: _selectedBorderWidth,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -381,7 +408,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          _selectionMode ? '${_selectedIndices.length}개 선택됨' : '간단 메모',
+          _selectionMode ? '${_selectedIndices.length}개 선택됨' : 'simple memo',
           style: const TextStyle(color: Colors.black87),
         ),
         leading:
@@ -398,10 +425,16 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                 ),
         actions: [
           if (_selectionMode)
-            IconButton(
-              icon: const Icon(CupertinoIcons.delete, color: Colors.black87),
-              tooltip: '삭제',
+            TextButton(
               onPressed: _deleteSelected,
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
             )
           else ...[
             IconButton(

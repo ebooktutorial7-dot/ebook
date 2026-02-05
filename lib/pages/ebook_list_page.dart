@@ -1,5 +1,6 @@
-// lib/pages/ebook_list_page.dart
-import 'dart:math'; // 🔹 documentId 생성을 위해 추가
+// ebook_list_page.dart
+
+import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
@@ -10,7 +11,7 @@ import 'package:ebook_tutorial_app/controllers/ebook_list_controller.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/services/ebook_service.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
-
+import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/dialogs/dialogs.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/utils/delta_utils.dart';
@@ -30,7 +31,8 @@ class EbookListPage extends StatefulWidget {
   State<EbookListPage> createState() => _EbookListPageState();
 }
 
-class _EbookListPageState extends State<EbookListPage> {
+class _EbookListPageState extends State<EbookListPage>
+    with SingleTickerProviderStateMixin {
   late final EbookListController controller;
   bool _reduceTransparencyFlag = false;
 
@@ -38,14 +40,88 @@ class _EbookListPageState extends State<EbookListPage> {
       A4MiniCard.a4Height + A4MiniCard.captionGap + A4MiniCard.captionHeight;
   static const double _memoSquare = 110;
 
+  TabController? _genreController;
+  int _genreIndex = 0;
+
+  static const List<Genre> _genreTabs = [
+    Genre.webNovel,
+    Genre.novel,
+    Genre.poem,
+    Genre.freeForm,
+    Genre.selfHelp,
+    Genre.science,
+    Genre.pictureBook,
+  ];
+
+  Widget _buildGenreTabBar() {
+    final theme = Theme.of(context);
+    final tc = _genreController;
+    if (tc == null) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 40,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: TabBar(
+          controller: tc,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          padding: EdgeInsets.zero,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+          indicator: const BoxDecoration(),
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w300,
+          ),
+          labelColor: theme.colorScheme.onSurface,
+          unselectedLabelColor: const Color.fromARGB(255, 145, 187, 230),
+          tabs: _genreTabs.map((g) => Tab(text: genreLabel(g))).toList(),
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _filteredEbooks() {
+    final selected = _genreTabs[_genreIndex];
+    return controller.ebooks.where((b) {
+      final name = b['genre'] as String?;
+      final g = Genre.values.firstWhere(
+        (e) => e.name == name,
+        orElse: () => Genre.webNovel,
+      );
+      return g == selected;
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     controller = EbookListController(service: EbookService());
     _initReduceTransparency();
+
+    _genreController = TabController(length: _genreTabs.length, vsync: this)
+      ..addListener(() {
+        if (!_genreController!.indexIsChanging) {
+          setState(() => _genreIndex = _genreController!.index);
+        }
+      });
+
     controller.init().then((_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void dispose() {
+    _genreController?.dispose();
+    super.dispose();
   }
 
   Future<void> _initReduceTransparency() async {
@@ -70,8 +146,7 @@ class _EbookListPageState extends State<EbookListPage> {
     );
   }
 
-  // 🔹 새 작품 만들기: 고유 documentId 부여 후 BookBuilderPage로 진입
-  Future<void> _createNewFreeForm() async {
+  Future<void> _createNewBook(Genre genre) async {
     final docId = _newDocumentId();
 
     final result = await Navigator.push<Map<String, dynamic>>(
@@ -82,6 +157,7 @@ class _EbookListPageState extends State<EbookListPage> {
               create:
                   (_) => WritingSettingsController(documentId: docId)..load(),
               child: BookBuilderPage(
+                genre: genre,
                 initialTitle: '제목을 입력하세요',
                 initialDeltaJson: deltaFromPlain('작품 내용을 입력하세요'),
                 initialDrawingJson: const <Map<String, dynamic>>[],
@@ -104,33 +180,34 @@ class _EbookListPageState extends State<EbookListPage> {
           const [],
     );
 
-    // 🔹 documentId 보존
+    controller.ebooks.last['genre'] = genre.name;
+
     controller.ebooks.last['documentId'] =
         (result['documentId'] as String?) ?? docId;
 
-    // 🔹 표지 사진 경로도 함께 저장
     controller.ebooks.last['coverPath'] = result['coverPath'] as String?;
 
-    // 🔹 디스크 저장
     await controller.persistEbooks();
 
     if (!mounted) return;
-    AppToast.show(context, '저장 완료'); // 🔹 토스트
+    AppToast.show(context, '저장 완료');
     setState(() {});
   }
 
-  // 🔹 기존 작품 편집: 문서별 WritingSettingsController와 함께 BookBuilderPage 열기
   Future<void> _editEbook(int index) async {
     final cur = controller.ebooks[index];
 
-    // 레거시 문서 보호: documentId 없으면 생성 후 즉시 저장
     if (cur['documentId'] == null) {
       cur['documentId'] = _newDocumentId();
       await controller.persistEbooks();
       if (!mounted) return;
     }
     final String docId = cur['documentId'] as String;
-
+    final genreName = cur['genre'] as String?;
+    final genre = Genre.values.firstWhere(
+      (e) => e.name == genreName,
+      orElse: () => Genre.webNovel,
+    );
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
@@ -139,6 +216,7 @@ class _EbookListPageState extends State<EbookListPage> {
               create:
                   (_) => WritingSettingsController(documentId: docId)..load(),
               child: BookBuilderPage(
+                genre: genre,
                 initialTitle: cur['title'] as String,
                 initialDeltaJson:
                     (cur['delta'] as List).cast<Map<String, dynamic>>(),
@@ -162,17 +240,15 @@ class _EbookListPageState extends State<EbookListPage> {
           (result['drawings'] as List?)?.cast<Map<String, dynamic>>() ??
           <Map<String, dynamic>>[],
     );
-
-    // 🔹 documentId 최신화
+    controller.ebooks[index]['genre'] = genre.name;
     controller.ebooks[index]['documentId'] =
         (result['documentId'] as String?) ?? (cur['documentId'] as String);
 
-    // 🔹 표지 사진 경로 최신화
     controller.ebooks[index]['coverPath'] = result['coverPath'] as String?;
 
     await controller.persistEbooks();
     if (!mounted) return;
-    AppToast.show(context, '저장 완료'); // 🔹 토스트
+    AppToast.show(context, '저장 완료');
     setState(() {});
   }
 
@@ -184,229 +260,241 @@ class _EbookListPageState extends State<EbookListPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading:
-            controller.selectionMode
-                ? IconButton(
-                  icon: const Icon(
-                    Icons.close,
-                    color: Color.fromARGB(255, 117, 148, 188),
-                  ),
-                  tooltip: '선택 취소',
-                  onPressed: () {
-                    setState(controller.exitSelectionMode);
-                  },
-                )
-                : null,
-        title: Text(
-          controller.selectionMode
-              ? '${controller.selectedIndices.length}개 선택됨'
-              : '책 목록',
-        ),
+        title: const Text('Book'),
         actions: [
-          if (controller.selectionMode)
-            IconButton(
-              icon: const Icon(
-                CupertinoIcons.delete,
-                color: Color.fromARGB(255, 117, 148, 188),
-              ),
-              tooltip: '삭제',
-              onPressed: () async {
-                await controller.deleteSelected();
-                if (mounted) setState(() {});
-              },
-            )
-          else ...[
-            IconButton(
-              icon: const Icon(Icons.add, color: Colors.black87),
-              tooltip: '장르 선택',
-              onPressed:
-                  () => showGenreDialog(
-                    context,
-                    theme: _glassTheme,
-                    onTap: (g) async {
-                      if (g == '자유 서식') {
-                        await _createNewFreeForm();
-                      } else {
-                        AppToast.show(context, '선택한 장르: $g');
-                      }
-                    },
-                  ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.more_vert, color: Colors.black87),
-              tooltip: '더보기',
-              onPressed:
-                  () => showMoreDialog(
-                    context: context,
-                    theme: _glassTheme,
-                    onPickMode: () {
-                      setState(controller.enterPickMode);
-                      AppToast.show(context, '선택 모드입니다. 항목을 눌러 선택하세요.');
-                    },
-                    onLogout: () => _logout(context),
-                  ),
-            ),
-          ],
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          physics: const BouncingScrollPhysics(),
-          children: [
-            if (!controller.selectionMode)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: AddSquareCard(onTap: _createNewFreeForm),
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.black87),
+            tooltip: '장르 선택',
+            onPressed:
+                () => showGenreDialog(
+                  context,
+                  theme: _glassTheme,
+                  onTap: (g) async {
+                    final genre = genreFromLabel(g);
+                    await _createNewBook(genre);
+                  },
                 ),
-              ),
-            if (!controller.selectionMode)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: InkWell(
-                  onTap: () {
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.black87),
+            tooltip: '더보기',
+            onPressed:
+                () => showMoreDialog(
+                  context: context,
+                  theme: _glassTheme,
+                  onPickMode: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder:
                             (_) => AllBooksPage(
                               ebooks: controller.ebooks,
+                              startInSelectionMode: true,
                               onChanged: (next) async {
                                 controller.ebooks
                                   ..clear()
                                   ..addAll(next);
-
                                 await controller.persistEbooks();
-
                                 if (mounted) setState(() {});
                               },
                             ),
                       ),
                     );
                   },
-
-                  borderRadius: BorderRadius.circular(8),
-                  splashFactory: NoSplash.splashFactory,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  highlightColor: Colors.transparent,
-                  splashColor: Colors.transparent,
-
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '책 목록',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 22,
-                          color: Color.fromARGB(255, 117, 148, 188),
-                          semanticLabel: 'book list',
-                        ),
-                      ],
-                    ),
-                  ),
+                  onLogout: () => _logout(context),
                 ),
-              ),
-            _buildShelf(),
-            const SizedBox(height: 8),
-            if (!controller.selectionMode)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const EditEpisodesPage(),
+          ),
+        ],
+      ),
+
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildGenreTabBar(),
+            const SizedBox(height: 1),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: AddSquareCard(
+                        onTap: () {
+                          final genre = _genreTabs[_genreIndex];
+                          _createNewBook(genre);
+                        },
                       ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  splashFactory: NoSplash.splashFactory,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  highlightColor: Colors.transparent,
-                  splashColor: Colors.transparent,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'edit 회차',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 22,
-                          color: Color.fromARGB(255, 117, 148, 188),
-                          semanticLabel: 'edit episodes',
-                        ),
-                      ],
                     ),
                   ),
-                ),
-              ),
-            if (!controller.selectionMode)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: InkWell(
-                  onTap: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SimpleMemoPage()),
-                    );
-                    if (result == true) {
-                      await controller.reloadMemos();
-                      if (mounted) setState(() {});
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  splashFactory: NoSplash.splashFactory,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  highlightColor: Colors.transparent,
-                  splashColor: Colors.transparent,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '간단 메모',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: InkWell(
+                      onTap: () {
+                        final genre = _genreTabs[_genreIndex];
+                        final genreBooks = _filteredEbooks();
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => AllBooksPage(
+                                  ebooks: genreBooks,
+                                  onChanged: (nextGenreBooks) async {
+                                    controller.ebooks.removeWhere((b) {
+                                      final name = b['genre'] as String?;
+                                      final g = Genre.values.firstWhere(
+                                        (e) => e.name == name,
+                                        orElse: () => Genre.webNovel,
+                                      );
+                                      return g == genre;
+                                    });
+
+                                    controller.ebooks.addAll(nextGenreBooks);
+
+                                    await controller.persistEbooks();
+                                    if (mounted) setState(() {});
+                                  },
+                                ),
                           ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      splashFactory: NoSplash.splashFactory,
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      highlightColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'book list',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 22,
+                              color: Color.fromARGB(255, 117, 148, 188),
+                              semanticLabel: 'book list',
+                            ),
+                          ],
                         ),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 22,
-                          color: Color.fromARGB(255, 117, 148, 188),
-                          semanticLabel: 'simple memo',
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+
+                  _buildShelf(),
+                  const SizedBox(height: 8),
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => EditEpisodesPage(
+                                  genre: _genreTabs[_genreIndex],
+                                ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      splashFactory: NoSplash.splashFactory,
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      highlightColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'edit episodes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 22,
+                              color: Color.fromARGB(255, 117, 148, 188),
+                              semanticLabel: 'edit episodes',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: InkWell(
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => SimpleMemoPage(
+                                  genre: _genreTabs[_genreIndex],
+                                ),
+                          ),
+                        );
+                        if (result == true) {
+                          final g = _genreTabs[_genreIndex];
+                          await controller.reloadMemos(genre: g);
+                          if (mounted) setState(() {});
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      splashFactory: NoSplash.splashFactory,
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      highlightColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'simple memo',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 22,
+                              color: Color.fromARGB(255, 117, 148, 188),
+                              semanticLabel: 'simple memo',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  _buildMemoPreviewRow(),
+                ],
               ),
-            _buildMemoPreviewRow(),
+            ),
           ],
         ),
       ),
@@ -414,114 +502,68 @@ class _EbookListPageState extends State<EbookListPage> {
   }
 
   Widget _buildShelf() {
-    if (controller.selectionMode) {
-      return SizedBox(
-        height: _shelfHeight,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: controller.ebooks.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (_, i) {
-            final selected = controller.selectedIndices.contains(i);
-            final preview = controller.deltaToPreview(controller.ebooks[i]);
-            final id = controller.ebooks[i]['id'] as int;
-            final coverPath =
-                controller.ebooks[i]['coverPath'] as String?; // 🔹 추가
-
-            return GestureDetector(
-              key: ValueKey('ebook_$id'),
-              onTap: () {
-                setState(() {
-                  if (selected) {
-                    controller.selectedIndices.remove(i);
-                  } else {
-                    controller.selectedIndices.add(i);
-                  }
-                  if (controller.selectedIndices.isEmpty) {
-                    controller.exitSelectionMode();
-                  }
-                });
-              },
-              child: SizedBox(
-                width: A4MiniCard.a4Width,
-                height: _shelfHeight,
-                child: A4MiniCard(
-                  title: controller.ebooks[i]['title'] as String,
-                  preview: preview,
-                  selected: selected,
-                  coverPath: coverPath, // 🔹
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    }
+    final books = _filteredEbooks();
 
     return SizedBox(
       height: _shelfHeight,
       child: ReorderableListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 15),
+
         onReorder: (oldIndex, newIndex) async {
-          await controller.onReorder(oldIndex, newIndex);
-          if (mounted) setState(() {});
+          return;
         },
-        buildDefaultDragHandles: true,
-        proxyDecorator:
-            (child, index, animation) => AnimatedBuilder(
-              animation: animation,
-              builder:
-                  (context, _) => Transform.scale(scale: 1.03, child: child),
-            ),
+
+        itemCount: books.length,
         itemBuilder: (_, i) {
-          final preview = controller.deltaToPreview(controller.ebooks[i]);
-          final id = controller.ebooks[i]['id'] as int;
-          final coverPath =
-              controller.ebooks[i]['coverPath'] as String?; // 🔹 추가
+          final book = books[i];
+          final originalIndex = controller.ebooks.indexOf(book);
 
           return Padding(
-            key: ValueKey('ebook_$id'),
+            key: ValueKey('ebook_${book['id']}'),
             padding: const EdgeInsets.only(right: 11),
             child: GestureDetector(
-              onTap: () => _editEbook(i),
+              onTap: () {
+                if (originalIndex >= 0) _editEbook(originalIndex);
+              },
               child: SizedBox(
                 width: A4MiniCard.a4Width,
                 child: A4MiniCard(
-                  title: controller.ebooks[i]['title'] as String,
-                  preview: preview,
+                  title: book['title'] as String,
+                  preview: controller.deltaToPreview(book),
                   selected: false,
-                  coverPath: coverPath, // 🔹 전달
+                  coverPath: book['coverPath'] as String?,
+                  selectionMode: false,
                 ),
               ),
             ),
           );
         },
-        itemCount: controller.ebooks.length,
       ),
     );
   }
 
   Widget _buildMemoPreviewRow() {
-    if (controller.selectionMode || controller.memoPreview.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final genre = _genreTabs[_genreIndex];
+    final preview = controller.memoPreview(genre);
+
+    if (preview.isEmpty) return const SizedBox.shrink();
+
     return SizedBox(
       height: _memoSquare + 36,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 15),
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: controller.memoPreview.length,
+        itemCount: preview.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) {
-          final item = controller.memoPreview[i];
+          final item = preview[i];
           return SizedBox(
             width: _memoSquare,
             child: MemoSquareCard(
               text: item.memo.text,
               onTap: () async {
-                // 🔹 간단한 인라인 에디터
                 final edited = await Navigator.of(context).push<String>(
                   PageRouteBuilder(
                     pageBuilder:
@@ -537,7 +579,15 @@ class _EbookListPageState extends State<EbookListPage> {
                   ),
                 );
                 if (edited == null || edited.trim().isEmpty) return;
-                final ok = await controller.editMemoInlineAt(i, edited.trim());
+
+                final genre = _genreTabs[_genreIndex];
+
+                final ok = await controller.editMemoInlineAt(
+                  genre: genre,
+                  previewIndex: i,
+                  newText: edited.trim(),
+                );
+
                 if (ok && mounted) setState(() {});
               },
             ),
@@ -548,7 +598,6 @@ class _EbookListPageState extends State<EbookListPage> {
   }
 }
 
-/// 🔹 페이지 내부 간단 메모 에디터 (파일 추가 없이 임베드)
 class _InlineMemoEditor extends StatefulWidget {
   final String? initialText;
   const _InlineMemoEditor({this.initialText});

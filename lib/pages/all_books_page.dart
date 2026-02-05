@@ -1,7 +1,7 @@
-// lib/pages/all_books_page.dart
+// all_books_page.dart
 
-import 'dart:math'; // 🔹 documentId
-import 'book_builder_page.dart'; // 🔹 BookBuilderPage로 이동
+import 'dart:math';
+import 'book_builder_page.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -10,8 +10,7 @@ import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
-
-// 🔹 새 카드 디자인 import
+import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/widgets/card_design.dart';
 
 class AllBooksPage extends StatefulWidget {
@@ -19,17 +18,18 @@ class AllBooksPage extends StatefulWidget {
     super.key,
     required this.ebooks,
     required this.onChanged,
+    this.startInSelectionMode = false,
   });
 
   final List<Map<String, dynamic>> ebooks;
   final ValueChanged<List<Map<String, dynamic>>> onChanged;
+  final bool startInSelectionMode;
 
   @override
   State<AllBooksPage> createState() => _AllBooksPageState();
 }
 
 class _AllBooksPageState extends State<AllBooksPage> {
-  // 🔹 카드 사이즈/비율을 A4MiniCard의 값과 맞춤
   static const double _cardWidth = A4MiniCard.a4Width;
   static const double _cardTotalHeight =
       A4MiniCard.a4Height + A4MiniCard.captionGap + A4MiniCard.captionHeight;
@@ -40,7 +40,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
 
   bool _reduceTransparencyFlag = false;
 
-  // 🔹 EbookListPage와 동일한 규칙으로 documentId 생성
   String _newDocumentId() =>
       'doc_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
 
@@ -49,6 +48,11 @@ class _AllBooksPageState extends State<AllBooksPage> {
     super.initState();
     _ebooks = widget.ebooks.map((e) => Map<String, dynamic>.from(e)).toList();
     _initReduceTransparency();
+
+    if (widget.startInSelectionMode) {
+      _selectionMode = true;
+      _selectedIndices.clear();
+    }
   }
 
   Future<void> _initReduceTransparency() async {
@@ -231,15 +235,17 @@ class _AllBooksPageState extends State<AllBooksPage> {
               )
               : null,
       title: Text(
-        _selectionMode ? '${_selectedIndices.length}개 선택됨' : '책 목록',
+        _selectionMode ? '${_selectedIndices.length}개 선택됨' : 'book list',
         style: const TextStyle(color: Colors.black),
       ),
       actions: [
         if (_selectionMode)
-          IconButton(
-            icon: const Icon(CupertinoIcons.delete, color: Colors.black87),
-            tooltip: '삭제',
+          TextButton(
             onPressed: _deleteSelected,
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+            ),
           )
         else
           IconButton(
@@ -251,7 +257,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
     );
   }
 
-  // 🔹 여기서 직접 _A4MiniCard 안 쓰고, card_design.dart의 A4MiniCard 사용
   Widget _buildCardItem({required int index}) {
     final map = _ebooks[index];
     final title = (map['title'] as String?) ?? '제목 없음';
@@ -261,7 +266,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
     );
     final isSelected = _selectedIndices.contains(index);
 
-    // 🔹 표지 경로 가져오기
     final coverPath = map['coverPath'] as String?;
 
     final card = A4MiniCard(
@@ -269,6 +273,7 @@ class _AllBooksPageState extends State<AllBooksPage> {
       preview: preview,
       selected: isSelected,
       coverPath: coverPath,
+      selectionMode: _selectionMode,
     );
 
     if (_selectionMode) {
@@ -289,20 +294,23 @@ class _AllBooksPageState extends State<AllBooksPage> {
           enableFeedback: false,
           borderRadius: BorderRadius.circular(16),
 
-          // 🔹 책 탭 시 BookBuilderPage로 이동
           onTap: () async {
             final book = _ebooks[index];
 
-            // 🔹 레거시 문서면 documentId 부여
             if (book['documentId'] == null) {
               book['documentId'] = _newDocumentId();
             }
-
+            final genreName = book['genre'] as String?;
+            final genre = Genre.values.firstWhere(
+              (e) => e.name == genreName,
+              orElse: () => Genre.webNovel,
+            );
             final result = await Navigator.push<Map<String, dynamic>>(
               context,
               MaterialPageRoute(
                 builder:
                     (_) => BookBuilderPage(
+                      genre: genre,
                       initialTitle: (book['title'] as String?) ?? '제목을 입력하세요',
                       initialDeltaJson:
                           (book['delta'] as List?)
@@ -356,7 +364,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
               book['updatedAt'] =
                   result['updatedAt'] ?? DateTime.now().toIso8601String();
 
-              // 🔹 새 표지 경로 반영
               book['coverPath'] = result['coverPath'] as String?;
             });
 
@@ -386,7 +393,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: 14,
                   crossAxisSpacing: 14,
-                  // 🔹 전체 아이템 비율도 A4MiniCard 기준으로 맞춤
                   childAspectRatio: _cardWidth / _cardTotalHeight,
                 ),
                 physics: const BouncingScrollPhysics(),

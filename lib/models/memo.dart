@@ -1,4 +1,5 @@
-// lib/models/memo.dart
+// models/memo.dart
+
 class Memo {
   final String text;
   final DateTime updatedAt;

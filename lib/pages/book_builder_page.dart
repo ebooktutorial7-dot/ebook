@@ -17,6 +17,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -165,6 +166,7 @@ class ChapterItem {
 }
 
 class BookBuilderPage extends StatefulWidget {
+  final Genre genre;
   final String? episodeTitle;
   final String initialTitle;
   final List<Map<String, dynamic>> initialDeltaJson;
@@ -173,6 +175,7 @@ class BookBuilderPage extends StatefulWidget {
   final String initialPenName;
   final String? documentId;
   const BookBuilderPage({
+    required this.genre,
     super.key,
     this.episodeTitle,
     required this.initialTitle,
@@ -2858,9 +2861,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                           const Padding(
                             padding: EdgeInsets.only(right: 5),
                             child: Icon(
-                              Icons.add,
-                              size: 16,
-                              color: Color(0xFF64B5F6),
+                              Icons.star,
+                              size: 20,
+                              color: Color.fromARGB(255, 255, 224, 132),
                             ),
                           ),
                         Expanded(
@@ -3769,6 +3772,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   @override
   Widget build(BuildContext context) {
+    final genreText = genreLabel(widget.genre);
     final writingSettings = _settingsController.settings;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -3845,7 +3849,20 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                   ),
                 ),
               ),
-              const SizedBox(height: 7),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    genreText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: ui.Color.fromARGB(255, 118, 156, 183),
+                    ),
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                 child: FrostedContainer(

@@ -1,4 +1,7 @@
-// lib/controllers/ebook_list_controller.dart
+// controllers/ebook_list_controller.dart
+
+import 'package:ebook_tutorial_app/models/genre.dart';
+
 import '../models/memo.dart';
 import '../services/ebook_service.dart';
 import '../utils/delta_utils.dart';
@@ -8,21 +11,23 @@ class EbookListController {
 
   final EbookService service;
 
-  // 상태
   final List<Map<String, dynamic>> ebooks = [];
   int nextId = 1;
 
   bool selectionMode = false;
   final Set<int> selectedIndices = {};
 
-  List<Memo> allMemosCache = [];
-  List<MemoPreviewItem> memoPreview = [];
+  final Map<Genre, List<Memo>> allMemosCacheByGenre = {};
+  final Map<Genre, List<MemoPreviewItem>> memoPreviewByGenre = {};
 
   static const int previewMaxLen = 30;
 
   Future<void> init() async {
     await reloadEbooks();
-    await reloadMemos();
+
+    for (final g in Genre.values) {
+      await reloadMemos(genre: g);
+    }
   }
 
   Future<void> reloadEbooks() async {
@@ -39,14 +44,20 @@ class EbookListController {
 
   Future<void> persistEbooks() async => service.saveEbooks(ebooks);
 
-  Future<void> reloadMemos() async {
-    allMemosCache = await service.loadMemos();
+  Future<void> reloadMemos({required Genre genre}) async {
+    final loaded = await service.loadMemos(genre: genre);
+    allMemosCacheByGenre[genre] = loaded;
+
     final items = <MemoPreviewItem>[];
-    for (var i = 0; i < allMemosCache.length; i++) {
-      items.add(MemoPreviewItem(index: i, memo: allMemosCache[i]));
+    for (var i = 0; i < loaded.length; i++) {
+      items.add(MemoPreviewItem(index: i, memo: loaded[i]));
     }
     items.sort((a, b) => b.memo.updatedAt.compareTo(a.memo.updatedAt));
-    memoPreview = items;
+    memoPreviewByGenre[genre] = items;
+  }
+
+  List<MemoPreviewItem> memoPreview(Genre genre) {
+    return memoPreviewByGenre[genre] ?? const <MemoPreviewItem>[];
   }
 
   String deltaToPreview(Map<String, dynamic> ebook) {
@@ -54,7 +65,6 @@ class EbookListController {
     return plainFromDelta(delta, maxLen: previewMaxLen);
   }
 
-  // 선택 모드
   void enterPickMode() {
     selectionMode = true;
     selectedIndices.clear();
@@ -113,17 +123,29 @@ class EbookListController {
     await persistEbooks();
   }
 
-  Future<bool> editMemoInlineAt(int previewIndex, String newText) async {
-    if (previewIndex < 0 || previewIndex >= memoPreview.length) return false;
-    final target = memoPreview[previewIndex];
+  Future<bool> editMemoInlineAt({
+    required Genre genre,
+    required int previewIndex,
+    required String newText,
+  }) async {
+    final previewList = memoPreviewByGenre[genre] ?? const <MemoPreviewItem>[];
+    final cache = allMemosCacheByGenre[genre] ?? <Memo>[];
+
+    if (previewIndex < 0 || previewIndex >= previewList.length) return false;
+
+    final target = previewList[previewIndex];
     final idx = target.index;
-    if (idx < 0 || idx >= allMemosCache.length) {
-      await reloadMemos();
+
+    if (idx < 0 || idx >= cache.length) {
+      await reloadMemos(genre: genre);
       return false;
     }
-    allMemosCache[idx] = Memo(newText, DateTime.now());
-    await service.saveMemos(allMemosCache);
-    await reloadMemos();
+
+    cache[idx] = Memo(newText, DateTime.now());
+    allMemosCacheByGenre[genre] = cache;
+
+    await service.saveMemos(cache, genre: genre);
+    await reloadMemos(genre: genre);
     return true;
   }
 }

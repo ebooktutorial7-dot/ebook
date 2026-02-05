@@ -199,6 +199,20 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     reduceTransparency: _reduceTransparencyFlag || !widget.enableGlass,
   );
 
+  Future<void> _openWorldSeat() async {
+    final result = await Navigator.of(context).push<Character>(
+      CupertinoPageRoute(
+        builder: (_) => WorldSeatPage(documentId: widget.documentId),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result != null) {
+      await saveWorldCharacterForBook(widget.documentId, result);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -984,40 +998,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                             ),
                           ),
                           Semantics(
-                            label: '세계관',
-                            button: true,
-                            child: IconButton(
-                              tooltip: '세계관',
-                              icon: const Icon(
-                                Icons.terrain,
-                                color: Colors.black87,
-                              ),
-                              splashColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              onPressed: () async {
-                                final nav = Navigator.of(context);
-
-                                final result = await nav.push<Character>(
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => WorldSeatPage(
-                                          documentId: widget.documentId,
-                                        ),
-                                  ),
-                                );
-
-                                if (!mounted) return;
-
-                                if (result != null) {
-                                  await saveWorldCharacterForBook(
-                                    widget.documentId,
-                                    result,
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                          Semantics(
                             label: 'PNG 변환',
                             button: true,
                             child: IconButton(
@@ -1445,6 +1425,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                         ),
                       ),
                     ],
+                    Positioned.fill(
+                      child: _FullScreenSwipeToWorld(
+                        scrollCtrl: _scrollCtrl,
+                        controller: _controller,
+                        onTrigger: _openWorldSeat,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1452,6 +1439,70 @@ class _ChapterWritePageState extends State<ChapterWritePage>
           );
         },
       ),
+    );
+  }
+}
+
+class _FullScreenSwipeToWorld extends StatefulWidget {
+  const _FullScreenSwipeToWorld({
+    required this.scrollCtrl,
+    required this.controller,
+    required this.onTrigger,
+  });
+
+  final ScrollController scrollCtrl;
+  final quill.QuillController controller;
+  final VoidCallback onTrigger;
+
+  @override
+  State<_FullScreenSwipeToWorld> createState() =>
+      _FullScreenSwipeToWorldState();
+}
+
+class _FullScreenSwipeToWorldState extends State<_FullScreenSwipeToWorld> {
+  Offset? _start;
+  bool _triggered = false;
+
+  static const double _minDx = 40;
+  static const double _minRatio = 1.3;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+
+      onPanStart: (d) {
+        _start = d.globalPosition;
+        _triggered = false;
+      },
+
+      onPanUpdate: (d) {
+        if (_triggered) return;
+        if (_start == null) return;
+        if (widget.scrollCtrl.hasClients &&
+            widget.scrollCtrl.position.isScrollingNotifier.value) {
+          return;
+        }
+        if (!widget.controller.selection.isCollapsed) return;
+
+        final now = d.globalPosition;
+        final dx = now.dx - _start!.dx;
+        final dy = now.dy - _start!.dy;
+
+        if (dx < -_minDx && dx.abs() > (dy.abs() * _minRatio)) {
+          _triggered = true;
+          widget.onTrigger();
+        }
+      },
+
+      onPanEnd: (_) {
+        _start = null;
+        _triggered = false;
+      },
+      onPanCancel: () {
+        _start = null;
+        _triggered = false;
+      },
     );
   }
 }

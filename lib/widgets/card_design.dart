@@ -1,4 +1,5 @@
-// lib/widgets/card_design.dart
+// widgets/card_design.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 
@@ -8,15 +9,17 @@ class A4MiniCard extends StatelessWidget {
     required this.title,
     required this.preview,
     this.selected = false,
+    required this.selectionMode,
     this.coverPath,
   });
 
   final String title;
   final String preview;
   final bool selected;
+  final bool selectionMode;
   final String? coverPath;
 
-  static const Color _border = Color.fromARGB(221, 159, 188, 208);
+  static const Color border = Color.fromARGB(221, 159, 188, 208);
 
   static const double a4Height = 150;
   static const double a4AspectWH = 2 / 3;
@@ -42,7 +45,6 @@ class A4MiniCard extends StatelessWidget {
         final capH = captionHeight * scale;
         final gap = captionGap * scale;
         final radius = 13 * scale;
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -50,30 +52,69 @@ class A4MiniCard extends StatelessWidget {
               duration: const Duration(milliseconds: 120),
               height: cardH,
               width: cardW,
-              clipBehavior: Clip.hardEdge,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
-                border:
-                    hasCover
-                        ? null
-                        : Border.all(
-                          color: selected ? _border : _border,
-                          width: 0.7,
-                        ),
-              ),
+              clipBehavior: hasCover ? Clip.none : Clip.hardEdge,
+              decoration:
+                  hasCover
+                      ? null
+                      : BoxDecoration(
+                        borderRadius: BorderRadius.circular(radius),
+                        border:
+                            (selectionMode && selected)
+                                ? Border.all(
+                                  color: const Color.fromARGB(
+                                    255,
+                                    91,
+                                    179,
+                                    255,
+                                  ),
+                                  width: 1.7,
+                                )
+                                : Border.all(color: border, width: 0.5),
+                      ),
 
               child:
                   hasCover
-                      ? Image.file(File(coverPath!), fit: BoxFit.cover)
+                      ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.file(
+                              File(coverPath!),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+
+                          if (selectionMode && selected)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(radius),
+                                    border: Border.all(
+                                      color: const Color.fromARGB(
+                                        255,
+                                        91,
+                                        179,
+                                        255,
+                                      ),
+                                      width: 1.7,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      )
                       : const Center(
                         child: Icon(
                           Icons.menu_book_outlined,
-                          size: 32,
+                          size: 25,
                           color: Color.fromARGB(221, 111, 159, 192),
                         ),
                       ),
             ),
-
             SizedBox(height: gap),
 
             SizedBox(
@@ -122,7 +163,7 @@ class AddSquareCard extends StatelessWidget {
   const AddSquareCard({super.key, required this.onTap});
 
   final VoidCallback onTap;
-  static const Color _border = Color.fromARGB(221, 159, 188, 208);
+  static const Color _border = Color.fromARGB(221, 170, 214, 244);
 
   @override
   Widget build(BuildContext context) {

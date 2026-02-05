@@ -1,4 +1,5 @@
-// lib/dialogs/dialogs.dart
+// dialogs/dialogs.dart
+
 import 'package:flutter/material.dart';
 import '../theme/glass_theme.dart';
 import '../widgets/glass/glass_container.dart';
@@ -17,7 +18,7 @@ Future<void> showGenreDialog(
     innerEdgeOpacity: 0.02,
   );
 
-  const genres = ['자유 서식', '소설', '시', '자기 계발', '과학 책', '그림 책', '수업 과제'];
+  const genres = ['웹 소설', '소설', '시', '자유 서식', '자기 계발', '과학 책', '그림 책'];
 
   return showDialog(
     context: context,

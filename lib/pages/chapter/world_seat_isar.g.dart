@@ -8354,11 +8354,26 @@ const FactionDocEntitySchema = CollectionSchema(
       type: IsarType.objectList,
       target: r'FactionDiagramE',
     ),
-    r'edges': PropertySchema(
+    r'documentId': PropertySchema(
       id: 3,
+      name: r'documentId',
+      type: IsarType.string,
+    ),
+    r'edges': PropertySchema(
+      id: 4,
       name: r'edges',
       type: IsarType.objectList,
       target: r'FactionEdgeE',
+    ),
+    r'schemaVersion': PropertySchema(
+      id: 5,
+      name: r'schemaVersion',
+      type: IsarType.long,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 6,
+      name: r'updatedAt',
+      type: IsarType.long,
     )
   },
   estimateSize: _factionDocEntityEstimateSize,
@@ -8366,7 +8381,21 @@ const FactionDocEntitySchema = CollectionSchema(
   deserialize: _factionDocEntityDeserialize,
   deserializeProp: _factionDocEntityDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'documentId': IndexSchema(
+      id: 4187168439921340405,
+      name: r'documentId',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'documentId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {
     r'FactionDiagramE': FactionDiagramESchema,
@@ -8395,6 +8424,7 @@ int _factionDocEntityEstimateSize(
           FactionDiagramESchema.estimateSize(value, offsets, allOffsets);
     }
   }
+  bytesCount += 3 + object.documentId.length * 3;
   bytesCount += 3 + object.edges.length * 3;
   {
     final offsets = allOffsets[FactionEdgeE]!;
@@ -8420,12 +8450,15 @@ void _factionDocEntitySerialize(
     FactionDiagramESchema.serialize,
     object.diagrams,
   );
+  writer.writeString(offsets[3], object.documentId);
   writer.writeObjectList<FactionEdgeE>(
-    offsets[3],
+    offsets[4],
     allOffsets,
     FactionEdgeESchema.serialize,
     object.edges,
   );
+  writer.writeLong(offsets[5], object.schemaVersion);
+  writer.writeLong(offsets[6], object.updatedAt);
 }
 
 FactionDocEntity _factionDocEntityDeserialize(
@@ -8444,14 +8477,17 @@ FactionDocEntity _factionDocEntityDeserialize(
         FactionDiagramE(),
       ) ??
       [];
+  object.documentId = reader.readString(offsets[3]);
   object.edges = reader.readObjectList<FactionEdgeE>(
-        offsets[3],
+        offsets[4],
         FactionEdgeESchema.deserialize,
         allOffsets,
         FactionEdgeE(),
       ) ??
       [];
   object.id = id;
+  object.schemaVersion = reader.readLong(offsets[5]);
+  object.updatedAt = reader.readLong(offsets[6]);
   return object;
 }
 
@@ -8475,6 +8511,8 @@ P _factionDocEntityDeserializeProp<P>(
           ) ??
           []) as P;
     case 3:
+      return (reader.readString(offset)) as P;
+    case 4:
       return (reader.readObjectList<FactionEdgeE>(
             offset,
             FactionEdgeESchema.deserialize,
@@ -8482,6 +8520,10 @@ P _factionDocEntityDeserializeProp<P>(
             FactionEdgeE(),
           ) ??
           []) as P;
+    case 5:
+      return (reader.readLong(offset)) as P;
+    case 6:
+      return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -8498,6 +8540,63 @@ List<IsarLinkBase<dynamic>> _factionDocEntityGetLinks(FactionDocEntity object) {
 void _factionDocEntityAttach(
     IsarCollection<dynamic> col, Id id, FactionDocEntity object) {
   object.id = id;
+}
+
+extension FactionDocEntityByIndex on IsarCollection<FactionDocEntity> {
+  Future<FactionDocEntity?> getByDocumentId(String documentId) {
+    return getByIndex(r'documentId', [documentId]);
+  }
+
+  FactionDocEntity? getByDocumentIdSync(String documentId) {
+    return getByIndexSync(r'documentId', [documentId]);
+  }
+
+  Future<bool> deleteByDocumentId(String documentId) {
+    return deleteByIndex(r'documentId', [documentId]);
+  }
+
+  bool deleteByDocumentIdSync(String documentId) {
+    return deleteByIndexSync(r'documentId', [documentId]);
+  }
+
+  Future<List<FactionDocEntity?>> getAllByDocumentId(
+      List<String> documentIdValues) {
+    final values = documentIdValues.map((e) => [e]).toList();
+    return getAllByIndex(r'documentId', values);
+  }
+
+  List<FactionDocEntity?> getAllByDocumentIdSync(
+      List<String> documentIdValues) {
+    final values = documentIdValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'documentId', values);
+  }
+
+  Future<int> deleteAllByDocumentId(List<String> documentIdValues) {
+    final values = documentIdValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'documentId', values);
+  }
+
+  int deleteAllByDocumentIdSync(List<String> documentIdValues) {
+    final values = documentIdValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'documentId', values);
+  }
+
+  Future<Id> putByDocumentId(FactionDocEntity object) {
+    return putByIndex(r'documentId', object);
+  }
+
+  Id putByDocumentIdSync(FactionDocEntity object, {bool saveLinks = true}) {
+    return putByIndexSync(r'documentId', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByDocumentId(List<FactionDocEntity> objects) {
+    return putAllByIndex(r'documentId', objects);
+  }
+
+  List<Id> putAllByDocumentIdSync(List<FactionDocEntity> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'documentId', objects, saveLinks: saveLinks);
+  }
 }
 
 extension FactionDocEntityQueryWhereSort
@@ -8575,6 +8674,51 @@ extension FactionDocEntityQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterWhereClause>
+      documentIdEqualTo(String documentId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'documentId',
+        value: [documentId],
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterWhereClause>
+      documentIdNotEqualTo(String documentId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'documentId',
+              lower: [],
+              upper: [documentId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'documentId',
+              lower: [documentId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'documentId',
+              lower: [documentId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'documentId',
+              lower: [],
+              upper: [documentId],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -8803,6 +8947,142 @@ extension FactionDocEntityQueryFilter
   }
 
   QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'documentId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'documentId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'documentId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'documentId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      documentIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'documentId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
       edgesLengthEqualTo(int length) {
     return QueryBuilder.apply(this, (query) {
       return query.listLength(
@@ -8946,6 +9226,118 @@ extension FactionDocEntityQueryFilter
       ));
     });
   }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      schemaVersionEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'schemaVersion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      schemaVersionGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'schemaVersion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      schemaVersionLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'schemaVersion',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      schemaVersionBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'schemaVersion',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      updatedAtEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      updatedAtGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      updatedAtLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterFilterCondition>
+      updatedAtBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension FactionDocEntityQueryObject
@@ -8997,6 +9389,48 @@ extension FactionDocEntityQuerySortBy
       return query.addSortBy(r'canvasW', Sort.desc);
     });
   }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortByDocumentId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'documentId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortByDocumentIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'documentId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortBySchemaVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'schemaVersion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortBySchemaVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'schemaVersion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
 }
 
 extension FactionDocEntityQuerySortThenBy
@@ -9029,6 +9463,20 @@ extension FactionDocEntityQuerySortThenBy
     });
   }
 
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenByDocumentId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'documentId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenByDocumentIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'documentId', Sort.desc);
+    });
+  }
+
   QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -9039,6 +9487,34 @@ extension FactionDocEntityQuerySortThenBy
       thenByIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenBySchemaVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'schemaVersion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenBySchemaVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'schemaVersion', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QAfterSortBy>
+      thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
     });
   }
 }
@@ -9056,6 +9532,27 @@ extension FactionDocEntityQueryWhereDistinct
       distinctByCanvasW() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'canvasW');
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QDistinct>
+      distinctByDocumentId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'documentId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QDistinct>
+      distinctBySchemaVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'schemaVersion');
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, FactionDocEntity, QDistinct>
+      distinctByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt');
     });
   }
 }
@@ -9087,10 +9584,30 @@ extension FactionDocEntityQueryProperty
     });
   }
 
+  QueryBuilder<FactionDocEntity, String, QQueryOperations>
+      documentIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'documentId');
+    });
+  }
+
   QueryBuilder<FactionDocEntity, List<FactionEdgeE>, QQueryOperations>
       edgesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'edges');
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, int, QQueryOperations>
+      schemaVersionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'schemaVersion');
+    });
+  }
+
+  QueryBuilder<FactionDocEntity, int, QQueryOperations> updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
     });
   }
 }

@@ -1107,7 +1107,9 @@ double _distPointToSegment(Offset p, Offset a, Offset b) {
 
 class FactionPage extends StatefulWidget {
   final Isar isar;
-  const FactionPage({super.key, required this.isar});
+  final String documentId;
+
+  const FactionPage({super.key, required this.isar, required this.documentId});
 
   @override
   State<FactionPage> createState() => _FactionPageState();
@@ -1233,89 +1235,137 @@ class _GlassActionItem {
 class _FactionPageState extends State<FactionPage> {
   late final FactionRepo _repo;
 
+  late DiagramDoc doc;
+
+  Future<void> _saveChain = Future.value();
+
   Timer? _saveDebounce;
 
-  void _scheduleSave() {
+  Future<void> _queueSave({bool immediate = false}) {
+    if (!immediate) {
+      _saveDebounce?.cancel();
+      _saveDebounce = Timer(const Duration(milliseconds: 250), () {
+        _queueSave(immediate: true);
+      });
+      return _saveChain;
+    }
+
     _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 250), _saveDoc);
+    final snap = _cloneDoc(doc);
+
+    _saveChain = _saveChain.then((_) async {
+      try {
+        await _repo.save(snap);
+      } catch (e, st) {
+        debugPrint('Faction save failed: $e\n$st');
+      }
+    });
+
+    return _saveChain;
   }
 
-  Future<void> _saveDoc() async {
-    await _repo.save(doc);
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        _saveDebounce?.cancel();
+        await _queueSave(immediate: true);
+
+        if (context.mounted) {
+          Navigator.of(context).pop(result);
+        }
+      },
+      child: _buildScaffold(context),
+    );
   }
 
-  static const double _expandMargin = 220;
-  static const double _expandStep = 1200;
-  static const double _maxCanvasW = 50000;
-  static const double _maxCanvasH = 50000;
+  DiagramDoc _cloneDoc(DiagramDoc src) {
+    return DiagramDoc(
+      canvasW: src.canvasW,
+      canvasH: src.canvasH,
+      diagrams:
+          src.diagrams
+              .map(
+                (n) => DiagramModel(
+                  id: n.id,
+                  name: n.name,
+                  x: n.x,
+                  y: n.y,
+                  r: n.r,
+                  locked: n.locked,
+                  imageUrl: n.imageUrl,
+                  shape: n.shape,
+                  fillColor: n.fillColor,
+                  insideText: n.insideText,
+                  showInsideText: n.showInsideText,
+                  insideTextColor: n.insideTextColor,
+                ),
+              )
+              .toList(),
+      edges:
+          src.edges
+              .map(
+                (e) => EdgeModel(
+                  id: e.id,
+                  from: e.from,
+                  to: e.to,
+                  fromAnchor: e.fromAnchor,
+                  toAnchor: e.toAnchor,
+                  fromFree:
+                      e.fromFree == null
+                          ? null
+                          : Offset(e.fromFree!.dx, e.fromFree!.dy),
+                  toFree:
+                      e.toFree == null
+                          ? null
+                          : Offset(e.toFree!.dx, e.toFree!.dy),
+                  label: e.label,
+                  curvature: e.curvature,
+                  style: EdgeStyle(
+                    color: e.style.color,
+                    width: e.style.width,
+                    dashed: e.style.dashed,
+                    arrowMode: e.style.arrowMode,
+                  ),
+                  labelPlacement: EdgeLabelPlacement(
+                    t: e.labelPlacement.t,
+                    dx: e.labelPlacement.dx,
+                    dy: e.labelPlacement.dy,
+                  ),
+                ),
+              )
+              .toList(),
+    );
+  }
 
-  bool _maybeExpandCanvasForRect(Rect r) {
-    double newW = doc.canvasW;
-    double newH = doc.canvasH;
+  @override
+  void initState() {
+    super.initState();
 
-    double shiftX = 0;
-    double shiftY = 0;
+    _repo = FactionRepo(widget.isar, widget.documentId);
 
-    if (r.left < _expandMargin) {
-      newW += _expandStep;
-      shiftX += _expandStep;
-    }
+    doc = DiagramDoc(canvasW: 2000, canvasH: 1400, diagrams: [], edges: []);
 
-    if (r.top < _expandMargin) {
-      newH += _expandStep;
-      shiftY += _expandStep;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final loaded = await _repo.loadOrCreate();
+      if (!mounted) return;
 
-    if (r.right > newW - _expandMargin) {
-      newW += _expandStep;
-    }
-    if (r.bottom > newH - _expandMargin) {
-      newH += _expandStep;
-    }
+      setState(() {
+        doc = loaded;
+        _bumpGeom();
+      });
 
-    newW = newW.clamp(1000, _maxCanvasW);
-    newH = newH.clamp(800, _maxCanvasH);
-
-    final changed = (newW != doc.canvasW) || (newH != doc.canvasH);
-    if (changed) {
-      doc = DiagramDoc(
-        canvasW: newW,
-        canvasH: newH,
-        diagrams: doc.diagrams,
-        edges: doc.edges,
-      );
-    }
-
-    if (shiftX != 0 || shiftY != 0) {
-      _shiftDoc(shiftX, shiftY);
-    }
-
-    return changed || (shiftX != 0 || shiftY != 0);
+      await _precacheDiagramImages();
+    });
   }
 
   final GlobalKey<_CanvasState> _canvasKey = GlobalKey<_CanvasState>();
 
-  late DiagramDoc doc;
   final ImagePicker _picker = ImagePicker();
-
-  void _shiftDoc(double dx, double dy) {
-    for (final n in doc.diagrams) {
-      n.x += dx;
-      n.y += dy;
-    }
-    for (final e in doc.edges) {
-      if (e.fromFree != null) e.fromFree = e.fromFree! + Offset(dx, dy);
-      if (e.toFree != null) e.toFree = e.toFree! + Offset(dx, dy);
-    }
-
-    if (tempLink != null) {
-      tempLink!.toPoint = tempLink!.toPoint + Offset(dx, dy);
-    }
-
-    _bumpGeom();
-    _scheduleSave();
-    _canvasKey.currentState?.nudgeScene(dx, dy);
-  }
 
   void _onDiagramSizeChanged(double v) {
     final n =
@@ -1325,7 +1375,7 @@ class _FactionPageState extends State<FactionPage> {
       n.r = v.clamp(20.0, 100.0);
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _openEdgeColorWheel(String edgeId) async {
@@ -1352,7 +1402,7 @@ class _FactionPageState extends State<FactionPage> {
       e.style.color = result.color!.toARGB32();
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _pickDiagramImage(String diagramId) async {
@@ -1370,7 +1420,7 @@ class _FactionPageState extends State<FactionPage> {
       n.imageUrl = x.path;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _openDiagramActionSheet(String diagramId) async {
@@ -1397,7 +1447,7 @@ class _FactionPageState extends State<FactionPage> {
               n.imageUrl = null;
               _bumpGeom();
             });
-            _scheduleSave();
+            _queueSave();
           },
         ),
       ]);
@@ -1426,7 +1476,7 @@ class _FactionPageState extends State<FactionPage> {
               n.fillColor = null;
               _bumpGeom();
             });
-            _scheduleSave();
+            _queueSave();
           },
         ),
       ]);
@@ -1465,7 +1515,7 @@ class _FactionPageState extends State<FactionPage> {
                 n.insideTextColor = null;
                 _bumpGeom();
               });
-              _scheduleSave();
+              _queueSave();
             },
           ),
       ]);
@@ -1483,7 +1533,7 @@ class _FactionPageState extends State<FactionPage> {
               n.insideTextColor = null;
               _bumpGeom();
             });
-            _scheduleSave();
+            _queueSave();
           },
         ),
       );
@@ -1532,7 +1582,7 @@ class _FactionPageState extends State<FactionPage> {
       n.insideTextColor = result.color!.toARGB32();
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _openDiagramColorSheet(String diagramId) async {
@@ -1562,7 +1612,7 @@ class _FactionPageState extends State<FactionPage> {
       n.fillColor = result.color!.toARGB32();
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _editDiagramInsideText(String diagramId) async {
@@ -1587,7 +1637,7 @@ class _FactionPageState extends State<FactionPage> {
       n.showInsideText = n.insideText.isNotEmpty;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _cycleSelectedDiagramShape() {
@@ -1601,7 +1651,7 @@ class _FactionPageState extends State<FactionPage> {
       n.shape = values[(i + 1) % values.length];
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   String? selectedDiagramId;
@@ -1621,31 +1671,9 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-
-    doc = DiagramDoc(canvasW: 2000, canvasH: 1400, diagrams: [], edges: []);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-
-      _repo = FactionRepo(widget.isar);
-
-      final loaded = await _repo.loadOrCreate();
-      if (!mounted) return;
-
-      setState(() {
-        doc = loaded;
-        _bumpGeom();
-      });
-
-      await _precacheDiagramImages();
-    });
-  }
-
-  @override
   void dispose() {
     _saveDebounce?.cancel();
+    _queueSave(immediate: true);
     super.dispose();
   }
 
@@ -1773,7 +1801,7 @@ class _FactionPageState extends State<FactionPage> {
       selectedEdgeId = null;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _toggleLockSelected() {
@@ -1784,7 +1812,7 @@ class _FactionPageState extends State<FactionPage> {
       n.locked = !n.locked;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _deleteSelectedDiagram() {
@@ -1798,7 +1826,7 @@ class _FactionPageState extends State<FactionPage> {
       tempLink = null;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _deleteSelectedEdge() {
@@ -1808,7 +1836,7 @@ class _FactionPageState extends State<FactionPage> {
       selectedEdgeId = null;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onDiagramTapped(DiagramModel diagram) {
@@ -1856,7 +1884,7 @@ class _FactionPageState extends State<FactionPage> {
       selectedEdgeId = null;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   Future<void> _renameSelectedDiagram() async {
@@ -1871,7 +1899,7 @@ class _FactionPageState extends State<FactionPage> {
       n.name = result.trim();
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _startLinkDrag({
@@ -1948,7 +1976,7 @@ class _FactionPageState extends State<FactionPage> {
       tempLink = null;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
     final label = await _promptEdgeLabel(initial: newEdge.label);
     if (!mounted) return;
 
@@ -1957,7 +1985,7 @@ class _FactionPageState extends State<FactionPage> {
         newEdge.label = label.trim();
         _bumpGeom();
       });
-      _scheduleSave();
+      _queueSave();
     }
   }
 
@@ -2088,7 +2116,7 @@ class _FactionPageState extends State<FactionPage> {
       e.label = result.trim();
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onLabelLongPressDrag(String edgeId, Offset scenePointer) {
@@ -2135,7 +2163,7 @@ class _FactionPageState extends State<FactionPage> {
       e.curvature = v.clamp(-3.5, 3.5);
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onWidthChanged(double v) {
@@ -2145,7 +2173,7 @@ class _FactionPageState extends State<FactionPage> {
       e.style.width = v.clamp(0.3, 10.0);
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onDashedChanged(bool v) {
@@ -2155,7 +2183,7 @@ class _FactionPageState extends State<FactionPage> {
       e.style.dashed = v;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onArrowModeChanged(ArrowMode v) {
@@ -2165,7 +2193,7 @@ class _FactionPageState extends State<FactionPage> {
       e.style.arrowMode = v;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
   void _onColorChanged(int color) {
@@ -2175,11 +2203,10 @@ class _FactionPageState extends State<FactionPage> {
       e.style.color = color;
       _bumpGeom();
     });
-    _scheduleSave();
+    _queueSave();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildScaffold(BuildContext context) {
     final selectedDiagram =
         (selectedDiagramId != null) ? _getDiagram(selectedDiagramId!) : null;
     final selectedEdge =
@@ -2288,22 +2315,12 @@ class _FactionPageState extends State<FactionPage> {
                           setState(() {
                             n.x += delta.dx;
                             n.y += delta.dy;
-
-                            const pad = 40.0;
-                            final rect = Rect.fromCenter(
-                              center: Offset(n.x, n.y),
-                              width: (n.r * 2) + pad * 2,
-                              height: (n.r * 2) + pad * 2,
-                            );
-                            _maybeExpandCanvasForRect(rect);
-
-                            n.x = math.max(n.r, n.x);
-                            n.y = math.max(n.r, n.y);
-
                             _bumpGeom();
                           });
+
+                          _queueSave();
                         },
-                        onDiagramDragEnd: _scheduleSave,
+                        onDiagramDragEnd: () => _queueSave(immediate: true),
                         onDiagramNameTap:
                             (diagramId) => _renameDiagram(diagramId),
                         onLinkDragStart: _startLinkDrag,
@@ -3037,6 +3054,13 @@ class _EdgeEndHandle extends StatelessWidget {
 
 class _CanvasState extends State<_Canvas> {
   final TransformationController _tc = TransformationController();
+
+  @override
+  void dispose() {
+    _tc.dispose();
+    super.dispose();
+  }
+
   bool _isPanningDiagram = false;
 
   static const double _minScale = 0.1;
@@ -3596,6 +3620,26 @@ class _DiagramWidgetState extends State<_DiagramWidget> {
     }
   }
 
+  Widget _buildDiagramImage(String url, int targetPx) {
+    final isNet = url.startsWith('http://') || url.startsWith('https://');
+    if (isNet) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        cacheWidth: targetPx,
+        cacheHeight: targetPx,
+        errorBuilder: (_, __, ___) => const SizedBox.expand(),
+      );
+    }
+    return Image.file(
+      File(url),
+      fit: BoxFit.cover,
+      cacheWidth: targetPx,
+      cacheHeight: targetPx,
+      errorBuilder: (_, __, ___) => const SizedBox.expand(),
+    );
+  }
+
   Widget _diagramImageContent() {
     final n = widget.diagram;
     final hasImage = (n.imageUrl != null && n.imageUrl!.trim().isNotEmpty);
@@ -3611,13 +3655,7 @@ class _DiagramWidgetState extends State<_DiagramWidget> {
     if (!hasImage) {
       image = const SizedBox.expand();
     } else {
-      image = Image.file(
-        File(n.imageUrl!),
-        fit: BoxFit.cover,
-        cacheWidth: targetPx,
-        cacheHeight: targetPx,
-        errorBuilder: (_, __, ___) => const SizedBox.expand(),
-      );
+      image = _buildDiagramImage(n.imageUrl!, targetPx);
     }
 
     final defaultTextColor = hasImage ? Colors.white : Colors.black87;
@@ -4418,36 +4456,17 @@ EdgeModel _edgeFromE(FactionEdgeE e) {
 
 class FactionRepo {
   final Isar isar;
-  FactionRepo(this.isar);
+  final String documentId;
 
-  static const int _singleId = 0;
+  FactionRepo(this.isar, this.documentId);
 
   IsarCollection<FactionDocEntity> get _col => isar.factionDocEntitys;
 
-  Future<DiagramDoc> loadOrCreate() async {
-    final doc = await _col.get(_singleId);
+  static const int kSchemaVersion = 1;
 
-    if (doc == null) {
-      final created =
-          FactionDocEntity()
-            ..id = _singleId
-            ..canvasW = 2000
-            ..canvasH = 1400
-            ..diagrams = <FactionDiagramE>[]
-            ..edges = <FactionEdgeE>[];
+  int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
-      await isar.writeTxn(() async {
-        await _col.put(created);
-      });
-
-      return DiagramDoc(
-        canvasW: 2000,
-        canvasH: 1400,
-        diagrams: const [],
-        edges: const [],
-      );
-    }
-
+  DiagramDoc _toUi(FactionDocEntity doc) {
     return DiagramDoc(
       canvasW: doc.canvasW,
       canvasH: doc.canvasH,
@@ -4456,17 +4475,76 @@ class FactionRepo {
     );
   }
 
-  Future<void> save(DiagramDoc uiDoc) async {
-    final d =
-        FactionDocEntity()
-          ..id = _singleId
-          ..canvasW = uiDoc.canvasW
-          ..canvasH = uiDoc.canvasH
-          ..diagrams = uiDoc.diagrams.map(_diagramToE).toList()
-          ..edges = uiDoc.edges.map(_edgeToE).toList();
+  FactionDocEntity _newEntity() {
+    return FactionDocEntity()
+      ..documentId = documentId
+      ..schemaVersion = kSchemaVersion
+      ..updatedAt = _nowMs()
+      ..canvasW = 2000
+      ..canvasH = 1400
+      ..diagrams = <FactionDiagramE>[]
+      ..edges = <FactionEdgeE>[];
+  }
 
+  bool _migrateIfNeeded(FactionDocEntity e) {
+    final from = e.schemaVersion;
+    if (from >= kSchemaVersion) return false;
+
+    if (e.canvasW <= 0) e.canvasW = 2000;
+    if (e.canvasH <= 0) e.canvasH = 1400;
+
+    e.schemaVersion = kSchemaVersion;
+    e.updatedAt = _nowMs();
+    return true;
+  }
+
+  Future<DiagramDoc> loadOrCreate() async {
+    final existing =
+        await _col.filter().documentIdEqualTo(documentId).findFirst();
+
+    if (existing == null) {
+      final created = _newEntity();
+      await isar.writeTxn(() async {
+        await _col.put(created);
+      });
+      return _toUi(created);
+    }
+
+    final needsSave = _migrateIfNeeded(existing);
+    if (needsSave) {
+      await isar.writeTxn(() async {
+        await _col.put(existing);
+      });
+    }
+    return _toUi(existing);
+  }
+
+  Future<void> save(DiagramDoc uiDoc) async {
     await isar.writeTxn(() async {
-      await _col.put(d);
+      final existing =
+          await _col.filter().documentIdEqualTo(documentId).findFirst();
+
+      final e = existing ?? _newEntity();
+
+      e
+        ..documentId = documentId
+        ..schemaVersion = kSchemaVersion
+        ..updatedAt = _nowMs()
+        ..canvasW = uiDoc.canvasW
+        ..canvasH = uiDoc.canvasH
+        ..diagrams = uiDoc.diagrams.map(_diagramToE).toList()
+        ..edges = uiDoc.edges.map(_edgeToE).toList();
+
+      await _col.put(e);
+    });
+  }
+
+  Future<void> deleteDoc() async {
+    await isar.writeTxn(() async {
+      final existing =
+          await _col.filter().documentIdEqualTo(documentId).findFirst();
+      if (existing == null) return;
+      await _col.delete(existing.id);
     });
   }
 }
