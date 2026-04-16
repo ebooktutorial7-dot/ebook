@@ -45,6 +45,7 @@ class A4MiniCard extends StatelessWidget {
         final capH = captionHeight * scale;
         final gap = captionGap * scale;
         final radius = 13 * scale;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -71,7 +72,6 @@ class A4MiniCard extends StatelessWidget {
                                 )
                                 : Border.all(color: border, width: 0.5),
                       ),
-
               child:
                   hasCover
                       ? Stack(
@@ -85,7 +85,6 @@ class A4MiniCard extends StatelessWidget {
                               fit: BoxFit.cover,
                             ),
                           ),
-
                           if (selectionMode && selected)
                             Positioned.fill(
                               child: IgnorePointer(
@@ -116,7 +115,6 @@ class A4MiniCard extends StatelessWidget {
                       ),
             ),
             SizedBox(height: gap),
-
             SizedBox(
               width: cardW,
               height: capH,
@@ -161,6 +159,57 @@ class A4MiniCard extends StatelessWidget {
 
 class AddSquareCard extends StatelessWidget {
   const AddSquareCard({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+  static const Color _border = Color.fromARGB(221, 170, 214, 244);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: _border, width: 1),
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add,
+                  size: 36,
+                  color: Color.fromARGB(221, 83, 129, 159),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  '새 작품 만들기',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color.fromARGB(221, 12, 24, 46),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AddWideCard extends StatelessWidget {
+  const AddWideCard({super.key, required this.onTap});
 
   final VoidCallback onTap;
   static const Color _border = Color.fromARGB(221, 170, 214, 244);

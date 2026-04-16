@@ -18,7 +18,7 @@ Future<void> showGenreDialog(
     innerEdgeOpacity: 0.02,
   );
 
-  const genres = ['웹 소설', '소설', '시', '자유 서식', '자기 계발', '과학 책', '그림 책'];
+  const genres = ['웹 소설', '소설', '시', '자유 서식', '자기 계발', '과학 책'];
 
   return showDialog(
     context: context,
@@ -172,16 +172,6 @@ Future<void> showMoreDialog({
                     ),
                   ),
                   const SizedBox(height: 16),
-                  GlassActionButton(
-                    theme: buttonTheme,
-                    icon: Icons.checklist_rtl,
-                    label: '책 선택',
-                    onPressed: () {
-                      Navigator.pop(context);
-                      onPickMode();
-                    },
-                  ),
-                  const SizedBox(height: 10),
                   GlassActionButton(
                     theme: buttonTheme,
                     icon: Icons.logout,

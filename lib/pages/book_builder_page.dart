@@ -174,6 +174,9 @@ class BookBuilderPage extends StatefulWidget {
   final int pageIndex;
   final String initialPenName;
   final String? documentId;
+  final int? initialOpenChapterIndex;
+  final bool initialAutoAddChapter;
+
   const BookBuilderPage({
     required this.genre,
     super.key,
@@ -184,7 +187,10 @@ class BookBuilderPage extends StatefulWidget {
     required this.pageIndex,
     this.initialPenName = '',
     this.documentId,
+    this.initialOpenChapterIndex,
+    this.initialAutoAddChapter = false,
   });
+
   @override
   State<BookBuilderPage> createState() => _BookBuilderPageState();
 }
@@ -645,6 +651,19 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       await _loadSortPref();
       await _loadPersistedChapters();
       _applyChapterSort();
+      await _maybeAutoOpenChapter();
+      if (widget.initialAutoAddChapter) {
+        _addChapter();
+        final newestIndex = _chapters
+            .map((c) => c.index)
+            .fold<int>(0, (p, e) => e > p ? e : p);
+        final found = _chapters.indexWhere((c) => c.index == newestIndex);
+        if (found >= 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          if (!mounted) return;
+          _openChapterEditor(_chapters[found]);
+        }
+      }
       await _loadPersistedMemos();
       await _loadPersistedMeta();
       await _loadPersistedCover();
@@ -1155,6 +1174,23 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
   }
 
+  bool _didAutoOpenChapter = false;
+
+  Future<void> _maybeAutoOpenChapter() async {
+    if (_didAutoOpenChapter) return;
+
+    final idx = widget.initialOpenChapterIndex;
+    if (idx == null) return;
+
+    final found = _chapters.indexWhere((c) => c.index == idx);
+    if (found < 0) return;
+
+    _didAutoOpenChapter = true;
+
+    if (!mounted) return;
+    await _openChapterEditor(_chapters[found]);
+  }
+
   Future<void> _persistMemos() async {
     if (widget.documentId == null) return;
     await _ensurePrefs();
@@ -1389,6 +1425,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 initialDeltaJson: c.delta,
                 enableGlass: _glass,
                 persistentKey: stableKey,
+                genre: widget.genre,
+                writingDate: DateTime.now(),
               ),
             ),
       ),

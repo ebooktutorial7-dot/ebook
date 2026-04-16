@@ -134,19 +134,15 @@ void cycleHeader(quill.QuillController c, {required bool clearedRecently}) {
   }
 }
 
-Timer? _paginationTimer;
+Timer? _layoutRefreshTimer;
 
-void schedulePagination(quill.QuillController c) {
-  _paginationTimer?.cancel();
-  _paginationTimer = Timer(const Duration(milliseconds: 120), () {
-    final sel = c.selection;
-    c.replaceText(sel.baseOffset, 0, '', sel);
+void scheduleLayoutRefresh(VoidCallback? onChanged) {
+  _layoutRefreshTimer?.cancel();
+  _layoutRefreshTimer = Timer(const Duration(milliseconds: 120), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onChanged?.call();
+    });
   });
-}
-
-void triggerPaginationNow(quill.QuillController c) {
-  final sel = c.selection;
-  c.replaceText(sel.baseOffset, 0, '', sel);
 }
 
 /// =============================================================
@@ -157,12 +153,16 @@ class MiniFlatToolbar extends StatelessWidget {
   final quill.QuillController controller;
   final GlassTheme theme;
   final VoidCallback? onLayoutChanged;
+  final VoidCallback? onMicTap;
+  final bool isListening;
 
   const MiniFlatToolbar({
     super.key,
     required this.controller,
     required this.theme,
     this.onLayoutChanged,
+    this.onMicTap,
+    this.isListening = false,
   });
 
   @override
@@ -189,8 +189,7 @@ class MiniFlatToolbar extends StatelessWidget {
         onPressed: () {
           onTap();
           if (affectLayout) {
-            schedulePagination(controller);
-            onLayoutChanged?.call();
+            scheduleLayoutRefresh(onLayoutChanged);
           }
         },
 
@@ -215,10 +214,91 @@ class MiniFlatToolbar extends StatelessWidget {
           physics: const BouncingScrollPhysics(),
           child: Row(
             children: [
+              if (onMicTap != null) ...[
+                IconButton(
+                  tooltip: isListening ? '음성 입력 중지' : '음성 입력',
+                  onPressed: onMicTap,
+                  icon: Icon(
+                    isListening ? Icons.mic : Icons.mic_none,
+                    size: 18,
+                    color: isListening ? Colors.redAccent : Colors.black87,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                ),
+                const SizedBox(width: 7),
+
+                IconButton(
+                  tooltip: '실행 취소',
+                  onPressed:
+                      controller.hasUndo
+                          ? () {
+                            controller.undo();
+                            onLayoutChanged?.call();
+                          }
+                          : null,
+                  icon: Icon(
+                    Icons.undo,
+                    size: 18,
+                    color: controller.hasUndo ? Colors.black87 : Colors.black26,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                ),
+                const SizedBox(width: 7),
+
+                IconButton(
+                  tooltip: '다시 실행',
+                  onPressed:
+                      controller.hasRedo
+                          ? () {
+                            controller.redo();
+                            onLayoutChanged?.call();
+                          }
+                          : null,
+                  icon: Icon(
+                    Icons.redo,
+                    size: 18,
+                    color: controller.hasRedo ? Colors.black87 : Colors.black26,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                ),
+                const SizedBox(width: 7),
+              ],
+
               // ----------------------------------------------------
               // 글자 크기 버튼 (행간/페이지에 영향 → 페이지네이션 필요)
               // ----------------------------------------------------
-              _FontSizeButton(controller: controller, theme: theme),
+              _FontSizeButton(
+                controller: controller,
+                theme: theme,
+                onLayoutChanged: onLayoutChanged,
+              ),
               const SizedBox(width: 7),
 
               // ----------------------------------------------------
@@ -362,7 +442,7 @@ class MiniFlatToolbar extends StatelessWidget {
               // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_list_numbered),
-                () {},
+                () => setExclusiveList(controller, ordered: true),
                 selected: _hasAttr(controller, quill.Attribute.ol),
                 affectLayout: true,
                 tooltip: '번호 목록',
@@ -451,8 +531,13 @@ class MiniFlatToolbar extends StatelessWidget {
 class _FontSizeButton extends StatefulWidget {
   final quill.QuillController controller;
   final GlassTheme theme;
+  final VoidCallback? onLayoutChanged;
 
-  const _FontSizeButton({required this.controller, required this.theme});
+  const _FontSizeButton({
+    required this.controller,
+    required this.theme,
+    this.onLayoutChanged,
+  });
 
   static const _sizes = <String>['7', '9', '11', '13', '15', '17', '20', '23'];
 
@@ -545,8 +630,7 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                               final ws =
                                   context.read<WritingSettingsController>();
                               ws.updateFontSize(sizePt);
-
-                              schedulePagination(widget.controller);
+                              scheduleLayoutRefresh(widget.onLayoutChanged);
                               _close();
                             },
                           ),
@@ -571,8 +655,7 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                             ws.updateFontSize(
                               WritingSettings.defaults().fontSize,
                             );
-
-                            schedulePagination(widget.controller);
+                            scheduleLayoutRefresh(widget.onLayoutChanged);
                             _close();
                           },
                         ),
@@ -1037,7 +1120,6 @@ class _AlignCycleButton extends StatelessWidget {
       icon: icon,
       onPressed: () {
         cycleAlign(controller);
-        schedulePagination(controller);
         onChanged?.call();
       },
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -1093,8 +1175,6 @@ void _clearFormats(quill.QuillController c) {
   for (final a in toUnset) {
     c.formatSelection(a);
   }
-
-  schedulePagination(c);
 }
 
 Future<ui.Image> _loadUiImage(File file) async {
@@ -1141,8 +1221,6 @@ void _insertEmbedNextLine(quill.QuillController c, {required String embedKey}) {
       quill.ChangeSource.local,
     );
   });
-
-  schedulePagination(c);
 }
 
 void _insertSolidHrNextLine(quill.QuillController c) =>
@@ -1199,8 +1277,6 @@ Future<void> _insertImageFromSource(
   } catch (e) {
     print('❌ 이미지 처리 오류: $e');
   }
-
-  schedulePagination(c);
 }
 
 /// =============================================================

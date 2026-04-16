@@ -1,4 +1,4 @@
-// controllers/ebook_list_controller.dart
+// ebook_list_controller
 
 import 'package:ebook_tutorial_app/models/genre.dart';
 
@@ -26,7 +26,8 @@ class EbookListController {
     await reloadEbooks();
 
     for (final g in Genre.values) {
-      await reloadMemos(genre: g);
+      if (g == Genre.main) continue;
+      await _loadMemosForGenre(g);
     }
   }
 
@@ -44,20 +45,50 @@ class EbookListController {
 
   Future<void> persistEbooks() async => service.saveEbooks(ebooks);
 
-  Future<void> reloadMemos({required Genre genre}) async {
+  Future<void> _loadMemosForGenre(Genre genre) async {
+    if (genre == Genre.main) return;
+
     final loaded = await service.loadMemos(genre: genre);
     allMemosCacheByGenre[genre] = loaded;
 
     final items = <MemoPreviewItem>[];
     for (var i = 0; i < loaded.length; i++) {
-      items.add(MemoPreviewItem(index: i, memo: loaded[i]));
+      items.add(MemoPreviewItem(genre: genre, index: i, memo: loaded[i]));
     }
+
     items.sort((a, b) => b.memo.updatedAt.compareTo(a.memo.updatedAt));
     memoPreviewByGenre[genre] = items;
   }
 
+  Future<void> reloadMemos({required Genre genre}) async {
+    if (genre == Genre.main) {
+      for (final g in Genre.values) {
+        if (g == Genre.main) continue;
+        await _loadMemosForGenre(g);
+      }
+      return;
+    }
+
+    await _loadMemosForGenre(genre);
+  }
+
   List<MemoPreviewItem> memoPreview(Genre genre) {
+    if (genre == Genre.main) {
+      return memoPreviewAll();
+    }
     return memoPreviewByGenre[genre] ?? const <MemoPreviewItem>[];
+  }
+
+  List<MemoPreviewItem> memoPreviewAll() {
+    final result = <MemoPreviewItem>[];
+
+    for (final g in Genre.values) {
+      if (g == Genre.main) continue;
+      result.addAll(memoPreviewByGenre[g] ?? const <MemoPreviewItem>[]);
+    }
+
+    result.sort((a, b) => b.memo.updatedAt.compareTo(a.memo.updatedAt));
+    return result;
   }
 
   String deltaToPreview(Map<String, dynamic> ebook) {
@@ -128,6 +159,8 @@ class EbookListController {
     required int previewIndex,
     required String newText,
   }) async {
+    if (genre == Genre.main) return false;
+
     final previewList = memoPreviewByGenre[genre] ?? const <MemoPreviewItem>[];
     final cache = allMemosCacheByGenre[genre] ?? <Memo>[];
 
@@ -148,10 +181,39 @@ class EbookListController {
     await reloadMemos(genre: genre);
     return true;
   }
+
+  Future<bool> editMemoInlineItem({
+    required MemoPreviewItem item,
+    required String newText,
+  }) async {
+    final genre = item.genre;
+    if (genre == Genre.main) return false;
+
+    final cache = allMemosCacheByGenre[genre] ?? <Memo>[];
+    final idx = item.index;
+
+    if (idx < 0 || idx >= cache.length) {
+      await reloadMemos(genre: genre);
+      return false;
+    }
+
+    cache[idx] = Memo(newText, DateTime.now());
+    allMemosCacheByGenre[genre] = cache;
+
+    await service.saveMemos(cache, genre: genre);
+    await reloadMemos(genre: genre);
+    return true;
+  }
 }
 
 class MemoPreviewItem {
+  final Genre genre;
   final int index;
   final Memo memo;
-  const MemoPreviewItem({required this.index, required this.memo});
+
+  const MemoPreviewItem({
+    required this.genre,
+    required this.index,
+    required this.memo,
+  });
 }

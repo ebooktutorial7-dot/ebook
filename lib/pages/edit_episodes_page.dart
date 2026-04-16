@@ -1,411 +1,510 @@
 // edit_episodes_page.dart
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-
-import 'package:ebook_tutorial_app/theme/glass_theme.dart';
-import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
-import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
-import 'package:ebook_tutorial_app/models/genre.dart';
-
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+
+import 'package:ebook_tutorial_app/models/genre.dart';
+import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
+import 'package:ebook_tutorial_app/pages/book_builder_page.dart';
 
 class EditEpisodesPage extends StatefulWidget {
-  const EditEpisodesPage({super.key, required this.genre});
+  const EditEpisodesPage({
+    super.key,
+    required this.genre,
+    required this.genreBooks,
+  });
 
   final Genre genre;
-
-  static const String resultEnterPickMode = 'enter_pick_mode';
+  final List<Map<String, dynamic>> genreBooks;
 
   @override
   State<EditEpisodesPage> createState() => _EditEpisodesPageState();
 }
 
-class Episode {
-  final String title;
-  final DateTime updatedAt;
+class GenreEpisodeItem {
+  final String bookId;
+  final String bookTitle;
 
-  Episode({required this.title, required this.updatedAt});
+  final String chapterTitle;
+  final int chapterIndex;
 
-  factory Episode.fromJson(Map<String, dynamic> json) {
-    return Episode(
-      title: (json['title'] as String?) ?? '',
-      updatedAt:
-          DateTime.tryParse((json['updatedAt'] as String?) ?? '') ??
-          DateTime.now(),
-    );
-  }
+  final String? coverPath;
+  final String? bookCoverPath;
+  final int? sizeBytes;
+  final int? charCount;
+  final DateTime? updatedAt;
+  final bool pinned;
 
-  Map<String, dynamic> toJson() => {
-    'title': title,
-    'updatedAt': updatedAt.toIso8601String(),
-  };
-}
+  final List<Map<String, dynamic>> delta;
 
-class EpisodeStorage {
-  static String _key(String genreName) => 'episodes_$genreName';
-
-  static Future<List<Episode>> load({required String genreName}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(genreName));
-    if (raw == null || raw.isEmpty) return <Episode>[];
-
-    final decoded = jsonDecode(raw);
-    if (decoded is! List) return <Episode>[];
-
-    return decoded
-        .map((e) => Episode.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
-  }
-
-  static Future<void> save(
-    List<Episode> episodes, {
-    required String genreName,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = jsonEncode(episodes.map((e) => e.toJson()).toList());
-    await prefs.setString(_key(genreName), raw);
-  }
+  GenreEpisodeItem({
+    required this.bookId,
+    required this.bookTitle,
+    required this.chapterTitle,
+    required this.chapterIndex,
+    required this.updatedAt,
+    required this.delta,
+    this.coverPath,
+    this.bookCoverPath,
+    this.sizeBytes,
+    this.charCount,
+    this.pinned = false,
+  });
 }
 
 class _EditEpisodesPageState extends State<EditEpisodesPage> {
-  final List<Episode> _episodes = [];
+  final List<GenreEpisodeItem> _items = [];
+  bool _groupByBook = false;
 
-  bool _selectionMode = false;
-  final Set<int> _selected = <int>{};
+  Map<String, List<GenreEpisodeItem>> _groupItemsByBook() {
+    final map = <String, List<GenreEpisodeItem>>{};
 
-  String get storageKey => 'episodes_${widget.genre.name}';
+    for (final item in _items) {
+      map.putIfAbsent(item.bookId, () => <GenreEpisodeItem>[]).add(item);
+    }
+    for (final entry in map.entries) {
+      entry.value.sort((a, b) {
+        final at = a.updatedAt?.millisecondsSinceEpoch ?? 0;
+        final bt = b.updatedAt?.millisecondsSinceEpoch ?? 0;
+        return bt.compareTo(at);
+      });
+    }
+
+    return map;
+  }
+
+  Widget _bookToggleBar() {
+    const iconColor = Color.fromARGB(255, 117, 148, 188);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () => setState(() => _groupByBook = !_groupByBook),
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_stories, color: iconColor, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    _groupByBook ? 'all' : 'selected',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Color.fromARGB(221, 83, 129, 159),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupedListView() {
+    final grouped = _groupItemsByBook();
+    final bookIds =
+        grouped.keys.toList()..sort((a, b) {
+          final at = grouped[a]?.first.updatedAt?.millisecondsSinceEpoch ?? 0;
+          final bt = grouped[b]?.first.updatedAt?.millisecondsSinceEpoch ?? 0;
+          return bt.compareTo(at);
+        });
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      itemCount: bookIds.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final bookId = bookIds[i];
+        final list = grouped[bookId] ?? const <GenreEpisodeItem>[];
+        if (list.isEmpty) return const SizedBox.shrink();
+
+        final bookTitle = list.first.bookTitle;
+        final bookCover = list.first.bookCoverPath;
+
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withValues(alpha: 0.92),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+              childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+              leading: _miniCover(chapterCover: null, bookCover: bookCover),
+              title: Text(
+                bookTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
+              subtitle: Text(
+                '${list.length}개 회차',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w400,
+                  color: Color.fromARGB(221, 83, 129, 159),
+                ),
+              ),
+              children: [
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, idx) => _episodeCard(list[idx]),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    unawaited(_loadEpisodes());
+    unawaited(_reload());
   }
 
-  Future<void> _loadEpisodes() async {
-    final loaded = await EpisodeStorage.load(genreName: widget.genre.name);
+  Future<void> _reload() async {
+    final loaded = await _loadMergedChapters();
     if (!mounted) return;
     setState(() {
-      _episodes
+      _items
         ..clear()
         ..addAll(loaded);
     });
   }
 
-  Future<void> _saveEpisodes() async {
-    await EpisodeStorage.save(_episodes, genreName: widget.genre.name);
+  Future<List<GenreEpisodeItem>> _loadMergedChapters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final merged = <GenreEpisodeItem>[];
+
+    for (final b in widget.genreBooks) {
+      final bookId = (b['documentId'] as String?) ?? '';
+      if (bookId.isEmpty) continue;
+      final bookTitle = (b['title'] as String?) ?? '(제목 없음)';
+
+      final bookCoverPath = prefs.getString('book_cover_$bookId')?.trim();
+      final raw = prefs.getString('book_chapters_$bookId');
+      if (raw == null || raw.isEmpty) continue;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) continue;
+
+      for (final e in decoded) {
+        if (e is! Map) continue;
+        final m = Map<String, dynamic>.from(e);
+        final coverPath =
+            ((m['cover'] as String?) ?? (m['coverPath'] as String?))?.trim();
+
+        final chapterTitle = (m['title'] as String?) ?? '';
+        final chapterIndex = (m['index'] as num?)?.toInt() ?? 0;
+
+        final updatedStr = m['updatedAt'] as String?;
+        final updatedAt =
+            (updatedStr != null && updatedStr.isNotEmpty)
+                ? DateTime.tryParse(updatedStr)
+                : null;
+
+        final deltaRaw = m['delta'];
+        final delta =
+            (deltaRaw is List)
+                ? deltaRaw
+                    .map((x) => Map<String, dynamic>.from(x as Map))
+                    .toList()
+                : <Map<String, dynamic>>[];
+
+        final sizeBytes = (m['sizeBytes'] as num?)?.toInt();
+        final charCount = (m['charCount'] as num?)?.toInt();
+        final pinned = (m['pinned'] as bool?) ?? false;
+
+        merged.add(
+          GenreEpisodeItem(
+            bookId: bookId,
+            bookTitle: bookTitle,
+            chapterTitle: chapterTitle,
+            chapterIndex: chapterIndex,
+            updatedAt: updatedAt,
+            delta: delta,
+            coverPath: coverPath,
+            bookCoverPath: bookCoverPath,
+            sizeBytes: sizeBytes,
+            charCount: charCount,
+            pinned: pinned,
+          ),
+        );
+      }
+    }
+
+    merged.sort((a, b) {
+      final at = a.updatedAt?.millisecondsSinceEpoch ?? 0;
+      final bt = b.updatedAt?.millisecondsSinceEpoch ?? 0;
+      return bt.compareTo(at);
+    });
+
+    return merged;
   }
 
-  void _showMoreDialog(BuildContext context) {
-    final theme = GlassTheme.fromFlags(reduceTransparency: false);
-    showDialog(
-      context: context,
-      barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
-      builder:
-          (_) => Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 24,
-            ),
-            child: GlassContainer(
-              theme: theme,
-              borderRadius: 20,
-              padding: const EdgeInsets.only(
-                top: 16,
-                left: 12,
-                right: 12,
-                bottom: 8,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '더보기',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
+  String _formatBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) return '0B';
+    const kb = 1024;
+    const mb = 1024 * 1024;
+    if (bytes < kb) return '${bytes}B';
+    if (bytes < mb) return '${(bytes / kb).toStringAsFixed(1)}KB';
+    return '${(bytes / mb).toStringAsFixed(1)}MB';
+  }
+
+  String _formatYMD(DateTime? dt) {
+    if (dt == null) return '—';
+    final l = dt.toLocal();
+    return '${l.year}.${l.month.toString().padLeft(2, '0')}.${l.day.toString().padLeft(2, '0')}.';
+  }
+
+  Widget _miniCover({String? chapterCover, String? bookCover}) {
+    final path =
+        (chapterCover != null && chapterCover.isNotEmpty)
+            ? chapterCover
+            : (bookCover != null && bookCover.isNotEmpty)
+            ? bookCover
+            : null;
+
+    final hasImage = path != null && File(path).existsSync();
+    const w = 79.0;
+    const h = w * 1.5;
+
+    return Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(13),
+        color:
+            hasImage
+                ? Colors.transparent
+                : Colors.white.withValues(alpha: 0.04),
+        border:
+            hasImage
+                ? null
+                : Border.all(
+                  color: const Color.fromARGB(255, 170, 193, 216),
+                  width: 0.5,
+                ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child:
+          hasImage
+              ? Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (_, __, ___) => const Center(
+                      child: Text(
+                        '+ 표지 사진',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          height: 1.2,
+                          color: Color.fromARGB(255, 171, 193, 217),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    GlassActionButton(
-                      theme: theme,
-                      icon: Icons.checklist_rtl,
-                      label: '책 선택',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pop(
-                          context,
-                          EditEpisodesPage.resultEnterPickMode,
-                        );
-                      },
+              )
+              : const Center(
+                child: Text(
+                  '+ 표지 사진',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                    color: Color.fromARGB(255, 171, 193, 217),
+                  ),
+                ),
+              ),
+    );
+  }
+
+  Widget _episodeCard(GenreEpisodeItem item) {
+    const subColor = Color.fromARGB(221, 83, 129, 159);
+
+    final metaText =
+        '${_formatBytes(item.sizeBytes)} · ${item.charCount ?? 0}자 · ${_formatYMD(item.updatedAt)}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBookAndChapter(item),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.white.withValues(alpha: 0.92),
+          ),
+          padding: const EdgeInsets.fromLTRB(1, 6, 10, 1),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _miniCover(
+                chapterCover: item.coverPath,
+                bookCover: item.bookCoverPath,
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        if (item.pinned)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 5),
+                            child: Icon(
+                              Icons.star,
+                              size: 20,
+                              color: Color.fromARGB(255, 255, 224, 132),
+                            ),
+                          ),
+                        Expanded(
+                          child: Text(
+                            item.chapterTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w400,
+                              color:
+                                  item.pinned
+                                      ? const Color(0xFF64B5F6)
+                                      : Colors.black87,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    GlassActionButton(
-                      theme: theme,
-                      icon: Icons.check_box_outlined,
-                      label: '회차 선택',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          _selectionMode = true;
-                          _selected.clear();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('닫기', style: TextStyle(fontSize: 16)),
+                    const SizedBox(height: 3),
+                    Text(
+                      metaText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: subColor,
+                        height: 1.0,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-    );
-  }
-
-  Future<void> _addEpisode() async {
-    final title = await _openTitleEditor(context, initial: '');
-    if (title == null) return;
-    final t = title.trim();
-    if (t.isEmpty) return;
-
-    setState(() {
-      _episodes.add(Episode(title: t, updatedAt: DateTime.now()));
-    });
-    await _saveEpisodes();
-  }
-
-  Future<void> _editEpisode(int index) async {
-    if (index < 0 || index >= _episodes.length) return;
-    final cur = _episodes[index];
-
-    final title = await _openTitleEditor(context, initial: cur.title);
-    if (title == null) return;
-    final t = title.trim();
-    if (t.isEmpty) return;
-
-    setState(() {
-      _episodes[index] = Episode(title: t, updatedAt: DateTime.now());
-    });
-    await _saveEpisodes();
-  }
-
-  void _toggleSelect(int index) {
-    setState(() {
-      if (_selected.contains(index)) {
-        _selected.remove(index);
-      } else {
-        _selected.add(index);
-      }
-    });
-  }
-
-  void _exitSelectionMode() {
-    setState(() {
-      _selectionMode = false;
-      _selected.clear();
-    });
-  }
-
-  void _deleteSelected() {
-    if (_selected.isEmpty) return;
-
-    showCupertinoModalPopup(
-      context: context,
-      builder:
-          (_) => CupertinoActionSheet(
-            title: const Text('삭제 확인'),
-            message: const Text('선택된 회차를 삭제하시겠습니까?'),
-            actions: [
-              CupertinoActionSheetAction(
-                isDestructiveAction: true,
-                onPressed: () async {
-                  final sorted = _selected.toList()..sort((a, b) => b - a);
-                  setState(() {
-                    for (final i in sorted) {
-                      if (i >= 0 && i < _episodes.length) {
-                        _episodes.removeAt(i);
-                      }
-                    }
-                    _exitSelectionMode();
-                  });
-                  Navigator.pop(context);
-                  await _saveEpisodes();
-                },
-                child: const Text('삭제'),
+              const Icon(
+                Icons.chevron_right,
+                color: Color.fromARGB(255, 117, 148, 188),
               ),
             ],
-            cancelButton: CupertinoActionSheetAction(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
           ),
+        ),
+      ),
     );
+  }
+
+  Future<void> _openBookAndChapter(GenreEpisodeItem item) async {
+    final book = widget.genreBooks.firstWhere(
+      (b) => (b['documentId'] as String?) == item.bookId,
+      orElse: () => const <String, dynamic>{},
+    );
+    if (book.isEmpty) return;
+
+    final String docId = item.bookId;
+
+    await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => ChangeNotifierProvider(
+              create:
+                  (_) => WritingSettingsController(documentId: docId)..load(),
+              child: BookBuilderPage(
+                genre: widget.genre,
+                initialTitle: (book['title'] as String?) ?? '제목을 입력하세요',
+                initialDeltaJson:
+                    ((book['delta'] as List?)?.cast<Map<String, dynamic>>()) ??
+                    const [],
+                initialDrawingJson:
+                    ((book['drawings'] as List?)
+                        ?.cast<Map<String, dynamic>>()) ??
+                    const [],
+                pageIndex: 0,
+                initialPenName: (book['penName'] as String?) ?? '',
+                documentId: docId,
+                initialOpenChapterIndex: item.chapterIndex,
+              ),
+            ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _reload();
   }
 
   @override
   Widget build(BuildContext context) {
-    final titleText = _selectionMode ? '${_selected.length}개 선택됨' : 'episodes';
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(titleText),
+        title: const Text('episodes'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
-        leading:
-            _selectionMode
-                ? IconButton(
-                  icon: const Icon(Icons.close, color: Colors.black87),
-                  tooltip: '선택 취소',
-                  onPressed: _exitSelectionMode,
-                )
-                : IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new),
-                  tooltip: '뒤로가기',
-                  onPressed: () => Navigator.pop(context),
-                ),
-        actions: [
-          if (_selectionMode)
-            TextButton(
-              onPressed: _deleteSelected,
-              child: const Text(
-                'Delete',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-            )
-          else ...[
-            IconButton(
-              icon: const Icon(Icons.add, color: Colors.black87),
-              tooltip: '회차 추가',
-              onPressed: _addEpisode,
-            ),
-            IconButton(
-              icon: const Icon(Icons.more_vert),
-              tooltip: '더보기',
-              onPressed: () => _showMoreDialog(context),
-            ),
-          ],
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          tooltip: '뒤로가기',
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body:
-          _episodes.isEmpty
-              ? const Center(
-                child: Text(
-                  '저장된 회차가 없습니다.\n오른쪽 상단 + 버튼으로 회차를 추가하세요.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15),
-                ),
-              )
-              : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: _episodes.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (_, i) {
-                  final ep = _episodes[i];
-                  final selected = _selectionMode && _selected.contains(i);
-
-                  final tile = Material(
-                    color: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(
-                        color:
-                            selected
-                                ? const Color.fromARGB(255, 91, 179, 255)
-                                : const Color.fromARGB(221, 159, 188, 208),
-                        width: selected ? 1.7 : 0.5,
-                      ),
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        ep.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      subtitle: Text(
-                        ep.updatedAt.toLocal().toString(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black54,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                        color: Color.fromARGB(255, 117, 148, 188),
-                      ),
-                    ),
-                  );
-
-                  if (_selectionMode) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _toggleSelect(i),
-                      child: tile,
-                    );
-                  }
-
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    onTap: () => _editEpisode(i),
-                    child: tile,
-                  );
-                },
+          _items.isEmpty
+              ? const Center(child: Text('저장된 회차가 없습니다.'))
+              : Column(
+                children: [
+                  _bookToggleBar(),
+                  Expanded(
+                    child:
+                        _groupByBook
+                            ? _groupedListView()
+                            : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              itemCount: _items.length,
+                              separatorBuilder:
+                                  (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (_, i) => _episodeCard(_items[i]),
+                            ),
+                  ),
+                ],
               ),
     );
   }
-}
-
-Future<String?> _openTitleEditor(
-  BuildContext context, {
-  required String initial,
-}) {
-  final controller = TextEditingController(text: initial);
-  return showDialog<String>(
-    context: context,
-    builder:
-        (_) => AlertDialog(
-          title: const Text('회차 제목'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: '예: 1화 / 프롤로그 / 12화'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('저장'),
-            ),
-          ],
-        ),
-  );
 }

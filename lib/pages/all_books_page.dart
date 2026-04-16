@@ -5,7 +5,6 @@ import 'book_builder_page.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
@@ -47,6 +46,7 @@ class _AllBooksPageState extends State<AllBooksPage> {
   void initState() {
     super.initState();
     _ebooks = widget.ebooks.map((e) => Map<String, dynamic>.from(e)).toList();
+    _sortBooksByLatestEdit();
     _initReduceTransparency();
 
     if (widget.startInSelectionMode) {
@@ -82,20 +82,20 @@ class _AllBooksPageState extends State<AllBooksPage> {
     widget.onChanged(next);
   }
 
-  void _reorder(int oldIndex, int newIndex) {
-    if (_selectionMode) return;
-    if (oldIndex == newIndex ||
-        oldIndex < 0 ||
-        newIndex < 0 ||
-        oldIndex >= _ebooks.length ||
-        newIndex >= _ebooks.length) {
-      return;
+  DateTime _parseUpdatedAt(Map<String, dynamic> book) {
+    final raw = book['updatedAt'];
+    if (raw is String) {
+      return DateTime.tryParse(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
     }
-    setState(() {
-      final item = _ebooks.removeAt(oldIndex);
-      _ebooks.insert(newIndex, item);
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  void _sortBooksByLatestEdit() {
+    _ebooks.sort((a, b) {
+      final aTime = _parseUpdatedAt(a);
+      final bTime = _parseUpdatedAt(b);
+      return bTime.compareTo(aTime); // 최신 편집이 앞
     });
-    _emitChange();
   }
 
   void _enterSelectionMode() {
@@ -365,6 +365,8 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   result['updatedAt'] ?? DateTime.now().toIso8601String();
 
               book['coverPath'] = result['coverPath'] as String?;
+
+              _sortBooksByLatestEdit();
             });
 
             _emitChange();
@@ -388,31 +390,17 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   .floor()
                   .clamp(2, 6);
 
-              return ReorderableGridView.builder(
+              return GridView.builder(
+                physics: const BouncingScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: 14,
                   crossAxisSpacing: 14,
                   childAspectRatio: _cardWidth / _cardTotalHeight,
                 ),
-                physics: const BouncingScrollPhysics(),
-                dragStartDelay: const Duration(milliseconds: 150),
-                dragEnabled: !_selectionMode,
-                dragWidgetBuilder:
-                    (index, child) => Transform.scale(
-                      scale: 1.03,
-                      child: Material(
-                        type: MaterialType.transparency,
-                        child: child,
-                      ),
-                    ),
-                onReorder: (oldIndex, newIndex) => _reorder(oldIndex, newIndex),
                 itemCount: _ebooks.length,
                 itemBuilder: (_, i) {
-                  return Container(
-                    key: ValueKey('ebook_$i'),
-                    child: _buildCardItem(index: i),
-                  );
+                  return _buildCardItem(index: i);
                 },
               );
             },

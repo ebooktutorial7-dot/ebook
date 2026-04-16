@@ -1,9 +1,11 @@
 // genre.dart
 
-enum Genre { webNovel, novel, poem, freeForm, selfHelp, science, pictureBook }
+enum Genre { main, webNovel, novel, poem, freeForm, selfHelp, science }
 
 Genre genreFromLabel(String label) {
   switch (label) {
+    case 'main':
+      return Genre.main;
     case '웹 소설':
       return Genre.webNovel;
     case '소설':
@@ -16,8 +18,6 @@ Genre genreFromLabel(String label) {
       return Genre.selfHelp;
     case '과학 책':
       return Genre.science;
-    case '그림 책':
-      return Genre.pictureBook;
     default:
       return Genre.freeForm;
   }
@@ -25,6 +25,8 @@ Genre genreFromLabel(String label) {
 
 String genreLabel(Genre g) {
   switch (g) {
+    case Genre.main:
+      return 'Main';
     case Genre.webNovel:
       return '웹 소설';
     case Genre.novel:
@@ -37,7 +39,5 @@ String genreLabel(Genre g) {
       return '자기 계발';
     case Genre.science:
       return '과학 책';
-    case Genre.pictureBook:
-      return '그림 책';
   }
 }

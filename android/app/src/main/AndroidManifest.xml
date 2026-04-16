@@ -8,6 +8,9 @@
     <!-- 카메라 사용 -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- 음성 인식용 마이크 권한 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Android 13 (API 33)+ : 이미지 읽기 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
@@ -31,7 +34,6 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Flutter UI 초기 표시용 테마 -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
@@ -42,13 +44,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Flutter 엔진용 메타데이터 (삭제 금지) -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
-    <!-- 텍스트 처리 가능한 앱 쿼리 (기본 Flutter 설정) -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />

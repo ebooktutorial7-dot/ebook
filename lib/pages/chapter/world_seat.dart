@@ -1164,7 +1164,7 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
 
     return SafeArea(
       top: false,
-      child: SingleChildScrollView(
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
         child: Column(
           children: [
@@ -1241,19 +1241,23 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
               ],
             ),
             const SizedBox(height: 8),
-            _memos.isEmpty
-                ? const Padding(
-                  padding: EdgeInsets.only(top: 12, bottom: 12),
-                  child: Text(
-                    '자유 메모를 추가해 보세요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color.fromARGB(221, 83, 129, 159),
-                      fontSize: 13,
-                    ),
-                  ),
-                )
-                : _buildMemoSectionsByIndex(indexes),
+            Expanded(
+              child:
+                  _memos.isEmpty
+                      ? const Center(
+                        child: Text(
+                          '자유 메모를 추가해 보세요.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color.fromARGB(221, 83, 129, 159),
+                            fontSize: 13,
+                          ),
+                        ),
+                      )
+                      : SingleChildScrollView(
+                        child: _buildMemoSectionsByIndex(indexes),
+                      ),
+            ),
           ],
         ),
       ),

@@ -5,6 +5,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
 
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -18,7 +22,7 @@ import 'package:ebook_tutorial_app/pages/chapter/world_seat.dart';
 import 'package:ebook_tutorial_app/pages/chapter/world_prefs.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:ebook_tutorial_app/quill/custom_leading.dart';
-
+import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/widgets/mini_flat_toolbar.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
@@ -122,7 +126,8 @@ class ChapterWritePage extends StatefulWidget {
   final List<Map<String, dynamic>> initialDeltaJson;
   final bool enableGlass;
   final String? persistentKey;
-
+  final Genre genre;
+  final DateTime writingDate;
   const ChapterWritePage({
     super.key,
     required this.documentId,
@@ -130,6 +135,8 @@ class ChapterWritePage extends StatefulWidget {
     required this.initialDeltaJson,
     required this.enableGlass,
     this.persistentKey,
+    required this.genre,
+    required this.writingDate,
   });
 
   @override
@@ -143,8 +150,14 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   final _focusNode = FocusNode();
   final _scrollCtrl = ScrollController();
 
-  bool _reduceTransparencyFlag = false;
+  final stt.SpeechToText _speech = stt.SpeechToText();
 
+  bool _speechReady = false;
+  bool _isListening = false;
+  String? _speechLocaleId;
+
+  bool _reduceTransparencyFlag = false;
+  int _initialCharsAtOpen = 0;
   int _pageCount = 1;
   int _currentPage = 1;
   int _pngRevision = 0;
@@ -154,14 +167,152 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   double _pngLikeContentHeightPx = 1000;
 
   double? _restoredOffset;
-  bool _restoreTried = false;
-  Timer? _saveDebounce;
+  int? _restoredSelection;
 
-  String get _baseKey =>
-      widget.persistentKey ?? 'title_${widget.chapterTitle.hashCode}';
+  bool _restoreTried = false;
+  bool _isRestoringDraft = false;
+
+  Timer? _saveDebounce;
+  Timer? _selectionSaveDebounce;
+  Timer? _contentSaveDebounce;
+
+  String? _lastDraftFingerprint;
+
+  String get _baseKey => widget.persistentKey ?? 'chapter_${widget.documentId}';
   String get _prefsKeyScroll => 'chapter_write_scroll_$_baseKey';
   String get _prefsKeySelection => 'chapter_write_selection_$_baseKey';
   String get _prefsKeyFocus => 'chapter_write_focus_$_baseKey';
+  String get _prefsKeyDraftTitle => 'chapter_write_draft_title_$_baseKey';
+  String get _prefsKeyDraftDelta => 'chapter_write_draft_delta_$_baseKey';
+
+  List<Map<String, dynamic>> _currentNormalizedDelta() {
+    final delta = _controller.document.toDelta().toJson();
+    final safeDeltaJson = List<Map<String, dynamic>>.from(
+      delta.map((e) => Map<String, dynamic>.from(e as Map)),
+    );
+    return _splitEditorBackgroundToBgAlpha(safeDeltaJson);
+  }
+
+  String _buildDraftFingerprint(String title, String deltaJson) {
+    return '$title\n$deltaJson';
+  }
+
+  void _onTitleChanged() {
+    if (_isRestoringDraft) return;
+    _scheduleAutoSave();
+  }
+
+  void _scheduleAutoSave() {
+    if (_isRestoringDraft) return;
+
+    _contentSaveDebounce?.cancel();
+    _contentSaveDebounce = Timer(const Duration(seconds: 1), () {
+      unawaited(_persistDraft());
+    });
+  }
+
+  Future<void> _persistDraft() async {
+    if (_isRestoringDraft) return;
+
+    final title = _titleCtrl.text.trim();
+    final normalized = _currentNormalizedDelta();
+    final deltaJson = jsonEncode(normalized);
+    final fingerprint = _buildDraftFingerprint(title, deltaJson);
+
+    if (fingerprint == _lastDraftFingerprint) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKeyDraftTitle, title);
+    await prefs.setString(_prefsKeyDraftDelta, deltaJson);
+
+    _lastDraftFingerprint = fingerprint;
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKeyDraftTitle);
+    await prefs.remove(_prefsKeyDraftDelta);
+    _lastDraftFingerprint = null;
+  }
+
+  Future<void> _restoreDraftAndPosition() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    _restoredOffset = prefs.getDouble(_prefsKeyScroll);
+    _restoredSelection = prefs.getInt(_prefsKeySelection);
+
+    final savedTitle = prefs.getString(_prefsKeyDraftTitle);
+    final savedDeltaString = prefs.getString(_prefsKeyDraftDelta);
+
+    if ((savedTitle == null || savedTitle.isEmpty) &&
+        (savedDeltaString == null || savedDeltaString.isEmpty)) {
+      return;
+    }
+
+    try {
+      _isRestoringDraft = true;
+
+      if (savedTitle != null) {
+        _titleCtrl.text = savedTitle;
+        _titleCtrl.selection = TextSelection.collapsed(
+          offset: _titleCtrl.text.length,
+        );
+      }
+
+      if (savedDeltaString != null && savedDeltaString.isNotEmpty) {
+        final decoded = jsonDecode(savedDeltaString);
+        if (decoded is List) {
+          final savedDelta = decoded
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(growable: true);
+
+          final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(savedDelta);
+          _controller.document = quill.Document.fromJson(editorDelta);
+        }
+      }
+
+      final max = _controller.document.toPlainText().length;
+      final sel = (_restoredSelection ?? 0).clamp(0, max);
+
+      _controller.updateSelection(
+        TextSelection.collapsed(offset: sel),
+        quill.ChangeSource.local,
+      );
+
+      final currentTitle = _titleCtrl.text.trim();
+      final currentDeltaJson = jsonEncode(_currentNormalizedDelta());
+      _lastDraftFingerprint = _buildDraftFingerprint(
+        currentTitle,
+        currentDeltaJson,
+      );
+    } catch (_) {
+    } finally {
+      _isRestoringDraft = false;
+
+      if (mounted) {
+        setState(() {});
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _recomputePaginationFromStoredHeight();
+          _attemptRestoreScroll();
+        });
+      }
+    }
+  }
+
+  String _keyOf(DateTime d) {
+    final x = DateTime(d.year, d.month, d.day);
+    final y = x.year.toString().padLeft(4, '0');
+    final m = x.month.toString().padLeft(2, '0');
+    final day = x.day.toString().padLeft(2, '0');
+    return '$y$m$day';
+  }
+
+  String _prefsKeyForDay(String genreKey, String yyyymmdd) =>
+      'calendar_day_${genreKey}_$yyyymmdd';
+
+  String _prefsMonthIndexKey(String genreKey, int year, int month) =>
+      'calendar_month_index_${genreKey}_${year.toString().padLeft(4, '0')}${month.toString().padLeft(2, '0')}';
 
   String? _resolveFontFamily(String key) {
     switch (key) {
@@ -213,6 +364,203 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     }
   }
 
+  void _insertTextAtCursor(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    final selection = _controller.selection;
+    final base = selection.baseOffset < 0 ? 0 : selection.baseOffset;
+    final extent = selection.extentOffset < 0 ? base : selection.extentOffset;
+
+    final start = math.min(base, extent);
+    final length = (extent - base).abs();
+
+    final insertText = selection.isCollapsed ? '$trimmed ' : trimmed;
+
+    _controller.replaceText(
+      start,
+      length,
+      insertText,
+      TextSelection.collapsed(offset: start + insertText.length),
+    );
+
+    _focusNode.requestFocus();
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return;
+
+    setState(() {});
+
+    if (result.finalResult) {
+      final text = result.recognizedWords.trim();
+      if (text.isNotEmpty) {
+        _insertTextAtCursor(text);
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _startListening() async {
+    if (!_speechReady) {
+      await _initSpeech();
+      if (!_speechReady) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('음성 인식을 사용할 수 없습니다.')));
+        return;
+      }
+    }
+
+    _focusNode.requestFocus();
+
+    await _speech.listen(
+      onResult: _onSpeechResult,
+      listenOptions: stt.SpeechListenOptions(
+        localeId: _speechLocaleId ?? 'ko_KR',
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+        cancelOnError: true,
+        listenMode: stt.ListenMode.dictation,
+        autoPunctuation: true,
+        enableHapticFeedback: true,
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isListening = true;
+    });
+  }
+
+  Future<void> _stopListening() async {
+    await _speech.stop();
+    if (!mounted) return;
+    setState(() {
+      _isListening = false;
+    });
+  }
+
+  Future<void> _toggleSpeechInput() async {
+    if (_isListening) {
+      await _stopListening();
+    } else {
+      await _startListening();
+    }
+  }
+
+  void _showAppSnackBar({
+    required String message,
+    required IconData icon,
+    required Color iconBgColor,
+    required Color cardColor,
+    String? actionLabel,
+    VoidCallback? onActionTap,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          padding: EdgeInsets.zero,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          duration: const Duration(seconds: 2),
+          content: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x22000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+              border: Border.all(color: const Color(0x22FFFFFF), width: 0.7),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 16, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                if (actionLabel != null && onActionTap != null) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      messenger.hideCurrentSnackBar();
+                      onActionTap();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        actionLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+  }
+
+  void _showErrorSnackBar(
+    String message, {
+    String? actionLabel,
+    VoidCallback? onActionTap,
+  }) {
+    _showAppSnackBar(
+      message: message,
+      icon: Icons.error_outline,
+      iconBgColor: const Color(0xFFFF5A5F),
+      cardColor: const Color(0xFF2C2323),
+      actionLabel: actionLabel,
+      onActionTap: onActionTap,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -229,16 +577,21 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       selection: const TextSelection.collapsed(offset: 0),
     );
 
+    _initialCharsAtOpen = _getCharCount();
     _titleCtrl.text = widget.chapterTitle;
+    _titleCtrl.addListener(_onTitleChanged);
 
     _initReduceTransparency();
+    _initSpeech();
 
     _controller.changes.listen((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recomputePaginationFromStoredHeight();
       });
+
       if (mounted) setState(() {});
       _saveSelectionDebounced();
+      _scheduleAutoSave();
 
       final sel = _controller.selection;
       if (!sel.isCollapsed) {
@@ -250,7 +603,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _scrollCtrl.addListener(_handleScroll);
     _focusNode.addListener(_onFocusChanged);
 
-    _loadSavedPosition();
+    unawaited(_restoreDraftAndPosition());
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _recomputePaginationFromStoredHeight();
       _attemptRestoreScroll();
@@ -335,6 +689,56 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   Timer? _previewThrottle;
 
+  Future<void> _initSpeech() async {
+    try {
+      final available = await _speech.initialize(
+        onStatus: _onSpeechStatus,
+        onError: _onSpeechError,
+        debugLogging: false,
+      );
+
+      String? localeId;
+      if (available) {
+        final systemLocale = await _speech.systemLocale();
+        localeId = systemLocale?.localeId;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _speechReady = available;
+        _speechLocaleId = localeId ?? 'ko_KR';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _speechReady = false;
+        _speechLocaleId = 'ko_KR';
+      });
+    }
+  }
+
+  void _onSpeechStatus(String status) {
+    if (!mounted) return;
+
+    setState(() {
+      _isListening = status == 'listening';
+    });
+  }
+
+  void _onSpeechError(SpeechRecognitionError error) {
+    if (!mounted) return;
+
+    setState(() {
+      _isListening = false;
+    });
+
+    _showErrorSnackBar(
+      '음성 인식 오류: ${error.errorMsg}',
+      actionLabel: '재시도',
+      onActionTap: _toggleSpeechInput,
+    );
+  }
+
   void _jumpToPagePreview(int page) {
     if (!_scrollCtrl.hasClients) return;
 
@@ -370,12 +774,18 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onControllerChanged);
     _focusNode.removeListener(_onFocusChanged);
+    _titleCtrl.removeListener(_onTitleChanged);
 
     _saveDebounce?.cancel();
+    _selectionSaveDebounce?.cancel();
+    _contentSaveDebounce?.cancel();
+    _previewThrottle?.cancel();
 
     _persistScroll();
     _persistSelection();
     _persistFocus();
+    unawaited(_persistDraft());
+    unawaited(_speech.stop());
 
     HardwareKeyboard.instance.removeHandler(_handleHardwareEnterToExitList);
 
@@ -396,6 +806,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _persistScroll();
       _persistSelection();
       _persistFocus();
+      unawaited(_persistDraft());
+      unawaited(_saveCalendarWritingLog());
     }
   }
 
@@ -403,20 +815,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final flag = await PlatformAccessibility.getReduceTransparencyFlag();
     if (!mounted) return;
     setState(() => _reduceTransparencyFlag = flag);
-  }
-
-  Future<void> _loadSavedPosition() async {
-    final prefs = await SharedPreferences.getInstance();
-    _restoredOffset = prefs.getDouble(_prefsKeyScroll);
-    final sel = prefs.getInt(_prefsKeySelection);
-    if (sel != null) {
-      final max = _controller.document.toPlainText().length;
-      final clamped = sel.clamp(0, max);
-      _controller.updateSelection(
-        TextSelection.collapsed(offset: clamped),
-        quill.ChangeSource.local,
-      );
-    }
   }
 
   void _attemptRestoreScroll() {
@@ -449,7 +847,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   void _saveSelectionDebounced() {
-    Future<void>.delayed(const Duration(milliseconds: 200), _persistSelection);
+    _selectionSaveDebounce?.cancel();
+    _selectionSaveDebounce = Timer(
+      const Duration(milliseconds: 200),
+      _persistSelection,
+    );
   }
 
   Future<void> _persistSelection() async {
@@ -462,14 +864,17 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     await prefs.setBool(_prefsKeyFocus, _isFocusWriting);
   }
 
-  void _save() {
-    final delta = _controller.document.toDelta().toJson();
-    final safeDeltaJson = List<Map<String, dynamic>>.from(
-      delta.map((e) => Map<String, dynamic>.from(e as Map)),
-    );
-    final normalized = _splitEditorBackgroundToBgAlpha(safeDeltaJson);
+  Future<void> _save() async {
+    _contentSaveDebounce?.cancel();
+
+    final normalized = _currentNormalizedDelta();
+
+    await _saveCalendarWritingLog();
+    await _clearDraft();
+
     final result = {'title': _titleCtrl.text.trim(), 'delta': normalized};
 
+    if (!mounted) return;
     Navigator.of(context).pop(result);
   }
 
@@ -754,6 +1159,120 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   int _getCharCount() {
     final plain = _controller.document.toPlainText();
     return plain.replaceAll(RegExp(r'\s+'), '').length;
+  }
+
+  Future<void> _saveCalendarWritingLog() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final currentChars = _getCharCount();
+
+    final genreKey = widget.genre.name;
+    final day = DateTime(
+      widget.writingDate.year,
+      widget.writingDate.month,
+      widget.writingDate.day,
+    );
+
+    final dayKey = _keyOf(day);
+    final dayPrefsKey = _prefsKeyForDay(genreKey, dayKey);
+    final monthIndexKey = _prefsMonthIndexKey(genreKey, day.year, day.month);
+
+    final chapterSessionId = 'chapter:${widget.documentId}:$_baseKey:$dayKey';
+
+    // 오늘 이 챕터를 처음 열었을 때 글자 수를 기준점으로 저장
+    final dayBaseKey = 'chapter_day_base_chars_${_baseKey}_$dayKey';
+
+    int dayBaseChars;
+    if (prefs.containsKey(dayBaseKey)) {
+      dayBaseChars = prefs.getInt(dayBaseKey) ?? _initialCharsAtOpen;
+    } else {
+      dayBaseChars = _initialCharsAtOpen;
+      await prefs.setInt(dayBaseKey, dayBaseChars);
+    }
+
+    // 오늘 순증감
+    final todayNet = currentChars - dayBaseChars;
+    final safeTodayNet = todayNet < 0 ? 0 : todayNet;
+
+    _CalendarDayLog log = _CalendarDayLog.empty();
+
+    final raw = prefs.getString(dayPrefsKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        log = _CalendarDayLog.fromMap(
+          Map<String, dynamic>.from(jsonDecode(raw)),
+        );
+      } catch (_) {}
+    }
+
+    final remainingSessions = <_CalendarWritingSession>[];
+
+    for (final s in log.sessions) {
+      final memo = s.memo.trim();
+
+      // 현재 챕터의 오늘 기록은 무조건 제거 후 새 값으로 덮어씀
+      if (memo == chapterSessionId) continue;
+
+      // 예전 잘못된 레거시 세션들도 같이 제거
+      final legacyChapterPrefix = 'chapter:${widget.documentId}:$_baseKey';
+      final legacyTitleMemo = widget.chapterTitle.trim();
+
+      final isLegacySameChapter =
+          memo == legacyChapterPrefix ||
+          memo.startsWith('$legacyChapterPrefix:');
+
+      final isLegacyTitleSession =
+          legacyTitleMemo.isNotEmpty && memo == legacyTitleMemo;
+
+      if (isLegacySameChapter || isLegacyTitleSession) continue;
+
+      remainingSessions.add(s);
+    }
+
+    final updatedSessions = <_CalendarWritingSession>[
+      ...remainingSessions,
+      if (safeTodayNet > 0)
+        _CalendarWritingSession(
+          atIso: DateTime.now().toIso8601String(),
+          chars: safeTodayNet,
+          memo: chapterSessionId,
+        ),
+    ];
+
+    final updated = log.copyWith(sessions: updatedSessions);
+
+    final existing = prefs.getString(monthIndexKey);
+    final Set<String> monthDays = {};
+
+    if (existing != null && existing.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existing);
+        if (decoded is List) {
+          for (final e in decoded) {
+            if (e is String && e.length == 8) {
+              monthDays.add(e);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (updatedSessions.isEmpty &&
+        updated.goalChars <= 0 &&
+        updated.note.trim().isEmpty &&
+        updated.tasks.isEmpty &&
+        updated.releases.isEmpty) {
+      monthDays.remove(dayKey);
+      await prefs.remove(dayPrefsKey);
+    } else {
+      monthDays.add(dayKey);
+      await prefs.setString(dayPrefsKey, jsonEncode(updated.toMap()));
+    }
+
+    await prefs.setString(
+      monthIndexKey,
+      jsonEncode(monthDays.toList()..sort()),
+    );
   }
 
   bool _handleHardwareEnterToExitList(KeyEvent event) {
@@ -1100,7 +1619,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 56 : 0) +
+                                        (_chromeVisible ? 45 : 0) +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
                                         (_chromeVisible ? 64 : 0) +
@@ -1206,7 +1725,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 56 : 0) +
+                                        (_chromeVisible ? 45 : 0) +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
                                         (_chromeVisible ? 64 : 0) +
@@ -1289,7 +1808,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                 child: Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     settings.horizontalMargin,
-                                    (_chromeVisible ? 56 : 0) +
+                                    (_chromeVisible ? 45 : 0) +
                                         _a4VerticalMargin,
                                     settings.horizontalMargin,
                                     (_chromeVisible ? 64 : 0) +
@@ -1384,6 +1903,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                               });
                               _recomputePaginationFromStoredHeight();
                             },
+                            onMicTap: _toggleSpeechInput,
+                            isListening: _isListening,
                           ),
                         ),
                       ),
@@ -2379,6 +2900,103 @@ class _ShootingStarLayerState extends State<_ShootingStarLayer>
   Widget build(BuildContext context) {
     return CustomPaint(
       painter: _ShootingStarPainter(animation: _controller, star: _currentStar),
+    );
+  }
+}
+
+class _CalendarDayLog {
+  final int goalChars;
+  final String note;
+  final List<_CalendarWritingSession> sessions;
+  final List<dynamic> tasks;
+  final List<dynamic> releases;
+
+  const _CalendarDayLog({
+    required this.goalChars,
+    required this.note,
+    required this.sessions,
+    required this.tasks,
+    required this.releases,
+  });
+
+  factory _CalendarDayLog.empty() => const _CalendarDayLog(
+    goalChars: 0,
+    note: '',
+    sessions: [],
+    tasks: [],
+    releases: [],
+  );
+
+  _CalendarDayLog copyWith({
+    int? goalChars,
+    String? note,
+    List<_CalendarWritingSession>? sessions,
+    List<dynamic>? tasks,
+    List<dynamic>? releases,
+  }) {
+    return _CalendarDayLog(
+      goalChars: goalChars ?? this.goalChars,
+      note: note ?? this.note,
+      sessions: sessions ?? this.sessions,
+      tasks: tasks ?? this.tasks,
+      releases: releases ?? this.releases,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'goalChars': goalChars,
+    'note': note,
+    'sessions': sessions.map((e) => e.toMap()).toList(),
+    'tasks': tasks,
+    'releases': releases,
+  };
+
+  factory _CalendarDayLog.fromMap(Map<String, dynamic> m) {
+    final sessionsRaw = m['sessions'];
+    final sessions = <_CalendarWritingSession>[];
+
+    if (sessionsRaw is List) {
+      for (final e in sessionsRaw) {
+        if (e is Map) {
+          sessions.add(
+            _CalendarWritingSession.fromMap(Map<String, dynamic>.from(e)),
+          );
+        }
+      }
+    }
+
+    return _CalendarDayLog(
+      goalChars: (m['goalChars'] as num?)?.toInt() ?? 0,
+      note: (m['note'] as String?) ?? '',
+      sessions: sessions,
+      tasks: (m['tasks'] as List?) ?? const [],
+      releases: (m['releases'] as List?) ?? const [],
+    );
+  }
+}
+
+class _CalendarWritingSession {
+  final String atIso;
+  final int chars;
+  final String memo;
+
+  const _CalendarWritingSession({
+    required this.atIso,
+    required this.chars,
+    required this.memo,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'atIso': atIso,
+    'chars': chars,
+    'memo': memo,
+  };
+
+  factory _CalendarWritingSession.fromMap(Map<String, dynamic> m) {
+    return _CalendarWritingSession(
+      atIso: (m['atIso'] as String?) ?? DateTime.now().toIso8601String(),
+      chars: (m['chars'] as num?)?.toInt() ?? 0,
+      memo: (m['memo'] as String?) ?? '',
     );
   }
 }
