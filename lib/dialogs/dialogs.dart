@@ -7,119 +7,173 @@ import '../widgets/glass/glass_action_button.dart';
 
 typedef GenreTap = Future<void> Function(String);
 
+ThemeData fixedLightTheme() {
+  return ThemeData(
+    brightness: Brightness.light,
+    useMaterial3: true,
+
+    scaffoldBackgroundColor: Colors.white,
+
+    colorScheme: const ColorScheme.light(
+      primary: Color(0xFF1F3A56),
+      surface: Colors.white,
+      onSurface: Color(0xFF111111),
+    ),
+
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.white,
+      foregroundColor: Color(0xFF111111),
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+    ),
+
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF1F3A56),
+        overlayColor: Colors.transparent,
+        splashFactory: NoSplash.splashFactory,
+      ),
+    ),
+
+    elevatedButtonTheme: const ElevatedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStatePropertyAll(
+          Color.fromARGB(255, 201, 220, 234),
+        ),
+        foregroundColor: WidgetStatePropertyAll(Color(0xFF1F3A56)),
+        elevation: WidgetStatePropertyAll(0.0),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        overlayColor: WidgetStatePropertyAll(Colors.transparent),
+        splashFactory: NoSplash.splashFactory,
+      ),
+    ),
+  );
+}
+
 Future<void> showGenreDialog(
   BuildContext context, {
   required GlassTheme theme,
   required GenreTap onTap,
 }) {
-  final buttonTheme = theme.copyWith(
-    sweepOpacity: 0.0,
-    highlightOpacity: 0.0,
-    innerEdgeOpacity: 0.02,
-  );
-
   const genres = ['웹 소설', '소설', '시', '자유 서식', '자기 계발', '과학 책'];
 
   return showDialog(
     context: context,
-    barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
+    barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.21),
     builder:
-        (_) => Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 24,
-          ),
-          child: GlassContainer(
-            theme: buttonTheme,
-            borderRadius: 20,
-            padding: const EdgeInsets.only(
-              top: 16,
-              left: 12,
-              right: 12,
-              bottom: 8,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * .6,
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    '장르 선택',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                    ),
+        (_) => Theme(
+          data: fixedLightTheme(),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 24,
+                ),
+                child: Container(
+                  width: 280,
+                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE6ECF3)),
                   ),
-                  const SizedBox(height: 16),
-                  Flexible(
-                    child: GridView.count(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 3.1,
-                      children:
-                          genres.map((g) {
-                            final baseStyle = ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor:
-                                  theme.reduceTransparency
-                                      ? Colors.blueGrey.shade50
-                                      : Colors.white.withValues(
-                                        alpha: theme.surfaceOpacity,
-                                      ),
-                              foregroundColor: Colors.black87,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: Colors.white.withValues(
-                                    alpha: theme.borderOpacity,
-                                  ),
-                                  width: 1,
-                                ),
-                              ),
-                            );
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '장르 선택',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111111),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
 
-                            return ElevatedButton(
-                              style: baseStyle.merge(
-                                ButtonStyle(
-                                  splashFactory: NoSplash.splashFactory,
-                                  overlayColor: WidgetStateProperty.all(
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 2.6,
+                        children:
+                            genres.map((g) {
+                              return ElevatedButton(
+                                style: ButtonStyle(
+                                  backgroundColor: const WidgetStatePropertyAll(
+                                    Color.fromARGB(214, 239, 251, 255),
+                                  ),
+                                  foregroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFF1F3A56),
+                                  ),
+                                  elevation: const WidgetStatePropertyAll(0.0),
+                                  shadowColor: const WidgetStatePropertyAll(
                                     Colors.transparent,
                                   ),
+                                  surfaceTintColor:
+                                      const WidgetStatePropertyAll(
+                                        Colors.transparent,
+                                      ),
+                                  overlayColor: const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                  splashFactory: NoSplash.splashFactory,
+                                  shape: WidgetStatePropertyAll(
+                                    RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                      side: const BorderSide(
+                                        color: Color(0xFFD6E3F0),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                  padding: const WidgetStatePropertyAll(
+                                    EdgeInsets.symmetric(vertical: 10),
+                                  ),
                                 ),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context);
-                                onTap(g);
-                              },
-                              child: Text(
-                                g,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onTap(g);
+                                },
+                                child: Text(
+                                  g,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            );
-                          }).toList(),
-                    ),
+                              );
+                            }).toList(),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          overlayColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
+                        ),
+                        child: const Text(
+                          '닫기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F3A56),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ButtonStyle(
-                      splashFactory: NoSplash.splashFactory,
-                      overlayColor: WidgetStateProperty.all(Colors.transparent),
-                    ),
-                    child: Text(
-                      '닫기',
-                      style: TextStyle(fontSize: 16, color: theme.accentColor),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

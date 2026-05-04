@@ -233,6 +233,16 @@ class _PdfPopupItem extends StatelessWidget {
   }
 }
 
+class _PreviewPageTarget {
+  final int chapterIndex;
+  final int localPage;
+
+  const _PreviewPageTarget({
+    required this.chapterIndex,
+    required this.localPage,
+  });
+}
+
 class _BookBuilderPageState extends State<BookBuilderPage>
     with SingleTickerProviderStateMixin {
   late final TextEditingController _titleCtrl;
@@ -263,6 +273,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   late final TextEditingController _summaryCtrl;
   late final TextEditingController _keywordInputCtrl;
   final List<String> _keywords = [];
+  final Map<int, _PreviewPageTarget> _previewPageTargets = {};
 
   late final TextEditingController _workTypeCtrl;
   late final TextEditingController _categoryCtrl;
@@ -427,14 +438,32 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       final engine = CanvasDocEngine(docSettings);
 
       final allPlans = <CanvasPagePlan>[];
-      for (final chunk in chunks) {
+      final pageTargets = <int, _PreviewPageTarget>{};
+
+      int globalPage = 1;
+
+      for (int chapterPos = 0; chapterPos < chunks.length; chapterPos++) {
         if (epoch != _paginateEpoch) return;
+
+        final chunk = chunks[chapterPos];
         final chunkJson = (chunk.toJson() as List)
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList(growable: true);
 
         final plans = await engine.paginateDelta(chunkJson);
-        allPlans.addAll(plans);
+
+        for (int localPage = 0; localPage < plans.length; localPage++) {
+          allPlans.add(plans[localPage]);
+
+          if (chapterPos < _chapters.length) {
+            pageTargets[globalPage] = _PreviewPageTarget(
+              chapterIndex: _chapters[chapterPos].index,
+              localPage: localPage + 1,
+            );
+          }
+
+          globalPage++;
+        }
       }
 
       if (!mounted || epoch != _paginateEpoch) return;
@@ -444,6 +473,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             allPlans.isEmpty ? [CanvasPagePlan(commands: [])] : allPlans;
         _pageCount = _pagePlans.length.clamp(1, 1 << 30);
         _currentIndex = _currentIndex.clamp(0, _pageCount - 1);
+
+        _previewPageTargets
+          ..clear()
+          ..addAll(pageTargets);
       });
     } finally {
       if (mounted && epoch == _paginateEpoch) _paginating = false;
@@ -574,6 +607,19 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     final img = await picture.toImage(outW, outH);
     picture.dispose();
     return img;
+  }
+
+  Future<void> _openEditorFromPreviewPage(int globalPage) async {
+    final target = _previewPageTargets[globalPage];
+    if (target == null) return;
+
+    final found = _chapters.indexWhere((c) => c.index == target.chapterIndex);
+    if (found < 0) return;
+
+    await _openChapterEditor(
+      _chapters[found],
+      initialOpenPage: target.localPage,
+    );
   }
 
   String _buildPaginationSignature(WritingSettings s) {
@@ -1410,7 +1456,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _persistChapters();
   }
 
-  Future<void> _openChapterEditor(ChapterItem c) async {
+  Future<void> _openChapterEditor(ChapterItem c, {int? initialOpenPage}) async {
     final stableKey = 'doc_${widget.documentId ?? 'local'}_chapter_${c.index}';
     final settingsController = context.read<WritingSettingsController>();
     final result = await Navigator.push<Map<String, dynamic>>(
@@ -1427,6 +1473,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 persistentKey: stableKey,
                 genre: widget.genre,
                 writingDate: DateTime.now(),
+                initialOpenPage: initialOpenPage,
               ),
             ),
       ),
@@ -3044,7 +3091,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                       itemBuilder: (context, index) {
                         return Align(
                           alignment: Alignment.topCenter,
-                          child: _buildContentCard(index, settings: settings),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () async {
+                              final globalPage = index + 1;
+                              await _openEditorFromPreviewPage(globalPage);
+                            },
+                            child: _buildContentCard(index, settings: settings),
+                          ),
                         );
                       },
                     ),
@@ -3062,7 +3116,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                         padding: const EdgeInsets.only(bottom: 14),
                         child: Align(
                           alignment: Alignment.topCenter,
-                          child: _buildContentCard(index, settings: settings),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () async {
+                              final globalPage = index + 1;
+                              await _openEditorFromPreviewPage(globalPage);
+                            },
+                            child: _buildContentCard(index, settings: settings),
+                          ),
                         ),
                       );
                     },

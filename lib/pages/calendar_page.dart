@@ -1,20 +1,33 @@
 // calendar_page.dart
 
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:ebook_tutorial_app/models/genre.dart';
 
 final Color kDialogBarrierColor = const Color(
   0xFF0F2238,
 ).withValues(alpha: 0.13);
 
+const kRepeatOnColor = Color(0xFFFF75A3);
+const kRepeatOffColor = Color(0xFF34608F);
+
+final WidgetStateProperty<Color?> kTransparentOverlay = WidgetStateProperty.all(
+  Colors.transparent,
+);
+
+final ButtonStyle kNoShadowIconButtonStyle = ButtonStyle(
+  overlayColor: kTransparentOverlay,
+  splashFactory: NoSplash.splashFactory,
+  shadowColor: kTransparentOverlay,
+  surfaceTintColor: kTransparentOverlay,
+  elevation: WidgetStateProperty.all(0),
+);
+
 class CalendarPage extends StatefulWidget {
-  final Genre genre;
   final DateTime? initialDate;
 
-  const CalendarPage({super.key, required this.genre, this.initialDate});
+  const CalendarPage({super.key, this.initialDate});
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -31,6 +44,20 @@ class _CalendarPageState extends State<CalendarPage>
 
   final List<RangeEvent> _rangeEvents = [];
 
+  final List<RecurringDailyTask> _dailyRepeatSeeds = [];
+  final Set<String> _editingTaskIds = {};
+  final Map<String, TextEditingController> _taskEditControllers = {};
+  final Map<String, FocusNode> _taskEditFocusNodes = {};
+
+  final List<RecurringReleaseSeed> _releaseRepeatSeeds = [];
+  final Set<String> _editingReleaseIds = {};
+  final Map<String, TextEditingController> _releaseEditControllers = {};
+  final Map<String, FocusNode> _releaseEditFocusNodes = {};
+
+  String _prefsReleaseRepeatKey() => 'calendar_release_repeat_common';
+
+  String _prefsDailyRepeatKey() => 'calendar_daily_repeat_common';
+
   String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
@@ -41,6 +68,19 @@ class _CalendarPageState extends State<CalendarPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
+    for (final c in _taskEditControllers.values) {
+      c.dispose();
+    }
+    for (final f in _taskEditFocusNodes.values) {
+      f.dispose();
+    }
+    for (final c in _releaseEditControllers.values) {
+      c.dispose();
+    }
+    for (final f in _releaseEditFocusNodes.values) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -48,6 +88,155 @@ class _CalendarPageState extends State<CalendarPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _bootstrap();
+    }
+  }
+
+  DateTime? _dateFromKey(String key) {
+    if (key.length != 8) return null;
+
+    final y = int.tryParse(key.substring(0, 4));
+    final m = int.tryParse(key.substring(4, 6));
+    final d = int.tryParse(key.substring(6, 8));
+
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  Future<void> _disableRepeatEverywhereExceptSelected({
+    required String seedId,
+    required String keepDayKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final dayKeys =
+        prefs
+            .getKeys()
+            .where((k) => k.startsWith('calendar_day_'))
+            .map((k) => k.substring('calendar_day_'.length))
+            .where((k) => k.length == 8)
+            .toList();
+
+    for (final dayKey in dayKeys) {
+      if (dayKey == keepDayKey) continue;
+
+      final raw = prefs.getString(_prefsKeyForDay(dayKey));
+      if (raw == null || raw.isEmpty) continue;
+
+      try {
+        final decoded = jsonDecode(raw);
+        final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
+
+        bool changed = false;
+        final nextTasks = <DayTask>[];
+
+        for (final task in log.tasks) {
+          if (task.repeatSourceId == seedId) {
+            changed = true;
+            continue;
+          }
+          if (task.id == seedId && task.repeatEveryDays != null) {
+            nextTasks.add(
+              task.copyWith(
+                generatedRepeat: false,
+                clearRepeatSourceId: true,
+                clearRepeatEveryDays: true,
+              ),
+            );
+            changed = true;
+            continue;
+          }
+
+          nextTasks.add(task);
+        }
+
+        final nextSkips =
+            log.skippedRepeatIds.where((id) => id != seedId).toList();
+
+        if (nextSkips.length != log.skippedRepeatIds.length) {
+          changed = true;
+        }
+
+        if (!changed) continue;
+
+        final date = _dateFromKey(dayKey);
+        if (date == null) continue;
+
+        await _saveDayLog(
+          date,
+          log.copyWith(tasks: nextTasks, skippedRepeatIds: nextSkips),
+        );
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _disableReleaseRepeatEverywhereExceptSelected({
+    required String seedId,
+    required String keepDayKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final dayKeys =
+        prefs
+            .getKeys()
+            .where((k) => k.startsWith('calendar_day_'))
+            .map((k) => k.substring('calendar_day_'.length))
+            .where((k) => k.length == 8)
+            .toList();
+
+    for (final dayKey in dayKeys) {
+      if (dayKey == keepDayKey) continue;
+
+      final raw = prefs.getString(_prefsKeyForDay(dayKey));
+      if (raw == null || raw.isEmpty) continue;
+
+      try {
+        final decoded = jsonDecode(raw);
+        final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
+
+        bool changed = false;
+        final nextReleases = <ReleaseItem>[];
+
+        for (final item in log.releases) {
+          if (item.repeatSourceId == seedId) {
+            changed = true;
+            continue;
+          }
+
+          if (item.id == seedId && item.repeatEveryDays != null) {
+            nextReleases.add(
+              item.copyWith(
+                generatedRepeat: false,
+                clearRepeatSourceId: true,
+                clearRepeatEveryDays: true,
+              ),
+            );
+            changed = true;
+            continue;
+          }
+
+          nextReleases.add(item);
+        }
+
+        final nextSkipped =
+            log.skippedReleaseRepeatIds.where((id) => id != seedId).toList();
+
+        if (nextSkipped.length != log.skippedReleaseRepeatIds.length) {
+          changed = true;
+        }
+
+        if (!changed) continue;
+
+        final date = _dateFromKey(dayKey);
+        if (date == null) continue;
+
+        await _saveDayLog(
+          date,
+          log.copyWith(
+            releases: nextReleases,
+            skippedReleaseRepeatIds: nextSkipped,
+          ),
+        );
+      } catch (_) {}
     }
   }
 
@@ -59,342 +248,241 @@ class _CalendarPageState extends State<CalendarPage>
     DateTime end = DateTime.parse(ev.endIso);
 
     final palette = <Color>[
-      const Color.fromARGB(255, 255, 169, 169),
-      const Color.fromARGB(255, 255, 206, 137),
-      const Color.fromARGB(255, 255, 255, 192),
-      const Color.fromARGB(255, 214, 255, 194),
-      const Color.fromARGB(255, 185, 239, 255),
-      const Color.fromARGB(255, 120, 149, 169),
+      const Color.fromARGB(255, 255, 183, 197),
+      const Color.fromARGB(255, 255, 210, 163),
+      const Color.fromARGB(255, 255, 236, 179),
+      const Color.fromARGB(255, 219, 245, 196),
+      const Color.fromARGB(255, 175, 234, 255),
+      const Color.fromARGB(255, 201, 223, 255),
+      const Color.fromARGB(255, 221, 209, 255),
+      const Color.fromARGB(255, 205, 240, 228),
+      const Color.fromARGB(255, 196, 206, 223),
     ];
 
     Color picked = Color(ev.colorValue);
+
     if (!palette.any((c) => c.toARGB32() == picked.toARGB32())) {
       palette.insert(0, picked);
     }
 
-    final edited = await showModalBottomSheet<Object?>(
+    final edited = await showDialog<Object?>(
       context: context,
       barrierColor: kDialogBarrierColor,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (ctx) {
-        final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+        String fmt(DateTime d) =>
+            '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.';
 
-        Widget section({
-          required Widget child,
-          EdgeInsetsGeometry padding = const EdgeInsets.all(14),
-        }) {
-          return Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE3EDF7), width: 1),
+        InputDecoration inputDeco(String hint) {
+          return InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Color.fromARGB(255, 157, 177, 198),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-            child: child,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE1EAF4)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE1EAF4)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color.fromARGB(255, 117, 148, 188),
+              ),
+            ),
           );
         }
 
-        Widget dateTile({
+        Widget dateField({
           required String label,
           required String value,
           required VoidCallback onTap,
         }) {
-          return InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE1EAF4), width: 1),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2E4A67),
+          return Expanded(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              overlayColor: kTransparentOverlay,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE1EAF4)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF5F7D9B),
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6F88A3),
-                      fontWeight: FontWeight.w500,
+                    const Spacer(),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F3A56),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: Color(0xFF9BB2C9),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          );
-        }
-
-        Future<DateTime?> pick(DateTime initial) async {
-          final res = await _pickDate(ctx, initial);
-          return res == null ? null : DateTime(res.year, res.month, res.day);
-        }
-
-        Future<bool?> showDeleteDialog() {
-          return showDialog<bool>(
-            context: context,
-            barrierColor: kDialogBarrierColor,
-            builder: (dialogCtx) {
-              return Dialog(
-                backgroundColor: Colors.transparent,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 77),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFFE3EDF7),
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD6E2EF),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        '일정 삭제',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1F3A56),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '“${ev.title.isEmpty ? '제목 없음' : ev.title}” 일정을 삭제하시겠습니까?',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          height: 1.45,
-                          color: Color(0xFF6F88A3),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SizedBox(
-                              height: 44,
-                              child: OutlinedButton(
-                                onPressed:
-                                    () => Navigator.of(dialogCtx).pop(false),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF7594BC),
-                                  side: const BorderSide(
-                                    color: Color(0xFFE1EAF4),
-                                    width: 1,
-                                  ),
-                                  backgroundColor: const Color(0xFFF8FBFF),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: const Text(
-                                  '취소',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: SizedBox(
-                              height: 44,
-                              child: ElevatedButton(
-                                onPressed:
-                                    () => Navigator.of(dialogCtx).pop(true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color.fromARGB(
-                                    235,
-                                    28,
-                                    62,
-                                    107,
-                                  ),
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: const Text(
-                                  '삭제',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
           );
         }
 
         return StatefulBuilder(
           builder: (ctx2, setSB) {
-            String fmt(DateTime d) =>
-                '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.';
+            final bottom = MediaQuery.of(ctx2).viewInsets.bottom;
 
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottom),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD6E2EF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    Row(
+            return Dialog(
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                padding: EdgeInsets.only(bottom: bottom),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 520,
+                    maxHeight: 720,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '일정 편집',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
+                        SizedBox(
+                          height: 40,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const Center(
+                                child: Text(
+                                  '일정 편집',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1F3A56),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                child: IconButton(
+                                  onPressed: () => Navigator.pop(ctx2),
+                                  splashColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        TextField(
+                          controller: titleC,
+                          decoration: inputDeco('제목 입력'),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF1F3A56),
                           ),
                         ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx2),
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF7594BC),
-                          ),
-                          child: const Text(
-                            '닫기',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 10),
+                        const SizedBox(height: 12),
 
-                    section(
-                      child: TextField(
-                        controller: titleC,
-                        decoration: const InputDecoration(
-                          hintText: '제목 입력',
-                          hintStyle: TextStyle(
-                            color: Color.fromARGB(255, 157, 177, 198),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F3A56),
-                        ),
-                      ),
-                    ),
+                        Row(
+                          children: [
+                            dateField(
+                              label: '시작일',
+                              value: fmt(start),
+                              onTap: () async {
+                                final pickedD = await _pickDate(ctx2, start);
+                                if (pickedD == null) return;
 
-                    const SizedBox(height: 12),
+                                setSB(() {
+                                  start = DateTime(
+                                    pickedD.year,
+                                    pickedD.month,
+                                    pickedD.day,
+                                  );
 
-                    section(
-                      child: Column(
-                        children: [
-                          dateTile(
-                            label: '시작일',
-                            value: fmt(start),
-                            onTap: () async {
-                              final pickedD = await pick(start);
-                              if (pickedD == null) return;
-                              setSB(() {
-                                start = DateTime(
-                                  pickedD.year,
-                                  pickedD.month,
-                                  pickedD.day,
-                                );
-                                if (end.isBefore(start)) end = start;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          dateTile(
-                            label: '종료일',
-                            value: fmt(end),
-                            onTap: () async {
-                              final pickedD = await pick(end);
-                              if (pickedD == null) return;
-                              setSB(() {
-                                end = DateTime(
-                                  pickedD.year,
-                                  pickedD.month,
-                                  pickedD.day,
-                                );
-                                if (end.isBefore(start)) end = start;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 2, bottom: 10),
-                          child: Text(
-                            '색상',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF5F7D9B),
+                                  if (end.isBefore(start)) {
+                                    end = start;
+                                  }
+                                });
+                              },
                             ),
+                            const SizedBox(width: 8),
+                            dateField(
+                              label: '종료일',
+                              value: fmt(end),
+                              onTap: () async {
+                                final pickedD = await _pickDate(ctx2, end);
+                                if (pickedD == null) return;
+
+                                setSB(() {
+                                  end = DateTime(
+                                    pickedD.year,
+                                    pickedD.month,
+                                    pickedD.day,
+                                  );
+
+                                  if (end.isBefore(start)) {
+                                    end = start;
+                                  }
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        const Text(
+                          '색상',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF5F7D9B),
                           ),
                         ),
+
+                        const SizedBox(height: 10),
+
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -405,8 +493,8 @@ class _CalendarPageState extends State<CalendarPage>
                                 borderRadius: BorderRadius.circular(999),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 140),
-                                  width: 34,
-                                  height: 34,
+                                  width: 30,
+                                  height: 30,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: c,
@@ -417,128 +505,107 @@ class _CalendarPageState extends State<CalendarPage>
                                               : Colors.transparent,
                                       width: 1.5,
                                     ),
-                                    boxShadow:
-                                        picked.toARGB32() == c.toARGB32()
-                                            ? [
-                                              BoxShadow(
-                                                color: c.withValues(
-                                                  alpha: 0.28,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ]
-                                            : null,
                                   ),
                                 ),
                               ),
                           ],
                         ),
+
+                        const SizedBox(height: 14),
+
+                        TextField(
+                          controller: memoC,
+                          maxLines: 3,
+                          decoration: inputDeco('메모 입력'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            color: Color.fromARGB(255, 39, 50, 60),
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(
+                                235,
+                                28,
+                                62,
+                                107,
+                              ),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                              surfaceTintColor: Colors.transparent,
+                              overlayColor: Colors.transparent,
+                              splashFactory: NoSplash.splashFactory,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(
+                                ctx2,
+                                RangeEvent(
+                                  id: ev.id,
+                                  title: titleC.text.trim(),
+                                  memo: memoC.text.trim(),
+                                  startIso: _ymd(start),
+                                  endIso: _ymd(end),
+                                  colorValue: picked.toARGB32(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              '저장',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final ok = await _showRangeEventDeleteDialog(ev);
+                              if (!ctx2.mounted) return;
+
+                              if (ok) {
+                                Navigator.of(ctx2).pop('__delete__');
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1F3A56),
+                              side: const BorderSide(
+                                color: Color(0xFFE1EAF4),
+                                width: 1,
+                              ),
+                              backgroundColor: const Color(0xFFF8FBFF),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text(
+                              '일정 삭제',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-
-                    const SizedBox(height: 12),
-
-                    section(
-                      child: TextField(
-                        controller: memoC,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: '메모 입력',
-                          hintStyle: TextStyle(
-                            color: Color.fromARGB(255, 157, 177, 198),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 14.5,
-                          height: 1.4,
-                          color: Color.fromARGB(255, 39, 50, 60),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(
-                            235,
-                            28,
-                            62,
-                            107,
-                          ),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        onPressed: () {
-                          final title = titleC.text.trim();
-
-                          Navigator.pop(
-                            ctx2,
-                            RangeEvent(
-                              id: ev.id,
-                              title: title,
-                              memo: memoC.text.trim(),
-                              startIso: _ymd(start),
-                              endIso: _ymd(end),
-                              colorValue: picked.toARGB32(),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          '저장',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          final ok = await showDeleteDialog();
-                          if (!ctx2.mounted) return;
-                          if (ok == true) {
-                            Navigator.of(ctx2).pop('__delete__');
-                          }
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF1F3A56),
-                          side: const BorderSide(
-                            color: Color(0xFFE1EAF4),
-                            width: 1,
-                          ),
-                          backgroundColor: const Color(0xFFF8FBFF),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          '일정 삭제',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -546,7 +613,6 @@ class _CalendarPageState extends State<CalendarPage>
         );
       },
     );
-
     return edited;
   }
 
@@ -569,6 +635,113 @@ class _CalendarPageState extends State<CalendarPage>
     } catch (_) {}
   }
 
+  Future<bool> _showRangeEventDeleteDialog(RangeEvent ev) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierColor: kDialogBarrierColor,
+      builder: (dialogCtx) {
+        return Dialog(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Center(
+                          child: Text(
+                            '일정 삭제',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  Text(
+                    '“${ev.title.isEmpty ? '제목 없음' : ev.title}” 일정을 삭제하시겠습니까?',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF6F88A3),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color.fromARGB(235, 28, 62, 107),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        overlayColor: Colors.transparent,
+                        splashFactory: NoSplash.splashFactory,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        '삭제',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    return ok == true;
+  }
+
   Future<void> _saveRangeEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final list = _rangeEvents.map((e) => e.toMap()).toList();
@@ -576,119 +749,269 @@ class _CalendarPageState extends State<CalendarPage>
   }
 
   Future<DateTime?> _pickDate(BuildContext context, DateTime initial) {
-    const primaryBlue = Color(0xFF7594BC);
-    const deepBlue = Color(0xFF1F3A56);
-    const softBg = Color(0xFFF8FBFF);
-    const softBorder = Color(0xFFE3EDF7);
-    const mutedText = Color(0xFF6F88A3);
+    DateTime picked = DateTime(initial.year, initial.month, initial.day);
+    DateTime displayedMonth = DateTime(initial.year, initial.month, 1);
 
-    return showDatePicker(
+    return showDialog<DateTime>(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
       barrierColor: kDialogBarrierColor,
-      helpText: '날짜 선택',
-      cancelText: '취소',
-      confirmText: '확인',
-      builder: (ctx, child) {
-        final base = Theme.of(ctx);
-
-        return Theme(
-          data: base.copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: primaryBlue,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: deepBlue,
-            ),
-            dialogTheme: DialogThemeData(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx2, setSB) {
+            return Dialog(
+              elevation: 0,
+              shadowColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 24,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              headerBackgroundColor: softBg,
-              headerForegroundColor: deepBlue,
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: deepBlue,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 520,
+                  maxHeight: 720,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 40,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            const Center(
+                              child: Text(
+                                '날짜 선택',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F3A56),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              child: IconButton(
+                                onPressed: () => Navigator.pop(ctx2),
+                                splashColor: Colors.transparent,
+                                highlightColor: Colors.transparent,
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Color(0xFF1F3A56),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Theme(
+                        data: Theme.of(ctx2).copyWith(
+                          colorScheme: const ColorScheme.light(
+                            primary: Color.fromARGB(255, 119, 188, 235),
+                            onPrimary: Colors.white,
+                            onSurface: Colors.black87,
+                          ),
+                          textTheme: Theme.of(ctx2).textTheme.copyWith(
+                            labelSmall: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color.fromARGB(255, 150, 190, 243),
+                            ),
+                          ),
+                        ),
+                        child: CalendarDatePickerClone(
+                          events: const [],
+                          displayedMonth: displayedMonth,
+                          selectedDate: picked,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                          onMonthChanged: (m) {
+                            setSB(() {
+                              displayedMonth = DateTime(m.year, m.month, 1);
+                            });
+                          },
+                          onDateSelected: (d) {
+                            setSB(() {
+                              picked = DateTime(d.year, d.month, d.day);
+                              displayedMonth = DateTime(d.year, d.month, 1);
+                            });
+                          },
+                          onEventTap: (_) {},
+                          onMoreTap: (_, __) {},
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(
+                              ctx2,
+                              DateTime(picked.year, picked.month, picked.day),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color.fromARGB(
+                              235,
+                              28,
+                              62,
+                              107,
+                            ),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            surfaceTintColor: Colors.transparent,
+                            overlayColor: Colors.transparent,
+                            splashFactory: NoSplash.splashFactory,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text(
+                            '확인',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              headerHelpStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: mutedText,
-              ),
-              weekdayStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: mutedText,
-              ),
-              dayStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: deepBlue,
-              ),
-              yearStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: deepBlue,
-              ),
-              dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return primaryBlue;
-                }
-                return Colors.transparent;
-              }),
-              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-                if (states.contains(WidgetState.disabled)) {
-                  return mutedText.withValues(alpha: 0.45);
-                }
-                return deepBlue;
-              }),
-              todayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-                return primaryBlue;
-              }),
-              todayBorder: const BorderSide(color: primaryBlue, width: 1),
-              yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return primaryBlue.withValues(alpha: 0.14);
-                }
-                return Colors.transparent;
-              }),
-              yearForegroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return primaryBlue;
-                }
-                return deepBlue;
-              }),
-              dividerColor: softBorder,
-              cancelButtonStyle: TextButton.styleFrom(
-                foregroundColor: mutedText,
-                textStyle: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              confirmButtonStyle: TextButton.styleFrom(
-                foregroundColor: primaryBlue,
-                textStyle: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-          child: child!,
+            );
+          },
         );
       },
+    );
+  }
+
+  List<int> _calcDailyWrittenChars(DateTime monthFirstDay) {
+    final year = monthFirstDay.year;
+    final month = monthFirstDay.month;
+    final daysInMonth = DateUtils.getDaysInMonth(year, month);
+
+    final result = List<int>.filled(daysInMonth, 0);
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      final key = _keyOf(DateTime(year, month, day));
+      final log = _monthCache[key];
+      result[day - 1] = log?.writtenChars ?? 0;
+    }
+
+    return result;
+  }
+
+  Widget _monthlyStatsGraphCard(MonthStats monthStats) {
+    final values = _calcDailyWrittenChars(_monthCursor);
+
+    final maxValue = values.fold<int>(0, (prev, v) => v > prev ? v : prev);
+
+    final selectedIndex =
+        (_selectedDate.year == _monthCursor.year &&
+                _selectedDate.month == _monthCursor.month)
+            ? _selectedDate.day - 1
+            : -1;
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) {
+                  if (values.isEmpty) return;
+
+                  final dx = details.localPosition.dx.clamp(0.0, width);
+                  final ratio = width == 0 ? 0.0 : dx / width;
+                  final index = ((values.length - 1) * ratio).round().clamp(
+                    0,
+                    values.length - 1,
+                  );
+
+                  final tapped = DateTime(
+                    _monthCursor.year,
+                    _monthCursor.month,
+                    index + 1,
+                  );
+
+                  setState(() {
+                    _selectedDate = tapped;
+                    _log = _resolveDayLog(_selectedDate);
+                  });
+                },
+                child: SizedBox(
+                  height: 150,
+                  child: CustomPaint(
+                    painter: _MonthlyCurvePainter(
+                      values: values,
+                      maxValue: maxValue,
+                      selectedIndex: selectedIndex,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                      child: Column(
+                        children: [
+                          const Spacer(),
+                          Row(
+                            children: [
+                              for (int i = 0; i < values.length; i++)
+                                if (i == 0 ||
+                                    (i + 1) % 5 == 0 ||
+                                    i == values.length - 1)
+                                  Expanded(
+                                    child: Text(
+                                      '${i + 1}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Color.fromARGB(
+                                          221,
+                                          83,
+                                          129,
+                                          159,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          _statLine('집필한 날', '${monthStats.writingDays}일'),
+          _statLine('오늘 작성', '${_formatInt(_log.writtenChars)}자'),
+          _statLine('총 글자수', '${_formatInt(monthStats.totalChars)}자'),
+          _statLine(
+            '최고 기록',
+            monthStats.bestChars > 0
+                ? '${_formatInt(monthStats.bestChars)}자 (${_prettyDayFromKey(monthStats.bestDayKey)})'
+                : '—',
+          ),
+        ],
+      ),
     );
   }
 
@@ -709,83 +1032,101 @@ class _CalendarPageState extends State<CalendarPage>
     DateTime end = _selectedDate;
 
     final palette = <Color>[
-      const Color.fromARGB(255, 255, 169, 169),
-      const Color.fromARGB(255, 255, 206, 137),
-      const Color.fromARGB(255, 255, 255, 192),
-      const Color.fromARGB(255, 214, 255, 194),
-      const Color.fromARGB(255, 185, 239, 255),
-      const Color.fromARGB(255, 120, 149, 169),
+      const Color.fromARGB(255, 255, 183, 197),
+      const Color.fromARGB(255, 255, 210, 163),
+      const Color.fromARGB(255, 255, 236, 179),
+      const Color.fromARGB(255, 219, 245, 196),
+      const Color.fromARGB(255, 175, 234, 255),
+      const Color.fromARGB(255, 201, 223, 255),
+      const Color.fromARGB(255, 221, 209, 255),
+      const Color.fromARGB(255, 205, 240, 228),
+      const Color.fromARGB(255, 196, 206, 223),
     ];
 
     Color picked = palette.first;
 
-    final created = await showModalBottomSheet<RangeEvent>(
+    final created = await showDialog<RangeEvent>(
       context: context,
       barrierColor: kDialogBarrierColor,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (ctx) {
-        final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+        String fmt(DateTime d) =>
+            '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.';
 
-        Widget section({
-          required Widget child,
-          EdgeInsetsGeometry padding = const EdgeInsets.all(14),
-        }) {
-          return Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE3EDF7), width: 1),
+        InputDecoration inputDeco(String hint) {
+          return InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Color.fromARGB(255, 157, 177, 198),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-            child: child,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE1EAF4)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE1EAF4)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color.fromARGB(255, 117, 148, 188),
+              ),
+            ),
           );
         }
 
-        Widget dateTile({
+        Widget dateField({
           required String label,
           required String value,
           required VoidCallback onTap,
         }) {
-          return InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE1EAF4), width: 1),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2E4A67),
+          return Expanded(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE1EAF4)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF5F7D9B),
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6F88A3),
-                      fontWeight: FontWeight.w500,
+                    const Spacer(),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F3A56),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: Color(0xFF9BB2C9),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -793,129 +1134,119 @@ class _CalendarPageState extends State<CalendarPage>
 
         return StatefulBuilder(
           builder: (ctx2, setSB) {
-            String fmt(DateTime d) =>
-                '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.';
+            final bottom = MediaQuery.of(ctx2).viewInsets.bottom;
 
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottom),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD6E2EF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    Row(
+            return Dialog(
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                padding: EdgeInsets.only(bottom: bottom),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 520,
+                    maxHeight: 720,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '신규 일정',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
+                        SizedBox(
+                          height: 40,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const Center(
+                                child: Text(
+                                  '신규 일정',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1F3A56),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                child: IconButton(
+                                  onPressed: () => Navigator.pop(ctx2),
+                                  splashColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: titleC,
+                          decoration: inputDeco('제목 입력'),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF1F3A56),
                           ),
                         ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx2),
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF7594BC),
-                          ),
-                          child: const Text(
-                            '닫기',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    section(
-                      child: TextField(
-                        controller: titleC,
-                        decoration: const InputDecoration(
-                          hintText: '제목 입력',
-                          hintStyle: TextStyle(
-                            color: Color.fromARGB(255, 157, 177, 198),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F3A56),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    section(
-                      child: Column(
-                        children: [
-                          dateTile(
-                            label: '시작일',
-                            value: fmt(start),
-                            onTap: () async {
-                              final pickedD = await _pickDate(ctx2, start);
-                              if (pickedD == null) return;
-                              setSB(() {
-                                start = DateTime(
-                                  pickedD.year,
-                                  pickedD.month,
-                                  pickedD.day,
-                                );
-                                if (end.isBefore(start)) end = start;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          dateTile(
-                            label: '종료일',
-                            value: fmt(end),
-                            onTap: () async {
-                              final pickedD = await _pickDate(ctx2, end);
-                              if (pickedD == null) return;
-                              setSB(() {
-                                end = DateTime(
-                                  pickedD.year,
-                                  pickedD.month,
-                                  pickedD.day,
-                                );
-                                if (end.isBefore(start)) end = start;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 2, bottom: 10),
-                          child: Text(
-                            '색상',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF5F7D9B),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            dateField(
+                              label: '시작일',
+                              value: fmt(start),
+                              onTap: () async {
+                                final pickedD = await _pickDate(ctx2, start);
+                                if (pickedD == null) return;
+                                setSB(() {
+                                  start = DateTime(
+                                    pickedD.year,
+                                    pickedD.month,
+                                    pickedD.day,
+                                  );
+                                  if (end.isBefore(start)) end = start;
+                                });
+                              },
                             ),
+                            const SizedBox(width: 8),
+                            dateField(
+                              label: '종료일',
+                              value: fmt(end),
+                              onTap: () async {
+                                final pickedD = await _pickDate(ctx2, end);
+                                if (pickedD == null) return;
+                                setSB(() {
+                                  end = DateTime(
+                                    pickedD.year,
+                                    pickedD.month,
+                                    pickedD.day,
+                                  );
+                                  if (end.isBefore(start)) end = start;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          '색상',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF5F7D9B),
                           ),
                         ),
+                        const SizedBox(height: 10),
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -924,10 +1255,9 @@ class _CalendarPageState extends State<CalendarPage>
                               InkWell(
                                 onTap: () => setSB(() => picked = c),
                                 borderRadius: BorderRadius.circular(999),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 140),
-                                  width: 34,
-                                  height: 34,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: c,
@@ -938,94 +1268,70 @@ class _CalendarPageState extends State<CalendarPage>
                                               : Colors.transparent,
                                       width: 1.5,
                                     ),
-                                    boxShadow:
-                                        picked.toARGB32() == c.toARGB32()
-                                            ? [
-                                              BoxShadow(
-                                                color: c.withValues(
-                                                  alpha: 0.28,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ]
-                                            : null,
                                   ),
                                 ),
                               ),
                           ],
                         ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: memoC,
+                          maxLines: 3,
+                          decoration: inputDeco('메모 입력'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            color: Color.fromARGB(255, 39, 50, 60),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(
+                                235,
+                                28,
+                                62,
+                                107,
+                              ),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                              surfaceTintColor: Colors.transparent,
+                              overlayColor: Colors.transparent,
+                              splashFactory: NoSplash.splashFactory,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () {
+                              final ev = RangeEvent(
+                                id:
+                                    DateTime.now().microsecondsSinceEpoch
+                                        .toString(),
+                                title: titleC.text.trim(),
+                                memo: memoC.text.trim(),
+                                startIso: _ymd(start),
+                                endIso: _ymd(end),
+                                colorValue: picked.toARGB32(),
+                              );
+
+                              Navigator.pop(ctx2, ev);
+                            },
+                            child: const Text(
+                              '확인',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    section(
-                      child: TextField(
-                        controller: memoC,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: '메모 입력',
-                          hintStyle: TextStyle(
-                            color: Color.fromARGB(255, 157, 177, 198),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                        ),
-                        style: const TextStyle(
-                          fontSize: 14.5,
-                          height: 1.4,
-                          color: Color.fromARGB(255, 39, 50, 60),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(
-                            235,
-                            28,
-                            62,
-                            107,
-                          ),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        onPressed: () {
-                          final title = titleC.text.trim();
-
-                          final ev = RangeEvent(
-                            id:
-                                DateTime.now().microsecondsSinceEpoch
-                                    .toString(),
-                            title: title,
-                            memo: memoC.text.trim(),
-                            startIso: _ymd(start),
-                            endIso: _ymd(end),
-                            colorValue: picked.toARGB32(),
-                          );
-
-                          Navigator.pop(ctx2, ev);
-                        },
-                        child: const Text(
-                          '확인',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1046,7 +1352,9 @@ class _CalendarPageState extends State<CalendarPage>
     setState(() => _loading = true);
     await _loadMonthIntoCache(_monthCursor);
     await _loadRangeEvents();
-    _log = _monthCache[_keyOf(_selectedDate)] ?? DayLog.empty();
+    await _loadDailyRepeatSeeds();
+    await _loadReleaseRepeatSeeds();
+    _log = _resolveDayLog(_selectedDate);
     setState(() => _loading = false);
   }
 
@@ -1058,11 +1366,10 @@ class _CalendarPageState extends State<CalendarPage>
     return '$y$m$day';
   }
 
-  String _prefsKeyForDay(String yyyymmdd) =>
-      'calendar_day_${widget.genre.name}_$yyyymmdd';
+  String _prefsKeyForDay(String yyyymmdd) => 'calendar_day_$yyyymmdd';
 
   String _prefsMonthIndexKey(int year, int month) =>
-      'calendar_month_index_${widget.genre.name}_${year.toString().padLeft(4, '0')}${month.toString().padLeft(2, '0')}';
+      'calendar_month_index_${year.toString().padLeft(4, '0')}${month.toString().padLeft(2, '0')}';
 
   DateTime _stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -1076,50 +1383,231 @@ class _CalendarPageState extends State<CalendarPage>
     return '${l.year}.${l.month.toString().padLeft(2, '0')}';
   }
 
+  int? _nextRepeatEveryDays(int? current) {
+    if (current == null) return 1;
+    if (current == 1) return 7;
+    if (current == 7) return 10;
+    return null;
+  }
+
+  Future<void> _toggleTaskRepeatCycle(int index) async {
+    if (index < 0 || index >= _log.tasks.length) return;
+
+    final current = _log.tasks[index];
+    final base = _baseDayLog(_selectedDate);
+    final tasks = [...base.tasks];
+    final skips = [...base.skippedRepeatIds];
+
+    final identity = _taskIdentity(current);
+    int savedIndex = tasks.indexWhere((t) => _taskIdentity(t) == identity);
+
+    if (savedIndex < 0) {
+      tasks.add(_materializeGeneratedTask(current));
+      savedIndex = tasks.length - 1;
+    }
+
+    final currentRepeatEveryDays = tasks[savedIndex].repeatEveryDays;
+    final nextRepeatEveryDays = _nextRepeatEveryDays(currentRepeatEveryDays);
+    final seedId = current.repeatSourceId ?? tasks[savedIndex].id;
+
+    if (nextRepeatEveryDays != null) {
+      tasks[savedIndex] = tasks[savedIndex].copyWith(
+        repeatEveryDays: nextRepeatEveryDays,
+        repeatSourceId: current.repeatSourceId,
+        generatedRepeat: false,
+      );
+
+      skips.remove(seedId);
+
+      final seed = RecurringDailyTask(
+        id: seedId,
+        text: tasks[savedIndex].text,
+        startDayKey: _keyOf(_selectedDate),
+        intervalDays: nextRepeatEveryDays,
+      );
+
+      final seedIndex = _dailyRepeatSeeds.indexWhere((e) => e.id == seedId);
+      if (seedIndex >= 0) {
+        _dailyRepeatSeeds[seedIndex] = seed;
+      } else {
+        _dailyRepeatSeeds.add(seed);
+      }
+    } else {
+      tasks[savedIndex] = tasks[savedIndex].copyWith(
+        generatedRepeat: false,
+        clearRepeatSourceId: true,
+        clearRepeatEveryDays: true,
+      );
+
+      _dailyRepeatSeeds.removeWhere((e) => e.id == seedId);
+      skips.remove(seedId);
+
+      await _disableRepeatEverywhereExceptSelected(
+        seedId: seedId,
+        keepDayKey: _keyOf(_selectedDate),
+      );
+    }
+
+    final updated = base.copyWith(tasks: tasks, skippedRepeatIds: skips);
+
+    await _saveDayLog(_selectedDate, updated);
+    await _saveDailyRepeatSeeds();
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
+  }
+
+  Future<void> _loadDailyRepeatSeeds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsDailyRepeatKey());
+    _dailyRepeatSeeds.clear();
+
+    if (raw == null || raw.trim().isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        for (final e in decoded) {
+          if (e is Map) {
+            _dailyRepeatSeeds.add(
+              RecurringDailyTask.fromMap(Map<String, dynamic>.from(e)),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveDailyRepeatSeeds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _dailyRepeatSeeds.map((e) => e.toMap()).toList();
+    await prefs.setString(_prefsDailyRepeatKey(), jsonEncode(list));
+  }
+
+  Future<void> _loadReleaseRepeatSeeds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsReleaseRepeatKey());
+    _releaseRepeatSeeds.clear();
+
+    if (raw == null || raw.trim().isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        for (final e in decoded) {
+          if (e is Map) {
+            _releaseRepeatSeeds.add(
+              RecurringReleaseSeed.fromMap(Map<String, dynamic>.from(e)),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveReleaseRepeatSeeds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _releaseRepeatSeeds.map((e) => e.toMap()).toList();
+    await prefs.setString(_prefsReleaseRepeatKey(), jsonEncode(list));
+  }
+
+  DayLog _baseDayLog(DateTime day) {
+    return _monthCache[_keyOf(day)] ?? DayLog.empty();
+  }
+
+  String _taskIdentity(DayTask task) => task.repeatSourceId ?? task.id;
+
+  DayTask _materializeGeneratedTask(DayTask task) {
+    if (!task.generatedRepeat) return task;
+
+    return task.copyWith(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      generatedRepeat: false,
+    );
+  }
+
+  String _releaseIdentity(ReleaseItem item) => item.repeatSourceId ?? item.id;
+
+  ReleaseItem _materializeGeneratedRelease(ReleaseItem item) {
+    if (!item.generatedRepeat) return item;
+
+    return item.copyWith(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      generatedRepeat: false,
+    );
+  }
+
+  DayLog _resolveDayLog(DateTime day) {
+    final base = _baseDayLog(day);
+    final dayKey = _keyOf(day);
+
+    final existingTaskIds = base.tasks.map(_taskIdentity).toSet();
+    final skippedTaskIds = base.skippedRepeatIds.toSet();
+    final generatedTasks = <DayTask>[];
+
+    for (final seed in _dailyRepeatSeeds) {
+      final seedStart = _dateFromKey(seed.startDayKey);
+      if (seedStart == null) continue;
+
+      final diffDays = _stripTime(day).difference(_stripTime(seedStart)).inDays;
+      if (diffDays < 0) continue;
+      if (diffDays % seed.intervalDays != 0) continue;
+      if (skippedTaskIds.contains(seed.id)) continue;
+      if (existingTaskIds.contains(seed.id)) continue;
+
+      generatedTasks.add(
+        DayTask(
+          id: 'virtual_${seed.id}_$dayKey',
+          text: seed.text,
+          done: false,
+          repeatEveryDays: seed.intervalDays,
+          repeatSourceId: seed.id,
+          generatedRepeat: true,
+        ),
+      );
+    }
+
+    final existingReleaseIds = base.releases.map(_releaseIdentity).toSet();
+    final skippedReleaseIds = base.skippedReleaseRepeatIds.toSet();
+    final generatedReleases = <ReleaseItem>[];
+
+    for (final seed in _releaseRepeatSeeds) {
+      final seedStart = _dateFromKey(seed.startDayKey);
+      if (seedStart == null) continue;
+
+      final diffDays = _stripTime(day).difference(_stripTime(seedStart)).inDays;
+      if (diffDays < 0) continue;
+      if (diffDays % seed.intervalDays != 0) continue;
+      if (skippedReleaseIds.contains(seed.id)) continue;
+      if (existingReleaseIds.contains(seed.id)) continue;
+
+      generatedReleases.add(
+        ReleaseItem(
+          id: 'virtual_release_${seed.id}_$dayKey',
+          title: seed.title,
+          status: ReleaseStatus.planned,
+          repeatEveryDays: seed.intervalDays,
+          repeatSourceId: seed.id,
+          generatedRepeat: true,
+        ),
+      );
+    }
+
+    return base.copyWith(
+      tasks: [...base.tasks, ...generatedTasks],
+      releases: [...base.releases, ...generatedReleases],
+    );
+  }
+
   Future<void> _loadMonthIntoCache(DateTime monthFirstDay) async {
     final prefs = await SharedPreferences.getInstance();
     _monthCache.clear();
 
-    if (widget.genre != Genre.main) {
-      final ymKey = _prefsMonthIndexKey(
-        monthFirstDay.year,
-        monthFirstDay.month,
-      );
-      final daysJson = prefs.getString(ymKey);
-      final Set<String> dayKeys = {};
+    final ymKey = _prefsMonthIndexKey(monthFirstDay.year, monthFirstDay.month);
+    final daysJson = prefs.getString(ymKey);
+    final Set<String> dayKeys = {};
 
-      if (daysJson != null && daysJson.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(daysJson);
-          if (decoded is List) {
-            for (final e in decoded) {
-              if (e is String && e.length == 8) dayKeys.add(e);
-            }
-          }
-        } catch (_) {}
-      }
-
-      for (final dayKey in dayKeys) {
-        final raw = prefs.getString(_prefsKeyForDay(dayKey));
-        if (raw == null || raw.isEmpty) continue;
-        try {
-          final decoded = jsonDecode(raw);
-          final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
-          _monthCache[dayKey] = log;
-        } catch (_) {}
-      }
-      return;
-    }
-
-    // Genre.main => 모든 장르 합산
-    for (final g in Genre.values.where((e) => e != Genre.main)) {
-      final ymKey =
-          'calendar_month_index_${g.name}_${monthFirstDay.year.toString().padLeft(4, '0')}${monthFirstDay.month.toString().padLeft(2, '0')}';
-
-      final daysJson = prefs.getString(ymKey);
-      if (daysJson == null || daysJson.isEmpty) continue;
-
-      final Set<String> dayKeys = {};
+    if (daysJson != null && daysJson.isNotEmpty) {
       try {
         final decoded = jsonDecode(daysJson);
         if (decoded is List) {
@@ -1128,25 +1616,17 @@ class _CalendarPageState extends State<CalendarPage>
           }
         }
       } catch (_) {}
+    }
 
-      for (final dayKey in dayKeys) {
-        final raw = prefs.getString('calendar_day_${g.name}_$dayKey');
-        if (raw == null || raw.isEmpty) continue;
+    for (final dayKey in dayKeys) {
+      final raw = prefs.getString(_prefsKeyForDay(dayKey));
+      if (raw == null || raw.isEmpty) continue;
 
-        try {
-          final decoded = jsonDecode(raw);
-          final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
-          final prev = _monthCache[dayKey] ?? DayLog.empty();
-
-          _monthCache[dayKey] = DayLog(
-            goalChars: prev.goalChars + log.goalChars,
-            note: prev.note,
-            sessions: [...prev.sessions, ...log.sessions],
-            tasks: [...prev.tasks, ...log.tasks],
-            releases: [...prev.releases, ...log.releases],
-          );
-        } catch (_) {}
-      }
+      try {
+        final decoded = jsonDecode(raw);
+        final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
+        _monthCache[dayKey] = log;
+      } catch (_) {}
     }
   }
 
@@ -1220,179 +1700,6 @@ class _CalendarPageState extends State<CalendarPage>
     );
   }
 
-  Future<void> _setDailyGoalDialog() async {
-    final c = TextEditingController(
-      text: _log.goalChars <= 0 ? '' : '${_log.goalChars}',
-    );
-
-    final next = await showDialog<int>(
-      context: context,
-      barrierColor: kDialogBarrierColor,
-      builder: (dialogCtx) {
-        const primaryBlue = Color(0xFF7594BC);
-        const deepBlue = Color(0xFF1F3A56);
-        const softBg = Color(0xFFF8FBFF);
-        const softBorder = Color(0xFFE3EDF7);
-        const mutedText = Color(0xFF6F88A3);
-
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E2EF),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '일일 목표 글자수',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: deepBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_formatYMD(_selectedDate)} 목표를 입력해주세요.\n비워두거나 0을 입력하면 해당 날짜 목표가 해제됩니다.',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                          color: mutedText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: TextField(
-                    controller: c,
-                    keyboardType: TextInputType.number,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: '예: 1500',
-                      hintStyle: TextStyle(
-                        color: Color.fromARGB(255, 157, 177, 198),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: deepBlue,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: mutedText,
-                            side: const BorderSide(color: softBorder, width: 1),
-                            backgroundColor: softBg,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '취소',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final v = int.tryParse(c.text.trim()) ?? 0;
-                            Navigator.pop(dialogCtx, v);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryBlue,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '저장',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (next == null) return;
-
-    final updated = _log.copyWith(goalChars: next <= 0 ? 0 : next);
-
-    await _saveDayLog(_selectedDate, updated);
-
-    if (!mounted) return;
-    setState(() => _log = updated);
-  }
-
   Widget _sectionTitle(String title, {Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 5),
@@ -1401,8 +1708,8 @@ class _CalendarPageState extends State<CalendarPage>
           Text(
             title,
             style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
           ),
@@ -1435,453 +1742,841 @@ class _CalendarPageState extends State<CalendarPage>
     return buf.toString();
   }
 
-  double _progress01(int written, int goal) {
-    if (goal <= 0) return 0;
-    final p = written / goal;
-    if (p < 0) return 0;
-    if (p > 1) return 1;
-    return p;
-  }
+  Future<void> _reorderTasks(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
 
-  Widget _dailyReportCard() {
-    final written = _log.writtenChars;
-    final goal = _log.goalChars;
-    final p = _progress01(written, goal);
+    final base = _baseDayLog(_selectedDate);
+    final tasks = _log.tasks.map(_materializeGeneratedTask).toList();
 
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _formatYMD(_selectedDate),
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: Color.fromARGB(221, 83, 129, 159),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _pill(
-                icon: Icons.edit_note,
-                text: '오늘 작성 ${_formatInt(written)}자',
-                fg: Colors.black87,
-                bg: const Color.fromARGB(20, 52, 96, 143),
-              ),
-              const SizedBox(width: 8),
-              const SizedBox(height: 15),
+    final item = tasks.removeAt(oldIndex);
+    tasks.insert(newIndex, item);
 
-              _pill(
-                icon: Icons.flag,
-                text: goal > 0 ? '오늘 목표 ${_formatInt(goal)}자' : '오늘 목표 없음',
-                fg: const Color.fromARGB(255, 117, 148, 188),
-                bg: const Color.fromARGB(20, 117, 148, 188),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          LinearProgressIndicator(
-            value: goal > 0 ? p : 0,
-            minHeight: 10,
-            borderRadius: BorderRadius.circular(999),
-            color: const Color(0xFF7594BC),
-            backgroundColor: const Color.fromARGB(255, 237, 245, 253),
-          ),
-          const SizedBox(height: 15),
-          Text(
-            goal > 0
-                ? '진행률 ${(p * 100).toStringAsFixed(0)}% · 남은 ${_formatInt((goal - written).clamp(0, 1 << 30))}자'
-                : '일일 목표를 설정하면 진행률이 표시됩니다.',
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: Color.fromARGB(221, 83, 129, 159),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _addTaskDialog() async {
-    final c = TextEditingController();
-
-    final next = await showDialog<String>(
-      context: context,
-      barrierColor: kDialogBarrierColor,
-      builder: (dialogCtx) {
-        const primaryBlue = Color(0xFF7594BC);
-        const deepBlue = Color(0xFF1F3A56);
-        const softBg = Color(0xFFF8FBFF);
-        const softBorder = Color(0xFFE3EDF7);
-        const mutedText = Color(0xFF6F88A3);
-
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E2EF),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '작업 추가',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: deepBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_formatYMD(_selectedDate)}에 할 작업을 입력해주세요.',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                          color: mutedText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: TextField(
-                    controller: c,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: '예: 12화 수정 / 설정 정리 / 표지 콘티',
-                      hintStyle: TextStyle(
-                        color: Color.fromARGB(255, 157, 177, 198),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: deepBlue,
-                    ),
-                    onSubmitted: (value) {
-                      final text = value.trim();
-                      Navigator.pop(dialogCtx, text);
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: mutedText,
-                            side: const BorderSide(color: softBorder, width: 1),
-                            backgroundColor: softBg,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '취소',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(dialogCtx, c.text.trim());
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryBlue,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '추가',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final updated = base.copyWith(
+      tasks: tasks,
+      skippedRepeatIds: base.skippedRepeatIds,
     );
 
-    if (next == null || next.trim().isEmpty) return;
-
-    final task = DayTask(text: next.trim(), done: false);
-    final updated = _log.copyWith(tasks: [..._log.tasks, task]);
     await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
+  }
+
+  TextEditingController _taskControllerFor(DayTask task) {
+    return _taskEditControllers.putIfAbsent(
+      task.id,
+      () => TextEditingController(text: task.text),
+    );
+  }
+
+  FocusNode _taskFocusNodeFor(DayTask task) {
+    return _taskEditFocusNodes.putIfAbsent(task.id, () => FocusNode());
+  }
+
+  void _disposeTaskEditor(String taskId) {
+    _taskEditControllers.remove(taskId)?.dispose();
+    _taskEditFocusNodes.remove(taskId)?.dispose();
+  }
+
+  TextEditingController _releaseControllerFor(ReleaseItem item) {
+    return _releaseEditControllers.putIfAbsent(
+      item.id,
+      () => TextEditingController(text: item.title),
+    );
+  }
+
+  FocusNode _releaseFocusNodeFor(ReleaseItem item) {
+    return _releaseEditFocusNodes.putIfAbsent(item.id, () => FocusNode());
+  }
+
+  void _disposeReleaseEditor(String releaseId) {
+    _releaseEditControllers.remove(releaseId)?.dispose();
+    _releaseEditFocusNodes.remove(releaseId)?.dispose();
+  }
+
+  Future<void> _addTaskInline() async {
+    final task = DayTask(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      text: '',
+      done: false,
+    );
+
+    final base = _baseDayLog(_selectedDate);
+    final updated = base.copyWith(tasks: [...base.tasks, task]);
+
+    await _saveDayLog(_selectedDate, updated);
+
+    if (!mounted) return;
+
+    setState(() {
+      _log = _resolveDayLog(_selectedDate);
+      _editingTaskIds.add(task.id);
+      _taskControllerFor(task).text = '';
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _taskFocusNodeFor(task).requestFocus();
+    });
+  }
+
+  Future<void> _startEditTask(int index) async {
+    if (index < 0 || index >= _log.tasks.length) return;
+
+    final current = _log.tasks[index];
+    final base = _baseDayLog(_selectedDate);
+    final tasks = [...base.tasks];
+
+    final identity = _taskIdentity(current);
+    int savedIndex = tasks.indexWhere((t) => _taskIdentity(t) == identity);
+
+    DayTask editableTask = current;
+
+    if (savedIndex < 0) {
+      editableTask = _materializeGeneratedTask(current);
+      tasks.add(editableTask);
+
+      final updated = base.copyWith(tasks: tasks);
+      await _saveDayLog(_selectedDate, updated);
+
+      if (!mounted) return;
+      setState(() {
+        _log = _resolveDayLog(_selectedDate);
+      });
+    } else {
+      editableTask = tasks[savedIndex];
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _editingTaskIds.add(editableTask.id);
+      _taskControllerFor(editableTask).text = editableTask.text;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _taskFocusNodeFor(editableTask).requestFocus();
+    });
+  }
+
+  Future<void> _commitTaskEdit(DayTask task, String rawText) async {
+    final text = rawText.trim();
+
+    final base = _baseDayLog(_selectedDate);
+    final tasks = [...base.tasks];
+
+    final identity = _taskIdentity(task);
+    final savedIndex = tasks.indexWhere((t) => _taskIdentity(t) == identity);
+
+    if (savedIndex < 0) {
+      if (text.isEmpty) {
+        setState(() {
+          _editingTaskIds.remove(task.id);
+        });
+        _disposeTaskEditor(task.id);
+        return;
+      }
+
+      tasks.add(
+        _materializeGeneratedTask(
+          task,
+        ).copyWith(text: text, generatedRepeat: false),
+      );
+    } else {
+      if (text.isEmpty) {
+        tasks.removeAt(savedIndex);
+      } else {
+        tasks[savedIndex] = tasks[savedIndex].copyWith(
+          text: text,
+          generatedRepeat: false,
+        );
+
+        final edited = tasks[savedIndex];
+
+        if (edited.repeatEveryDays != null && edited.repeatSourceId == null) {
+          final seedIndex = _dailyRepeatSeeds.indexWhere(
+            (e) => e.id == edited.id,
+          );
+          if (seedIndex >= 0) {
+            _dailyRepeatSeeds[seedIndex] = RecurringDailyTask(
+              id: edited.id,
+              text: edited.text,
+              startDayKey: _dailyRepeatSeeds[seedIndex].startDayKey,
+              intervalDays: edited.repeatEveryDays!,
+            );
+            await _saveDailyRepeatSeeds();
+          }
+        }
+      }
+    }
+
+    final updated = base.copyWith(tasks: tasks);
+    await _saveDayLog(_selectedDate, updated);
+
+    if (!mounted) return;
+
+    setState(() {
+      _editingTaskIds.remove(task.id);
+      _log = _resolveDayLog(_selectedDate);
+    });
+
+    _disposeTaskEditor(task.id);
   }
 
   Future<void> _toggleTaskDone(int index) async {
     if (index < 0 || index >= _log.tasks.length) return;
-    final tasks = [..._log.tasks];
-    tasks[index] = tasks[index].copyWith(done: !tasks[index].done);
-    final updated = _log.copyWith(tasks: tasks);
+
+    final current = _log.tasks[index];
+    final base = _baseDayLog(_selectedDate);
+    final tasks = [...base.tasks];
+
+    final identity = _taskIdentity(current);
+    int savedIndex = tasks.indexWhere((t) => _taskIdentity(t) == identity);
+
+    if (savedIndex < 0) {
+      tasks.add(_materializeGeneratedTask(current));
+      savedIndex = tasks.length - 1;
+    }
+
+    tasks[savedIndex] = tasks[savedIndex].copyWith(
+      done: !tasks[savedIndex].done,
+      generatedRepeat: false,
+    );
+
+    final updated = base.copyWith(tasks: tasks);
+
     await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
   }
 
   Future<void> _removeTask(int index) async {
     if (index < 0 || index >= _log.tasks.length) return;
-    final tasks = [..._log.tasks]..removeAt(index);
-    final updated = _log.copyWith(tasks: tasks);
+
+    final current = _log.tasks[index];
+    final base = _baseDayLog(_selectedDate);
+    final tasks = [...base.tasks];
+    final skips = [...base.skippedRepeatIds];
+
+    final identity = _taskIdentity(current);
+    final savedIndex = tasks.indexWhere((t) => _taskIdentity(t) == identity);
+
+    if (savedIndex >= 0) {
+      tasks.removeAt(savedIndex);
+    }
+
+    if (current.repeatSourceId != null) {
+      if (!skips.contains(current.repeatSourceId!)) {
+        skips.add(current.repeatSourceId!);
+      }
+    }
+
+    if (current.repeatEveryDays != null && current.repeatSourceId == null) {
+      _dailyRepeatSeeds.removeWhere((e) => e.id == current.id);
+    }
+
+    final updated = base.copyWith(tasks: tasks, skippedRepeatIds: skips);
+
     await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
+    await _saveDailyRepeatSeeds();
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
   }
 
-  Future<void> _addReleaseDialog() async {
-    final cTitle = TextEditingController();
+  Future<void> _startEditRelease(int index) async {
+    if (index < 0 || index >= _log.releases.length) return;
 
-    final next = await showDialog<String>(
+    final current = _log.releases[index];
+    final base = _baseDayLog(_selectedDate);
+    final releases = [...base.releases];
+
+    final identity = _releaseIdentity(current);
+    int savedIndex = releases.indexWhere(
+      (r) => _releaseIdentity(r) == identity,
+    );
+
+    ReleaseItem editable = current;
+
+    if (savedIndex < 0) {
+      editable = _materializeGeneratedRelease(current);
+      releases.add(editable);
+
+      await _saveDayLog(_selectedDate, base.copyWith(releases: releases));
+
+      if (!mounted) return;
+      setState(() {
+        _log = _resolveDayLog(_selectedDate);
+      });
+    } else {
+      editable = releases[savedIndex];
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _editingReleaseIds.add(editable.id);
+      _releaseControllerFor(editable).text = editable.title;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _releaseFocusNodeFor(editable).requestFocus();
+    });
+  }
+
+  Future<void> _commitReleaseEdit(ReleaseItem item, String rawText) async {
+    final text = rawText.trim();
+
+    final base = _baseDayLog(_selectedDate);
+    final releases = [...base.releases];
+
+    final identity = _releaseIdentity(item);
+    final savedIndex = releases.indexWhere(
+      (r) => _releaseIdentity(r) == identity,
+    );
+
+    if (savedIndex < 0) {
+      if (text.isEmpty) {
+        setState(() {
+          _editingReleaseIds.remove(item.id);
+        });
+        _disposeReleaseEditor(item.id);
+        return;
+      }
+
+      releases.add(
+        _materializeGeneratedRelease(
+          item,
+        ).copyWith(title: text, generatedRepeat: false),
+      );
+    } else {
+      if (text.isEmpty) {
+        releases.removeAt(savedIndex);
+      } else {
+        releases[savedIndex] = releases[savedIndex].copyWith(
+          title: text,
+          generatedRepeat: false,
+        );
+
+        final edited = releases[savedIndex];
+
+        if (edited.repeatEveryDays != null && edited.repeatSourceId == null) {
+          final seedIndex = _releaseRepeatSeeds.indexWhere(
+            (e) => e.id == edited.id,
+          );
+          if (seedIndex >= 0) {
+            _releaseRepeatSeeds[seedIndex] = RecurringReleaseSeed(
+              id: edited.id,
+              title: edited.title,
+              startDayKey: _releaseRepeatSeeds[seedIndex].startDayKey,
+              intervalDays: edited.repeatEveryDays!,
+            );
+            await _saveReleaseRepeatSeeds();
+          }
+        }
+      }
+    }
+
+    await _saveDayLog(_selectedDate, base.copyWith(releases: releases));
+
+    if (!mounted) return;
+
+    setState(() {
+      _editingReleaseIds.remove(item.id);
+      _log = _resolveDayLog(_selectedDate);
+    });
+
+    _disposeReleaseEditor(item.id);
+  }
+
+  Future<void> _toggleReleaseRepeatCycle(int index) async {
+    if (index < 0 || index >= _log.releases.length) return;
+
+    final current = _log.releases[index];
+    final base = _baseDayLog(_selectedDate);
+    final releases = [...base.releases];
+    final skips = [...base.skippedReleaseRepeatIds];
+
+    final identity = _releaseIdentity(current);
+    int savedIndex = releases.indexWhere(
+      (r) => _releaseIdentity(r) == identity,
+    );
+
+    if (savedIndex < 0) {
+      releases.add(_materializeGeneratedRelease(current));
+      savedIndex = releases.length - 1;
+    }
+
+    final currentRepeat = releases[savedIndex].repeatEveryDays;
+    final nextRepeat = _nextRepeatEveryDays(currentRepeat);
+    final seedId = current.repeatSourceId ?? releases[savedIndex].id;
+
+    if (nextRepeat != null) {
+      releases[savedIndex] = releases[savedIndex].copyWith(
+        repeatEveryDays: nextRepeat,
+        repeatSourceId: current.repeatSourceId,
+        generatedRepeat: false,
+      );
+
+      skips.remove(seedId);
+
+      final seed = RecurringReleaseSeed(
+        id: seedId,
+        title: releases[savedIndex].title,
+        startDayKey: _keyOf(_selectedDate),
+        intervalDays: nextRepeat,
+      );
+
+      final seedIndex = _releaseRepeatSeeds.indexWhere((e) => e.id == seedId);
+      if (seedIndex >= 0) {
+        _releaseRepeatSeeds[seedIndex] = seed;
+      } else {
+        _releaseRepeatSeeds.add(seed);
+      }
+    } else {
+      releases[savedIndex] = releases[savedIndex].copyWith(
+        generatedRepeat: false,
+        clearRepeatSourceId: true,
+        clearRepeatEveryDays: true,
+      );
+
+      _releaseRepeatSeeds.removeWhere((e) => e.id == seedId);
+      skips.remove(seedId);
+
+      await _disableReleaseRepeatEverywhereExceptSelected(
+        seedId: seedId,
+        keepDayKey: _keyOf(_selectedDate),
+      );
+    }
+
+    await _saveDayLog(
+      _selectedDate,
+      base.copyWith(releases: releases, skippedReleaseRepeatIds: skips),
+    );
+    await _saveReleaseRepeatSeeds();
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
+  }
+
+  Future<void> _reorderReleases(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    final base = _baseDayLog(_selectedDate);
+    final releases = _log.releases.map(_materializeGeneratedRelease).toList();
+
+    final item = releases.removeAt(oldIndex);
+    releases.insert(newIndex, item);
+
+    await _saveDayLog(
+      _selectedDate,
+      base.copyWith(
+        releases: releases,
+        skippedReleaseRepeatIds: base.skippedReleaseRepeatIds,
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
+  }
+
+  Future<void> _removeRelease(int index) async {
+    if (index < 0 || index >= _log.releases.length) return;
+
+    final current = _log.releases[index];
+    final base = _baseDayLog(_selectedDate);
+    final releases = [...base.releases];
+    final skips = [...base.skippedReleaseRepeatIds];
+
+    final identity = _releaseIdentity(current);
+    final savedIndex = releases.indexWhere(
+      (r) => _releaseIdentity(r) == identity,
+    );
+
+    if (savedIndex >= 0) {
+      releases.removeAt(savedIndex);
+    }
+
+    if (current.repeatSourceId != null) {
+      if (!skips.contains(current.repeatSourceId!)) {
+        skips.add(current.repeatSourceId!);
+      }
+    }
+
+    if (current.repeatEveryDays != null && current.repeatSourceId == null) {
+      _releaseRepeatSeeds.removeWhere((e) => e.id == current.id);
+    }
+
+    await _saveDayLog(
+      _selectedDate,
+      base.copyWith(releases: releases, skippedReleaseRepeatIds: skips),
+    );
+    await _saveReleaseRepeatSeeds();
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
+  }
+
+  Future<bool> _showAllDataResetDialog() async {
+    final ok = await showDialog<bool>(
       context: context,
       barrierColor: kDialogBarrierColor,
       builder: (dialogCtx) {
-        const primaryBlue = Color(0xFF7594BC);
-        const deepBlue = Color(0xFF1F3A56);
-        const softBg = Color(0xFFF8FBFF);
-        const softBorder = Color(0xFFE3EDF7);
-        const mutedText = Color(0xFF6F88A3);
-
         return Dialog(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 64,
+            vertical: 24,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E2EF),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '연재 [업로드] 추가',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: deepBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_formatYMD(_selectedDate)} 업로드 계획 또는 완료할 회차를 입력해주세요.',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                          color: mutedText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: softBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: softBorder, width: 1),
-                  ),
-                  child: TextField(
-                    controller: cTitle,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: '예: 15화 : 맑은 날',
-                      hintStyle: TextStyle(
-                        color: Color.fromARGB(255, 157, 177, 198),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: deepBlue,
-                    ),
-                    onSubmitted: (value) {
-                      Navigator.pop(dialogCtx, value.trim());
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: mutedText,
-                            side: const BorderSide(color: softBorder, width: 1),
-                            backgroundColor: softBg,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '취소',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Center(
+                          child: Text(
+                            '전체 초기화',
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(dialogCtx, cTitle.text.trim());
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryBlue,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            '추가',
-                            style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
+                              color: Color(0xFF1F3A56),
                             ),
                           ),
                         ),
+                        Positioned(
+                          right: 0,
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            style: kNoShadowIconButtonStyle,
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  const Text(
+                    '모든 캘린더 데이터를 삭제하시겠습니까?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF6F88A3),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    '일정 / 오늘 할 일 / 연재 / 반복 설정 / 집필 기록이 모두 삭제됩니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: Color(0xFF6F88A3),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color.fromARGB(235, 28, 62, 107),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        overlayColor: Colors.transparent,
+                        splashFactory: NoSplash.splashFactory,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        '전체 삭제',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
 
-    if (next == null || next.trim().isEmpty) return;
+    return ok == true;
+  }
 
-    final item = ReleaseItem(title: next.trim(), status: ReleaseStatus.planned);
+  Future<void> _resetAllCalendarData() async {
+    final ok = await _showAllDataResetDialog();
+    if (!ok) return;
 
-    final updated = _log.copyWith(releases: [..._log.releases, item]);
+    final prefs = await SharedPreferences.getInstance();
+
+    final keysToRemove =
+        prefs.getKeys().where((key) {
+          return key.startsWith('calendar_day_') ||
+              key.startsWith('calendar_month_index_') ||
+              key == _prefsRangeEventsKey() ||
+              key == _prefsDailyRepeatKey() ||
+              key == _prefsReleaseRepeatKey();
+        }).toList();
+
+    for (final key in keysToRemove) {
+      await prefs.remove(key);
+    }
+
+    _monthCache.clear();
+    _rangeEvents.clear();
+    _dailyRepeatSeeds.clear();
+    _releaseRepeatSeeds.clear();
+    _editingTaskIds.clear();
+    _editingReleaseIds.clear();
+
+    for (final c in _taskEditControllers.values) {
+      c.dispose();
+    }
+    _taskEditControllers.clear();
+
+    for (final f in _taskEditFocusNodes.values) {
+      f.dispose();
+    }
+    _taskEditFocusNodes.clear();
+
+    for (final c in _releaseEditControllers.values) {
+      c.dispose();
+    }
+    _releaseEditControllers.clear();
+
+    for (final f in _releaseEditFocusNodes.values) {
+      f.dispose();
+    }
+    _releaseEditFocusNodes.clear();
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedDate = _stripTime(DateTime.now());
+      _monthCursor = DateTime(_selectedDate.year, _selectedDate.month, 1);
+      _log = DayLog.empty();
+      _loading = false;
+    });
+  }
+
+  Future<bool> _showDayLogResetDialog(DateTime day) async {
+    String fmt(DateTime d) =>
+        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierColor: kDialogBarrierColor,
+      builder: (dialogCtx) {
+        return Dialog(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 64,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Center(
+                          child: Text(
+                            '기록 초기화',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  Text(
+                    '${fmt(day)} 기록을 삭제하시겠습니까?',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF6F88A3),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    '오늘 할 일 / 연재 / 집필 기록이 모두 삭제됩니다.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: Color(0xFF6F88A3),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color.fromARGB(235, 28, 62, 107),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        overlayColor: Colors.transparent,
+                        splashFactory: NoSplash.splashFactory,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        '삭제',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    return ok == true;
+  }
+
+  Future<void> _addReleaseInline() async {
+    final item = ReleaseItem(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      title: '',
+      status: ReleaseStatus.planned,
+    );
+
+    final base = _baseDayLog(_selectedDate);
+    final updated = base.copyWith(releases: [...base.releases, item]);
 
     await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
+
+    if (!mounted) return;
+
+    setState(() {
+      _log = _resolveDayLog(_selectedDate);
+      _editingReleaseIds.add(item.id);
+      _releaseControllerFor(item).text = '';
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _releaseFocusNodeFor(item).requestFocus();
+    });
   }
 
   Future<void> _toggleReleaseStatus(int index) async {
     if (index < 0 || index >= _log.releases.length) return;
-    final releases = [..._log.releases];
-    final cur = releases[index];
+
+    final current = _log.releases[index];
+    final base = _baseDayLog(_selectedDate);
+    final releases = [...base.releases];
+
+    final identity = _releaseIdentity(current);
+    int savedIndex = releases.indexWhere(
+      (r) => _releaseIdentity(r) == identity,
+    );
+
+    if (savedIndex < 0) {
+      releases.add(_materializeGeneratedRelease(current));
+      savedIndex = releases.length - 1;
+    }
+
+    final cur = releases[savedIndex];
     final next =
-        (cur.status == ReleaseStatus.planned)
+        cur.status == ReleaseStatus.planned
             ? ReleaseStatus.published
             : ReleaseStatus.planned;
-    releases[index] = cur.copyWith(status: next);
-    final updated = _log.copyWith(releases: releases);
-    await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
-  }
 
-  Future<void> _removeRelease(int index) async {
-    if (index < 0 || index >= _log.releases.length) return;
-    final releases = [..._log.releases]..removeAt(index);
-    final updated = _log.copyWith(releases: releases);
-    await _saveDayLog(_selectedDate, updated);
-    setState(() => _log = updated);
+    releases[savedIndex] = cur.copyWith(status: next, generatedRepeat: false);
+
+    await _saveDayLog(_selectedDate, base.copyWith(releases: releases));
+
+    if (!mounted) return;
+    setState(() => _log = _resolveDayLog(_selectedDate));
   }
 
   Future<void> _changeMonth(int deltaMonths) async {
@@ -1905,374 +2600,250 @@ class _CalendarPageState extends State<CalendarPage>
       _selectedDate = DateTime(_monthCursor.year, _monthCursor.month, 1);
     }
 
-    _log = _monthCache[_keyOf(_selectedDate)] ?? DayLog.empty();
+    _log = _resolveDayLog(_selectedDate);
 
     setState(() => _loading = false);
   }
 
-  Future<void> _openDayEventsSheet(DateTime day, List<RangeEvent> hits) async {
+  Future<void> _openDayEventsSheet(DateTime day, List<RangeEvent> _) async {
     final d = _stripTime(day);
 
-    await showModalBottomSheet(
+    final dayEvents =
+        _rangeEvents.where((ev) => ev.includes(d)).toList()..sort((a, b) {
+          final c1 = a.start.compareTo(b.start);
+          if (c1 != 0) return c1;
+
+          final c2 = a.end.compareTo(b.end);
+          if (c2 != 0) return c2;
+
+          return a.id.compareTo(b.id);
+        });
+
+    String fmt(DateTime date) =>
+        '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}.';
+    await showDialog<void>(
       context: context,
       barrierColor: kDialogBarrierColor,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (ctx) {
-        Widget section({
-          required Widget child,
-          EdgeInsetsGeometry padding = const EdgeInsets.all(14),
-        }) {
+        Widget eventCard(RangeEvent ev) {
           return Container(
-            padding: padding,
+            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE3EDF7), width: 1),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFE1EAF4), width: 1),
             ),
-            child: child,
-          );
-        }
-
-        Widget actionIcon({
-          required IconData icon,
-          required VoidCallback onTap,
-          Color iconColor = const Color(0xFF6F88A3),
-        }) {
-          return InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE1EAF4), width: 1),
-              ),
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-          );
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E2EF),
-                    borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _openEditRangeEventSheet(ev);
+              },
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.only(top: 5),
+                    decoration: BoxDecoration(
+                      color: ev.color.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
 
-                Row(
-                  children: [
-                    Text(
-                      '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}.',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1F3A56),
-                      ),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF7594BC),
-                      ),
-                      child: const Text(
-                        '닫기',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(width: 10),
 
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: hits.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final ev = hits[i];
-
-                      return section(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () async {
-                            Navigator.pop(ctx);
-                            await _openEditRangeEventSheet(ev);
-                          },
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                margin: const EdgeInsets.only(top: 5),
-                                decoration: BoxDecoration(
-                                  color: ev.color.withValues(alpha: 0.9),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      ev.title.isEmpty ? '제목 없음' : ev.title,
-                                      style: const TextStyle(
-                                        fontSize: 14.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF1F3A56),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${ev.startIso} ~ ${ev.endIso}',
-                                      style: const TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF6F88A3),
-                                      ),
-                                    ),
-                                    if (ev.memo.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        ev.memo,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 12.5,
-                                          height: 1.4,
-                                          color: Color(0xFF5F7D9B),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(width: 10),
-
-                              Column(
-                                children: [
-                                  actionIcon(
-                                    icon: Icons.edit_outlined,
-                                    onTap: () async {
-                                      Navigator.pop(ctx);
-                                      await _openEditRangeEventSheet(ev);
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  actionIcon(
-                                    icon: Icons.close_rounded,
-                                    iconColor: const Color(0xFF1F3A56),
-                                    onTap: () async {
-                                      final sheetNav = Navigator.of(ctx);
-
-                                      final ok = await showDialog<bool>(
-                                        context: context,
-                                        barrierColor: kDialogBarrierColor,
-                                        builder: (dialogCtx) {
-                                          return Dialog(
-                                            backgroundColor: Colors.transparent,
-                                            insetPadding:
-                                                const EdgeInsets.symmetric(
-                                                  horizontal: 77,
-                                                ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                    18,
-                                                    18,
-                                                    18,
-                                                    14,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                                border: Border.all(
-                                                  color: const Color(
-                                                    0xFFE3EDF7,
-                                                  ),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Container(
-                                                    width: 42,
-                                                    height: 4,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                        0xFFD6E2EF,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            999,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 16),
-                                                  const Text(
-                                                    '선택 날짜 기록 삭제',
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 17,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: Color(0xFF1F3A56),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 10),
-                                                  const Text(
-                                                    '해당 날짜의 목표, 메모, 할 일, 연재 기록이 모두 삭제됩니다.',
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 13.5,
-                                                      height: 1.45,
-                                                      color: Color(0xFF6F88A3),
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 18),
-                                                  Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: SizedBox(
-                                                          height: 44,
-                                                          child: OutlinedButton(
-                                                            onPressed:
-                                                                () =>
-                                                                    Navigator.of(
-                                                                      dialogCtx,
-                                                                    ).pop(
-                                                                      false,
-                                                                    ),
-                                                            style: OutlinedButton.styleFrom(
-                                                              foregroundColor:
-                                                                  const Color(
-                                                                    0xFF7594BC,
-                                                                  ),
-                                                              side: const BorderSide(
-                                                                color: Color(
-                                                                  0xFFE1EAF4,
-                                                                ),
-                                                                width: 1,
-                                                              ),
-                                                              backgroundColor:
-                                                                  const Color(
-                                                                    0xFFF8FBFF,
-                                                                  ),
-                                                              shape: RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      14,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            child: const Text(
-                                                              '취소',
-                                                              style: TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 10),
-                                                      Expanded(
-                                                        child: SizedBox(
-                                                          height: 44,
-                                                          child: ElevatedButton(
-                                                            onPressed:
-                                                                () =>
-                                                                    Navigator.of(
-                                                                      dialogCtx,
-                                                                    ).pop(true),
-                                                            style: ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  const Color.fromARGB(
-                                                                    235,
-                                                                    28,
-                                                                    62,
-                                                                    107,
-                                                                  ),
-                                                              foregroundColor:
-                                                                  Colors.white,
-                                                              elevation: 0,
-                                                              shape: RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      14,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            child: const Text(
-                                                              '삭제',
-                                                              style: TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w800,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      );
-                                      if (!mounted) return;
-
-                                      if (ok == true) {
-                                        setState(() {
-                                          _rangeEvents.removeWhere(
-                                            (x) => x.id == ev.id,
-                                          );
-                                        });
-                                        await _saveRangeEvents();
-                                        if (!mounted) return;
-                                      }
-
-                                      sheetNav.pop();
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ev.title.isEmpty ? '제목 없음' : ev.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            height: 1.3,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1F3A56),
                           ),
                         ),
-                      );
-                    },
+
+                        const SizedBox(height: 5),
+
+                        Text(
+                          '${ev.startIso} ~ ${ev.endIso}',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6F88A3),
+                          ),
+                        ),
+
+                        if (ev.memo.trim().isNotEmpty) ...[
+                          const SizedBox(height: 7),
+                          Text(
+                            ev.memo,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.4,
+                              color: Color(0xFF5F7D9B),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _openEditRangeEventSheet(ev);
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 19,
+                          color: Color(0xFF6F88A3),
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: () async {
+                          final dialogNav = Navigator.of(ctx);
+
+                          final ok = await _showRangeEventDeleteDialog(ev);
+
+                          if (!mounted || !dialogNav.mounted) return;
+                          if (!ok) return;
+
+                          setState(() {
+                            _rangeEvents.removeWhere((x) => x.id == ev.id);
+                          });
+
+                          await _saveRangeEvents();
+
+                          if (!mounted || !dialogNav.mounted) return;
+
+                          dialogNav.pop();
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Color(0xFF1F3A56),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Dialog(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520, maxHeight: 680),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Center(
+                          child: Text(
+                            fmt(d),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            icon: const Icon(
+                              Icons.close,
+                              color: Color(0xFF1F3A56),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (dayEvents.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        '등록된 일정이 없습니다.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.4,
+                          color: Color(0xFF6F88A3),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: dayEvents.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) {
+                          return eventCard(dayEvents[i]);
+                        },
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
@@ -2304,430 +2875,500 @@ class _CalendarPageState extends State<CalendarPage>
   Widget build(BuildContext context) {
     final monthStats = _calcMonthStats(_monthCursor);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Color.fromARGB(255, 0, 0, 0)),
-        title: const Text(
-          'calendar',
-          style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+    final noShadowButtonStyle = ButtonStyle(
+      overlayColor: WidgetStateProperty.all(Colors.transparent),
+      splashFactory: NoSplash.splashFactory,
+      shadowColor: WidgetStateProperty.all(Colors.transparent),
+      surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+      elevation: WidgetStateProperty.all(0),
+    );
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+        ),
+
+        dialogTheme: const DialogThemeData(
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+        ),
+
+        iconButtonTheme: IconButtonThemeData(style: noShadowButtonStyle),
+
+        textButtonTheme: TextButtonThemeData(style: noShadowButtonStyle),
+
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: noShadowButtonStyle,
+        ),
+
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: noShadowButtonStyle,
         ),
       ),
-      body: SafeArea(
-        child:
-            _loading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  children: [
-                    _card(
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.event,
-                            size: 18,
-                            color: Color.fromARGB(255, 117, 148, 188),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatYMD(_selectedDate),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(999),
-                              color: const Color.fromARGB(30, 160, 201, 255),
-                            ),
-                            child: const Text(
-                              'all',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color.fromARGB(255, 140, 177, 226),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: Color.fromARGB(255, 0, 0, 0)),
 
-                    _sectionTitle(
-                      '날짜 선택',
-                      trailing: IconButton(
-                        onPressed: _openAddRangeEventSheet,
-                        icon: const Icon(Icons.add, color: Colors.black),
-                      ),
-                    ),
-                    _card(
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.light(
-                            primary: Color.fromARGB(255, 119, 188, 235),
-                            onPrimary: Colors.white,
-                            onSurface: Colors.black87,
-                          ),
+          leading: IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            style: kNoShadowIconButtonStyle,
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.black,
+              size: 20,
+            ),
+          ),
 
-                          textTheme: Theme.of(context).textTheme.copyWith(
-                            labelSmall: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color.fromARGB(255, 150, 190, 243),
-                            ),
-                          ),
-                        ),
-                        child: CalendarDatePickerClone(
-                          events: _rangeEvents,
-                          displayedMonth: _monthCursor,
-                          selectedDate: _selectedDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                          onMonthChanged: (m) async {
-                            setState(() {
-                              _loading = true;
-                              _monthCursor = DateTime(m.year, m.month, 1);
-                            });
-
-                            await _loadMonthIntoCache(_monthCursor);
-
-                            if (_selectedDate.year != _monthCursor.year ||
-                                _selectedDate.month != _monthCursor.month) {
-                              _selectedDate = DateTime(
-                                _monthCursor.year,
-                                _monthCursor.month,
-                                1,
-                              );
-                            }
-
-                            _log =
-                                _monthCache[_keyOf(_selectedDate)] ??
-                                DayLog.empty();
-                            setState(() => _loading = false);
-                          },
-                          onDateSelected: (d) {
-                            final next = _stripTime(d);
-                            setState(() {
-                              _selectedDate = next;
-                              _log =
-                                  _monthCache[_keyOf(_selectedDate)] ??
-                                  DayLog.empty();
-                            });
-                          },
-                          onEventTap: (ev) => _openEditRangeEventSheet(ev),
-                          onMoreTap:
-                              (day, hits) => _openDayEventsSheet(day, hits),
-                        ),
-                      ),
-                    ),
-                    _sectionTitle(
-                      '월 통계 [ ${_formatYM(_monthCursor)} ]',
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            onPressed: () => _changeMonth(-1),
-                            icon: const Icon(
-                              Icons.chevron_left,
-                              color: Color.fromARGB(255, 117, 148, 188),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => _changeMonth(1),
-                            icon: const Icon(
-                              Icons.chevron_right,
-                              color: Color.fromARGB(255, 117, 148, 188),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _statLine(
-                            '총 글자수',
-                            '${_formatInt(monthStats.totalChars)}자',
-                          ),
-                          _statLine('집필한 날', '${monthStats.writingDays}일'),
-                          _statLine(
-                            '최고 기록',
-                            monthStats.bestChars > 0
-                                ? '${_formatInt(monthStats.bestChars)}자 (${_prettyDayFromKey(monthStats.bestDayKey)})'
-                                : '—',
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-                    _sectionTitle(
-                      '일일 목표/리포트',
-                      trailing: TextButton.icon(
-                        onPressed: _setDailyGoalDialog,
-                        icon: const Icon(Icons.flag, size: 18),
-                        label: const Text('일일목표'),
-                      ),
-                    ),
-                    _dailyReportCard(),
-                    const SizedBox(height: 12),
-
-                    _sectionTitle(
-                      '오늘 할 일',
-                      trailing: TextButton.icon(
-                        onPressed: _addTaskDialog,
-                        icon: const Icon(Icons.add_task, size: 18),
-                        label: const Text('추가'),
-                      ),
-                    ),
-                    _log.tasks.isEmpty
-                        ? _card(
-                          child: const Text(
-                            '오늘 해야 할 작업을 추가해두면, 작업 흐름이 정리됩니다.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Color.fromARGB(221, 83, 129, 159),
-                            ),
-                          ),
-                        )
-                        : _card(
-                          child: Column(
-                            children: [
-                              for (int i = 0; i < _log.tasks.length; i++) ...[
-                                _taskRow(
-                                  _log.tasks[i],
-                                  onToggle: () => _toggleTaskDone(i),
-                                  onDelete: () => _removeTask(i),
+          title: const Text(
+            'calendar',
+            style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+          ),
+        ),
+        body: SafeArea(
+          child:
+              _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    children: [
+                      _card(
+                        child: Row(
+                          children: [
+                            const Spacer(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.event,
+                                  size: 18,
+                                  color: Color.fromARGB(255, 117, 148, 188),
                                 ),
-                                if (i != _log.tasks.length - 1)
-                                  const Divider(height: 16),
-                              ],
-                            ],
-                          ),
-                        ),
-
-                    const SizedBox(height: 12),
-                    _sectionTitle(
-                      '연재 [업로드]',
-                      trailing: TextButton.icon(
-                        onPressed: _addReleaseDialog,
-                        icon: const Icon(Icons.upload, size: 18),
-                        label: const Text('추가'),
-                      ),
-                    ),
-                    _log.releases.isEmpty
-                        ? _card(
-                          child: const Text(
-                            '업로드 계획/완료를 기록해두면, 연재 주기 관리에 도움이 됩니다.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Color.fromARGB(221, 83, 129, 159),
-                            ),
-                          ),
-                        )
-                        : _card(
-                          child: Column(
-                            children: [
-                              for (
-                                int i = 0;
-                                i < _log.releases.length;
-                                i++
-                              ) ...[
-                                _releaseRow(
-                                  _log.releases[i],
-                                  onToggle: () => _toggleReleaseStatus(i),
-                                  onDelete: () => _removeRelease(i),
-                                ),
-                                if (i != _log.releases.length - 1)
-                                  const Divider(height: 16),
-                              ],
-                            ],
-                          ),
-                        ),
-
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          barrierColor: kDialogBarrierColor,
-                          builder: (_) {
-                            return Dialog(
-                              backgroundColor: Colors.transparent,
-                              insetPadding: const EdgeInsets.symmetric(
-                                horizontal: 77,
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.fromLTRB(
-                                  18,
-                                  18,
-                                  18,
-                                  14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: const Color(0xFFE3EDF7),
-                                    width: 1,
+                                const SizedBox(width: 8),
+                                Text(
+                                  _formatYMD(_selectedDate),
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 42,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFD6E2EF),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    const Text(
-                                      '선택 날짜 기록 삭제',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF1F3A56),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    const Text(
-                                      '해당 날짜의 목표, 메모, 할 일, 연재 기록이 모두 삭제됩니다.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 13.5,
-                                        height: 1.45,
-                                        color: Color(0xFF6F88A3),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 44,
-                                            child: OutlinedButton(
-                                              onPressed:
-                                                  () => Navigator.pop(
-                                                    context,
-                                                    false,
-                                                  ),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: const Color(
-                                                  0xFF7594BC,
-                                                ),
-                                                side: const BorderSide(
-                                                  color: Color(0xFFE1EAF4),
-                                                  width: 1,
-                                                ),
-                                                backgroundColor: const Color(
-                                                  0xFFF8FBFF,
-                                                ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                ),
-                                              ),
-                                              child: const Text(
-                                                '취소',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 44,
-                                            child: ElevatedButton(
-                                              onPressed:
-                                                  () => Navigator.pop(
-                                                    context,
-                                                    true,
-                                                  ),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    const Color.fromARGB(
-                                                      235,
-                                                      28,
-                                                      62,
-                                                      107,
-                                                    ),
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                ),
-                                              ),
-                                              child: const Text(
-                                                '삭제',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                        if (ok != true) return;
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
 
-                        final empty = DayLog.empty();
-                        await _saveDayLog(_selectedDate, empty);
-                        setState(() => _log = empty);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color.fromARGB(
-                          255,
-                          80,
-                          105,
-                          139,
-                        ), // 글자/아이콘
-                        side: const BorderSide(
-                          color: Color.fromARGB(255, 26, 68, 113), // 테두리
-                          width: 0.5,
+                      _sectionTitle(
+                        '날짜 선택',
+                        trailing: IconButton(
+                          onPressed: _openAddRangeEventSheet,
+                          icon: const Icon(Icons.add, color: Colors.black),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
+                      ),
+                      _card(
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.light(
+                              primary: Color.fromARGB(255, 119, 188, 235),
+                              onPrimary: Colors.white,
+                              onSurface: Colors.black87,
+                            ),
+
+                            textTheme: Theme.of(context).textTheme.copyWith(
+                              labelSmall: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color.fromARGB(255, 150, 190, 243),
+                              ),
+                            ),
+                          ),
+                          child: CalendarDatePickerClone(
+                            events: _rangeEvents,
+                            displayedMonth: _monthCursor,
+                            selectedDate: _selectedDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                            onMonthChanged: (m) async {
+                              setState(() {
+                                _loading = true;
+                                _monthCursor = DateTime(m.year, m.month, 1);
+                              });
+
+                              await _loadMonthIntoCache(_monthCursor);
+
+                              if (_selectedDate.year != _monthCursor.year ||
+                                  _selectedDate.month != _monthCursor.month) {
+                                _selectedDate = DateTime(
+                                  _monthCursor.year,
+                                  _monthCursor.month,
+                                  1,
+                                );
+                              }
+
+                              _log = _resolveDayLog(_selectedDate);
+                              setState(() => _loading = false);
+                            },
+                            onDateSelected: (d) {
+                              final next = _stripTime(d);
+                              setState(() {
+                                _selectedDate = next;
+                                _log = _resolveDayLog(_selectedDate);
+                              });
+                            },
+                            onEventTap: (ev) => _openEditRangeEventSheet(ev),
+                            onMoreTap:
+                                (day, hits) => _openDayEventsSheet(day, hits),
+                          ),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
-                      icon: const Icon(Icons.close),
-                      label: const Text(
-                        '이 날짜 기록 삭제',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+
+                      _sectionTitle(
+                        '오늘 할 일',
+                        trailing: TextButton.icon(
+                          onPressed: _addTaskInline,
+                          style: TextButton.styleFrom(
+                            splashFactory: NoSplash.splashFactory,
+                            overlayColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            surfaceTintColor: Colors.transparent,
+                          ),
+                          icon: const Icon(Icons.add_task, size: 18),
+                          label: const Text('추가'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      _log.tasks.isEmpty
+                          ? _card(
+                            child: const Text(
+                              '오늘 해야 할 작업을 추가해두면, 작업 흐름이 정리됩니다.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color.fromARGB(221, 83, 129, 159),
+                              ),
+                            ),
+                          )
+                          : _card(
+                            child: ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: true,
+                              itemCount: _log.tasks.length,
+                              onReorder: _reorderTasks,
+
+                              proxyDecorator: (child, index, animation) {
+                                return AnimatedBuilder(
+                                  animation: animation,
+                                  child: child,
+                                  builder: (context, child) {
+                                    final t = Curves.easeOut.transform(
+                                      animation.value,
+                                    );
+                                    final scale = 1.0 + (0.08 * t);
+
+                                    return Transform.scale(
+                                      scale: scale,
+                                      child: Material(
+                                        type: MaterialType.transparency,
+                                        elevation: 0,
+                                        shadowColor: Colors.transparent,
+                                        surfaceTintColor: Colors.transparent,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+
+                              itemBuilder: (context, i) {
+                                final task = _log.tasks[i];
+
+                                return Container(
+                                  key: ValueKey(task.id),
+                                  margin: EdgeInsets.only(
+                                    bottom: i == _log.tasks.length - 1 ? 0 : 8,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      TaskSwipeRow(
+                                        key: ValueKey(task.id),
+                                        task: task,
+                                        isEditing: _editingTaskIds.contains(
+                                          task.id,
+                                        ),
+                                        editController: _taskControllerFor(
+                                          task,
+                                        ),
+                                        editFocusNode: _taskFocusNodeFor(task),
+                                        onStartEdit: () => _startEditTask(i),
+                                        onSubmitEdit:
+                                            (text) =>
+                                                _commitTaskEdit(task, text),
+                                        onToggleDone: () => _toggleTaskDone(i),
+                                        onDelete: () => _removeTask(i),
+                                        onToggleRepeatDaily:
+                                            () => _toggleTaskRepeatCycle(i),
+                                      ),
+                                      if (i != _log.tasks.length - 1)
+                                        const Divider(height: 16),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                      const SizedBox(height: 25),
+
+                      _sectionTitle(
+                        '연재 [ 업로드 ]',
+                        trailing: TextButton.icon(
+                          onPressed: _addReleaseInline,
+                          style: TextButton.styleFrom(
+                            splashFactory: NoSplash.splashFactory,
+                            overlayColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            surfaceTintColor: Colors.transparent,
+                          ),
+                          icon: const Icon(Icons.upload, size: 18),
+                          label: const Text('추가'),
+                        ),
+                      ),
+                      _log.releases.isEmpty
+                          ? _card(
+                            child: const Text(
+                              '업로드 계획/완료를 기록해두면, 연재 주기 관리에 도움이 됩니다.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color.fromARGB(221, 83, 129, 159),
+                              ),
+                            ),
+                          )
+                          : _card(
+                            child: ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: true,
+                              itemCount: _log.releases.length,
+                              onReorder: _reorderReleases,
+                              proxyDecorator: (child, index, animation) {
+                                return AnimatedBuilder(
+                                  animation: animation,
+                                  child: child,
+                                  builder: (context, child) {
+                                    final t = Curves.easeOut.transform(
+                                      animation.value,
+                                    );
+                                    final scale = 1.0 + (0.08 * t);
+
+                                    return Transform.scale(
+                                      scale: scale,
+                                      child: Material(
+                                        type: MaterialType.transparency,
+                                        elevation: 0,
+                                        shadowColor: Colors.transparent,
+                                        surfaceTintColor: Colors.transparent,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              itemBuilder: (context, i) {
+                                final release = _log.releases[i];
+
+                                return Container(
+                                  key: ValueKey(release.id),
+                                  margin: EdgeInsets.only(
+                                    bottom:
+                                        i == _log.releases.length - 1 ? 0 : 8,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ReleaseSwipeRow(
+                                        key: ValueKey(release.id),
+                                        release: release,
+                                        isEditing: _editingReleaseIds.contains(
+                                          release.id,
+                                        ),
+                                        editController: _releaseControllerFor(
+                                          release,
+                                        ),
+                                        editFocusNode: _releaseFocusNodeFor(
+                                          release,
+                                        ),
+                                        onStartEdit: () => _startEditRelease(i),
+                                        onSubmitEdit:
+                                            (text) => _commitReleaseEdit(
+                                              release,
+                                              text,
+                                            ),
+                                        onToggleStatus:
+                                            () => _toggleReleaseStatus(i),
+                                        onDelete: () => _removeRelease(i),
+                                        onToggleRepeat:
+                                            () => _toggleReleaseRepeatCycle(i),
+                                      ),
+                                      if (i != _log.releases.length - 1)
+                                        const Divider(height: 16),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                      const SizedBox(height: 25),
+                      _sectionTitle(
+                        '월 통계 [ ${_formatYM(_monthCursor)} ]',
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: () => _changeMonth(-1),
+                              style: kNoShadowIconButtonStyle,
+                              icon: const Icon(
+                                Icons.chevron_left,
+                                color: Color.fromARGB(255, 117, 148, 188),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => _changeMonth(1),
+                              style: kNoShadowIconButtonStyle,
+                              icon: const Icon(
+                                Icons.chevron_right,
+                                color: Color.fromARGB(255, 117, 148, 188),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _monthlyStatsGraphCard(monthStats),
+
+                      const SizedBox(height: 25),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final ok = await _showDayLogResetDialog(
+                            _selectedDate,
+                          );
+                          if (!mounted) return;
+
+                          if (!ok) return;
+
+                          final skippedTaskRepeatIds =
+                              _log.tasks
+                                  .where(
+                                    (task) =>
+                                        task.repeatEveryDays != null ||
+                                        task.repeatSourceId != null ||
+                                        task.generatedRepeat,
+                                  )
+                                  .map((task) => task.repeatSourceId ?? task.id)
+                                  .toSet()
+                                  .toList();
+
+                          final skippedReleaseRepeatIds =
+                              _log.releases
+                                  .where(
+                                    (item) =>
+                                        item.repeatEveryDays != null ||
+                                        item.repeatSourceId != null ||
+                                        item.generatedRepeat,
+                                  )
+                                  .map((item) => item.repeatSourceId ?? item.id)
+                                  .toSet()
+                                  .toList();
+
+                          final empty = DayLog.empty().copyWith(
+                            skippedRepeatIds: skippedTaskRepeatIds,
+                            skippedReleaseRepeatIds: skippedReleaseRepeatIds,
+                          );
+
+                          await _saveDayLog(_selectedDate, empty);
+
+                          if (!mounted) return;
+                          setState(() => _log = _resolveDayLog(_selectedDate));
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color.fromARGB(
+                            255,
+                            80,
+                            105,
+                            139,
+                          ),
+                          side: const BorderSide(
+                            color: Color.fromARGB(255, 26, 68, 113),
+                            width: 0.5,
+                          ),
+                          backgroundColor: Colors.white,
+                          shadowColor: Colors.transparent,
+                          surfaceTintColor: Colors.transparent,
+                          overlayColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        icon: const Icon(Icons.close),
+                        label: const Text(
+                          '이 날짜 기록 초기화',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      OutlinedButton.icon(
+                        onPressed: _resetAllCalendarData,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color.fromARGB(
+                            255,
+                            80,
+                            105,
+                            139,
+                          ),
+                          side: const BorderSide(
+                            color: Color.fromARGB(255, 26, 68, 113),
+                            width: 0.5,
+                          ),
+                          backgroundColor: Colors.white,
+                          shadowColor: Colors.transparent,
+                          surfaceTintColor: Colors.transparent,
+                          overlayColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        label: const Text(
+                          '전체 데이터 초기화',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+        ),
       ),
     );
   }
@@ -2740,8 +3381,8 @@ class _CalendarPageState extends State<CalendarPage>
           Text(
             left,
             style: const TextStyle(
-              fontSize: 13,
-              color: Color.fromARGB(221, 83, 129, 159),
+              fontSize: 13.5,
+              color: Color.fromARGB(221, 64, 126, 170),
             ),
           ),
           const Spacer(),
@@ -2749,161 +3390,12 @@ class _CalendarPageState extends State<CalendarPage>
             right,
             style: const TextStyle(
               fontSize: 13.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _pill({
-    required IconData icon,
-    required String text,
-    required Color fg,
-    required Color bg,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: bg,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: fg,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _taskRow(
-    DayTask t, {
-    required VoidCallback onToggle,
-    required VoidCallback onDelete,
-  }) {
-    return Row(
-      children: [
-        InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(
-              t.done ? Icons.check_box : Icons.check_box_outline_blank,
-              color:
-                  t.done
-                      ? const Color.fromARGB(255, 52, 96, 143)
-                      : const Color.fromARGB(255, 117, 148, 188),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            t.text,
-            style: TextStyle(
-              fontSize: 13.5,
-              height: 1.2,
-              decoration:
-                  t.done ? TextDecoration.lineThrough : TextDecoration.none,
-              color:
-                  t.done
-                      ? const Color.fromARGB(221, 83, 129, 159)
-                      : Colors.black87,
-            ),
-          ),
-        ),
-        IconButton(
-          onPressed: onDelete,
-          icon: const Icon(
-            Icons.close,
-            size: 18,
-            color: Color.fromARGB(255, 160, 160, 160),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _releaseRow(
-    ReleaseItem r, {
-    required VoidCallback onToggle,
-    required VoidCallback onDelete,
-  }) {
-    final isDone = r.status == ReleaseStatus.published;
-    return Row(
-      children: [
-        InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(
-              isDone ? Icons.cloud_done : Icons.cloud_upload_outlined,
-              color:
-                  isDone
-                      ? const Color.fromARGB(255, 52, 96, 143)
-                      : const Color.fromARGB(255, 117, 148, 188),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            r.title,
-            style: TextStyle(
-              fontSize: 13.5,
-              height: 1.2,
-              fontWeight: isDone ? FontWeight.w700 : FontWeight.w400,
-              color:
-                  isDone
-                      ? const Color.fromARGB(255, 52, 96, 143)
-                      : Colors.black87,
-            ),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color:
-                isDone
-                    ? const Color.fromARGB(25, 52, 96, 143)
-                    : const Color.fromARGB(20, 117, 148, 188),
-          ),
-          child: Text(
-            isDone ? '완료' : '계획',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color:
-                  isDone
-                      ? const Color.fromARGB(255, 52, 96, 143)
-                      : const Color.fromARGB(255, 117, 148, 188),
-            ),
-          ),
-        ),
-        IconButton(
-          onPressed: onDelete,
-          icon: const Icon(
-            Icons.close,
-            size: 18,
-            color: Color.fromARGB(255, 221, 240, 255),
-          ),
-        ),
-      ],
     );
   }
 
@@ -2922,6 +3414,8 @@ class DayLog {
   final List<WritingSession> sessions;
   final List<DayTask> tasks;
   final List<ReleaseItem> releases;
+  final List<String> skippedRepeatIds;
+  final List<String> skippedReleaseRepeatIds;
 
   const DayLog({
     required this.goalChars,
@@ -2929,6 +3423,8 @@ class DayLog {
     required this.sessions,
     required this.tasks,
     required this.releases,
+    required this.skippedRepeatIds,
+    required this.skippedReleaseRepeatIds,
   });
 
   factory DayLog.empty() => const DayLog(
@@ -2937,6 +3433,8 @@ class DayLog {
     sessions: [],
     tasks: [],
     releases: [],
+    skippedRepeatIds: [],
+    skippedReleaseRepeatIds: [],
   );
 
   int get writtenChars {
@@ -2952,7 +3450,9 @@ class DayLog {
       note.trim().isEmpty &&
       sessions.isEmpty &&
       tasks.isEmpty &&
-      releases.isEmpty;
+      releases.isEmpty &&
+      skippedRepeatIds.isEmpty &&
+      skippedReleaseRepeatIds.isEmpty;
 
   DayLog copyWith({
     int? goalChars,
@@ -2960,6 +3460,8 @@ class DayLog {
     List<WritingSession>? sessions,
     List<DayTask>? tasks,
     List<ReleaseItem>? releases,
+    List<String>? skippedRepeatIds,
+    List<String>? skippedReleaseRepeatIds,
   }) {
     return DayLog(
       goalChars: goalChars ?? this.goalChars,
@@ -2967,6 +3469,9 @@ class DayLog {
       sessions: sessions ?? this.sessions,
       tasks: tasks ?? this.tasks,
       releases: releases ?? this.releases,
+      skippedRepeatIds: skippedRepeatIds ?? this.skippedRepeatIds,
+      skippedReleaseRepeatIds:
+          skippedReleaseRepeatIds ?? this.skippedReleaseRepeatIds,
     );
   }
 
@@ -2976,6 +3481,8 @@ class DayLog {
     'sessions': sessions.map((e) => e.toMap()).toList(),
     'tasks': tasks.map((e) => e.toMap()).toList(),
     'releases': releases.map((e) => e.toMap()).toList(),
+    'skippedRepeatIds': skippedRepeatIds,
+    'skippedReleaseRepeatIds': skippedReleaseRepeatIds,
   };
 
   factory DayLog.fromMap(Map<String, dynamic> m) {
@@ -2985,6 +3492,8 @@ class DayLog {
     final sessionsRaw = m['sessions'];
     final tasksRaw = m['tasks'];
     final releasesRaw = m['releases'];
+    final skippedRaw = m['skippedRepeatIds'];
+    final skippedReleaseRaw = m['skippedReleaseRepeatIds'];
 
     final sessions = <WritingSession>[];
     if (sessionsRaw is List) {
@@ -3011,12 +3520,28 @@ class DayLog {
       }
     }
 
+    final skippedRepeatIds = <String>[];
+    if (skippedRaw is List) {
+      for (final e in skippedRaw) {
+        if (e is String) skippedRepeatIds.add(e);
+      }
+    }
+
+    final skippedReleaseRepeatIds = <String>[];
+    if (skippedReleaseRaw is List) {
+      for (final e in skippedReleaseRaw) {
+        if (e is String) skippedReleaseRepeatIds.add(e);
+      }
+    }
+
     return DayLog(
       goalChars: goal,
       note: note,
       sessions: sessions,
       tasks: tasks,
       releases: releases,
+      skippedRepeatIds: skippedRepeatIds,
+      skippedReleaseRepeatIds: skippedReleaseRepeatIds,
     );
   }
 }
@@ -3047,47 +3572,411 @@ class WritingSession {
   }
 }
 
+class TaskSwipeRow extends StatefulWidget {
+  final DayTask task;
+  final bool isEditing;
+  final TextEditingController editController;
+  final FocusNode editFocusNode;
+
+  final VoidCallback onStartEdit;
+  final ValueChanged<String> onSubmitEdit;
+
+  final VoidCallback onToggleDone;
+  final VoidCallback onDelete;
+  final VoidCallback onToggleRepeatDaily;
+
+  const TaskSwipeRow({
+    super.key,
+    required this.task,
+    required this.isEditing,
+    required this.editController,
+    required this.editFocusNode,
+    required this.onStartEdit,
+    required this.onSubmitEdit,
+    required this.onToggleDone,
+    required this.onDelete,
+    required this.onToggleRepeatDaily,
+  });
+
+  @override
+  State<TaskSwipeRow> createState() => _TaskSwipeRowState();
+}
+
+class _TaskSwipeRowState extends State<TaskSwipeRow> {
+  static const double _maxReveal = 58;
+  double _offsetX = 0;
+  bool _committing = false;
+
+  void _submitEdit() {
+    if (_committing) return;
+    _committing = true;
+    widget.onSubmitEdit(widget.editController.text);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.isEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.editFocusNode.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskSwipeRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.isEditing && !oldWidget.isEditing) {
+      _committing = false;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.editFocusNode.requestFocus();
+      });
+    }
+
+    if (!widget.isEditing && oldWidget.isEditing) {
+      _committing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRepeat =
+        widget.task.repeatEveryDays != null ||
+        widget.task.repeatSourceId != null ||
+        widget.task.generatedRepeat;
+
+    final repeatLabel =
+        widget.task.repeatEveryDays != null
+            ? '${widget.task.repeatEveryDays}'
+            : null;
+
+    const repeatOnColor = kRepeatOnColor;
+    const repeatOffColor = kRepeatOffColor;
+
+    const checkDoneRepeatOnColor = Color.fromARGB(255, 255, 117, 163);
+    const checkUndoneRepeatOnColor = Color.fromARGB(255, 255, 117, 163);
+
+    const checkDoneNormalColor = Color.fromARGB(255, 52, 102, 143);
+    const checkUndoneNormalColor = Color.fromARGB(255, 117, 148, 188);
+
+    return SizedBox(
+      height: 48,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  width: _offsetX,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: InkWell(
+                      onTap: () {
+                        widget.onToggleRepeatDaily();
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      focusColor: Colors.transparent,
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        color: Colors.transparent,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              Icons.repeat_rounded,
+                              size: 24,
+                              color: isRepeat ? repeatOnColor : repeatOffColor,
+                            ),
+                            if (repeatLabel != null)
+                              Positioned(
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 1.5,
+                                    vertical: 0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    repeatLabel,
+                                    style: TextStyle(
+                                      fontSize:
+                                          repeatLabel.length >= 2 ? 6.8 : 7.6,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.0,
+                                      color:
+                                          isRepeat
+                                              ? repeatOnColor
+                                              : repeatOffColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                if (widget.isEditing) return;
+
+                setState(() {
+                  _offsetX = (_offsetX + details.delta.dx).clamp(0, _maxReveal);
+                });
+              },
+              onHorizontalDragEnd: (_) {
+                if (widget.isEditing) return;
+
+                setState(() {
+                  _offsetX = _offsetX > 20 ? _maxReveal : 0;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                transform: Matrix4.translationValues(_offsetX, 0, 0),
+                child: Material(
+                  color: Colors.white,
+                  child: Row(
+                    children: [
+                      InkWell(
+                        onTap: widget.onToggleDone,
+                        borderRadius: BorderRadius.circular(6),
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        overlayColor: WidgetStateProperty.all(
+                          Colors.transparent,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            widget.task.done
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            color:
+                                isRepeat
+                                    ? (widget.task.done
+                                        ? checkDoneRepeatOnColor
+                                        : checkUndoneRepeatOnColor)
+                                    : (widget.task.done
+                                        ? checkDoneNormalColor
+                                        : checkUndoneNormalColor),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      Expanded(
+                        child:
+                            widget.isEditing
+                                ? TextField(
+                                  controller: widget.editController,
+                                  focusNode: widget.editFocusNode,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: const InputDecoration(
+                                    hintText: '할 일을 입력하세요',
+                                    hintStyle: TextStyle(
+                                      color: Color.fromARGB(255, 157, 177, 198),
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    border: InputBorder.none,
+                                    isCollapsed: true,
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    height: 1.2,
+                                    color: Colors.black87,
+                                  ),
+                                  onSubmitted: (_) => _submitEdit(),
+                                  onTapOutside: (_) => _submitEdit(),
+                                )
+                                : InkWell(
+                                  onTap: widget.onStartEdit,
+                                  splashColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  overlayColor: WidgetStateProperty.all(
+                                    Colors.transparent,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      widget.task.text,
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        height: 1.2,
+                                        decoration:
+                                            widget.task.done
+                                                ? TextDecoration.lineThrough
+                                                : TextDecoration.none,
+                                        color:
+                                            widget.task.done
+                                                ? const Color.fromARGB(
+                                                  221,
+                                                  83,
+                                                  129,
+                                                  159,
+                                                )
+                                                : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                      ),
+
+                      IconButton(
+                        onPressed: widget.onDelete,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        style: IconButton.styleFrom(
+                          overlayColor: Colors.transparent,
+                        ),
+                        icon: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Color.fromARGB(255, 160, 160, 160),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class DayTask {
+  final String id;
   final String text;
   final bool done;
+  final int? repeatEveryDays;
+  final String? repeatSourceId;
+  final bool generatedRepeat;
 
-  const DayTask({required this.text, required this.done});
+  const DayTask({
+    required this.id,
+    required this.text,
+    required this.done,
+    this.repeatEveryDays,
+    this.repeatSourceId,
+    this.generatedRepeat = false,
+  });
 
-  DayTask copyWith({String? text, bool? done}) =>
-      DayTask(text: text ?? this.text, done: done ?? this.done);
+  DayTask copyWith({
+    String? id,
+    String? text,
+    bool? done,
+    int? repeatEveryDays,
+    String? repeatSourceId,
+    bool? generatedRepeat,
+    bool clearRepeatSourceId = false,
+    bool clearRepeatEveryDays = false,
+  }) => DayTask(
+    id: id ?? this.id,
+    text: text ?? this.text,
+    done: done ?? this.done,
+    repeatEveryDays:
+        clearRepeatEveryDays ? null : (repeatEveryDays ?? this.repeatEveryDays),
+    repeatSourceId:
+        clearRepeatSourceId ? null : (repeatSourceId ?? this.repeatSourceId),
+    generatedRepeat: generatedRepeat ?? this.generatedRepeat,
+  );
 
-  Map<String, dynamic> toMap() => {'text': text, 'done': done};
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'text': text,
+    'done': done,
+    'repeatEveryDays': repeatEveryDays,
+    'repeatSourceId': repeatSourceId,
+    'generatedRepeat': generatedRepeat,
+  };
 
   factory DayTask.fromMap(Map<String, dynamic> m) {
+    final legacyRepeatDaily = (m['repeatDaily'] as bool?) ?? false;
+
     return DayTask(
+      id:
+          (m['id'] as String?) ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
       text: (m['text'] as String?) ?? '',
       done: (m['done'] as bool?) ?? false,
+      repeatEveryDays:
+          (m['repeatEveryDays'] as num?)?.toInt() ??
+          (legacyRepeatDaily ? 1 : null),
+      repeatSourceId: m['repeatSourceId'] as String?,
+      generatedRepeat: (m['generatedRepeat'] as bool?) ?? false,
+    );
+  }
+}
+
+class RecurringDailyTask {
+  final String id;
+  final String text;
+  final String startDayKey;
+  final int intervalDays;
+
+  const RecurringDailyTask({
+    required this.id,
+    required this.text,
+    required this.startDayKey,
+    required this.intervalDays,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'text': text,
+    'startDayKey': startDayKey,
+    'intervalDays': intervalDays,
+  };
+
+  factory RecurringDailyTask.fromMap(Map<String, dynamic> m) {
+    final legacyRepeatDaily = (m['repeatDaily'] as bool?) ?? false;
+
+    return RecurringDailyTask(
+      id:
+          (m['id'] as String?) ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
+      text: (m['text'] as String?) ?? '',
+      startDayKey: (m['startDayKey'] as String?) ?? '',
+      intervalDays:
+          (m['intervalDays'] as num?)?.toInt() ?? (legacyRepeatDaily ? 1 : 1),
     );
   }
 }
 
 enum ReleaseStatus { planned, published }
-
-class ReleaseItem {
-  final String title;
-  final ReleaseStatus status;
-
-  const ReleaseItem({required this.title, required this.status});
-
-  ReleaseItem copyWith({String? title, ReleaseStatus? status}) =>
-      ReleaseItem(title: title ?? this.title, status: status ?? this.status);
-
-  Map<String, dynamic> toMap() => {'title': title, 'status': status.name};
-
-  factory ReleaseItem.fromMap(Map<String, dynamic> m) {
-    final s = (m['status'] as String?) ?? ReleaseStatus.planned.name;
-    final status = ReleaseStatus.values.firstWhere(
-      (e) => e.name == s,
-      orElse: () => ReleaseStatus.planned,
-    );
-    return ReleaseItem(title: (m['title'] as String?) ?? '', status: status);
-  }
-}
 
 class MonthStats {
   final int totalChars;
@@ -3101,6 +3990,190 @@ class MonthStats {
     required this.bestChars,
     required this.bestDayKey,
   });
+}
+
+class _MonthlyCurvePainter extends CustomPainter {
+  final List<int> values;
+  final int maxValue;
+  final int selectedIndex;
+
+  _MonthlyCurvePainter({
+    required this.values,
+    required this.maxValue,
+    required this.selectedIndex,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+
+    const double leftPad = 10;
+    const double rightPad = 10;
+    const double topPad = 10;
+    const double bottomPad = 25;
+
+    final double chartWidth = size.width - leftPad - rightPad;
+    final double chartHeight = size.height - topPad - bottomPad;
+
+    if (chartWidth <= 0 || chartHeight <= 0) return;
+
+    final double baseY = topPad + chartHeight;
+
+    final guidePaint =
+        Paint()
+          ..color = const Color(0xFFEAF1F7)
+          ..strokeWidth = 0.8;
+
+    for (int i = 0; i < 4; i++) {
+      final y = topPad + (chartHeight / 3) * i;
+      canvas.drawLine(
+        Offset(leftPad, y),
+        Offset(size.width - rightPad, y),
+        guidePaint,
+      );
+    }
+
+    final List<Offset> points = [];
+
+    for (int i = 0; i < values.length; i++) {
+      final x =
+          values.length == 1
+              ? leftPad + chartWidth / 2
+              : leftPad + (chartWidth * i / (values.length - 1));
+
+      double normalized;
+
+      if (maxValue <= 0 || values[i] <= 0) {
+        normalized = 0.0;
+      } else {
+        final ratio = (values[i] / maxValue).clamp(0.0, 1.0);
+
+        normalized = math.pow(ratio, 0.45).toDouble();
+
+        if (normalized < 0.08) {
+          normalized = 0.08;
+        }
+      }
+
+      final y = baseY - (normalized * (chartHeight - 10));
+      points.add(Offset(x, y));
+    }
+
+    final curvePath = Path()..moveTo(points.first.dx, points.first.dy);
+
+    if (points.length == 2) {
+      curvePath.lineTo(points.last.dx, points.last.dy);
+    } else {
+      const smoothing = 0.18;
+
+      double clampY(double y) => y.clamp(topPad, baseY).toDouble();
+
+      for (int i = 0; i < points.length - 1; i++) {
+        final p0 = i == 0 ? points[i] : points[i - 1];
+        final p1 = points[i];
+        final p2 = points[i + 1];
+        final p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
+
+        final cp1 = Offset(
+          p1.dx + (p2.dx - p0.dx) * smoothing,
+          clampY(p1.dy + (p2.dy - p0.dy) * smoothing),
+        );
+
+        final cp2 = Offset(
+          p2.dx - (p3.dx - p1.dx) * smoothing,
+          clampY(p2.dy - (p3.dy - p1.dy) * smoothing),
+        );
+
+        curvePath.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
+      }
+    }
+
+    final linePaint =
+        Paint()
+          ..color = const Color.fromARGB(255, 255, 117, 163)
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawPath(curvePath, linePaint);
+    final dotPaint =
+        Paint()
+          ..color = const Color.fromARGB(255, 255, 117, 163)
+          ..style = PaintingStyle.fill;
+
+    final dotBorderPaint =
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < points.length; i++) {
+      if (values[i] <= 0) continue;
+
+      final p = points[i];
+
+      canvas.drawCircle(p, 3.6, dotBorderPaint);
+      canvas.drawCircle(p, 2.4, dotPaint);
+    }
+    if (selectedIndex >= 0 && selectedIndex < points.length) {
+      final selected = points[selectedIndex];
+
+      final guideSelectedPaint =
+          Paint()
+            ..color = const Color.fromARGB(90, 52, 96, 143)
+            ..strokeWidth = 0.9;
+
+      canvas.drawLine(
+        Offset(selected.dx, topPad),
+        Offset(selected.dx, baseY),
+        guideSelectedPaint,
+      );
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: values[selectedIndex] > 0 ? '${values[selectedIndex]}자' : '0자',
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF35516D),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      double labelX = selected.dx - textPainter.width / 2;
+      double labelY = selected.dy - 26;
+
+      if (labelX < leftPad) labelX = leftPad;
+      if (labelX + textPainter.width > size.width - rightPad) {
+        labelX = size.width - rightPad - textPainter.width;
+      }
+      if (labelY < 0) labelY = 0;
+
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          labelX - 6,
+          labelY - 3,
+          textPainter.width + 12,
+          textPainter.height + 6,
+        ),
+        const Radius.circular(999),
+      );
+
+      final bubblePaint =
+          Paint()..color = const Color.fromARGB(255, 255, 255, 255);
+
+      canvas.drawRRect(rrect, bubblePaint);
+      textPainter.paint(canvas, Offset(labelX, labelY));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonthlyCurvePainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.maxValue != maxValue ||
+        oldDelegate.selectedIndex != selectedIndex;
+  }
 }
 
 class _RangeBarsOverlay extends StatelessWidget {
@@ -3239,6 +4312,11 @@ class _RangeBarsOverlay extends StatelessWidget {
                 topRight: capRight ? r : Radius.zero,
                 bottomRight: capRight ? r : Radius.zero,
               ),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              overlayColor: kTransparentOverlay,
               onTap: () => onEventTap(ev),
               child: Container(
                 decoration: BoxDecoration(
@@ -3305,6 +4383,11 @@ class _RangeBarsOverlay extends StatelessWidget {
           height: 10,
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            overlayColor: kTransparentOverlay,
             onTap: () => onMoreTap(day, hits),
             child: Center(
               child: Text(
@@ -3554,6 +4637,11 @@ class CalendarDatePickerClone extends StatelessWidget {
             children: [
               InkWell(
                 borderRadius: BorderRadius.circular(8),
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                focusColor: Colors.transparent,
+                overlayColor: kTransparentOverlay,
                 onTap: () async {
                   final picked = await _pickMonthYearBottomSheet(
                     context,
@@ -3587,16 +4675,29 @@ class CalendarDatePickerClone extends StatelessWidget {
                 iconSize: 20,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                style: ButtonStyle(
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  splashFactory: NoSplash.splashFactory,
+                  shadowColor: WidgetStateProperty.all(Colors.transparent),
+                  elevation: WidgetStateProperty.all(0),
+                ),
                 onPressed:
                     () => onMonthChanged(
                       DateTime(month.year, month.month - 1, 1),
                     ),
                 icon: const Icon(Icons.chevron_left),
               ),
+
               IconButton(
                 iconSize: 20,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                style: ButtonStyle(
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  splashFactory: NoSplash.splashFactory,
+                  shadowColor: WidgetStateProperty.all(Colors.transparent),
+                  elevation: WidgetStateProperty.all(0),
+                ),
                 onPressed:
                     () => onMonthChanged(
                       DateTime(month.year, month.month + 1, 1),
@@ -3732,6 +4833,10 @@ class CalendarDatePickerClone extends StatelessWidget {
                                 highlightShape: BoxShape.circle,
                                 containedInkWell: true,
                                 radius: cellSize / 2,
+                                splashColor: Colors.transparent,
+                                highlightColor: Colors.transparent,
+                                hoverColor: Colors.transparent,
+                                focusColor: Colors.transparent,
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
@@ -3777,113 +4882,153 @@ class CalendarDatePickerClone extends StatelessWidget {
     int y = current.year;
     int m = current.month;
 
-    return showModalBottomSheet<DateTime>(
+    final noEffectIconStyle = ButtonStyle(
+      overlayColor: WidgetStateProperty.all(Colors.transparent),
+      splashFactory: NoSplash.splashFactory,
+      shadowColor: WidgetStateProperty.all(Colors.transparent),
+      elevation: WidgetStateProperty.all(0),
+    );
+
+    return showDialog<DateTime>(
       context: context,
       barrierColor: kDialogBarrierColor,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx2, setSB) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
+            return Dialog(
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Select month',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                      Row(
+                        children: [
+                          Text(
+                            'Select month',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx2),
+                            style: kNoShadowIconButtonStyle,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => Navigator.pop(ctx2),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            onPressed: () => setSB(() => y -= 1),
+                            style: noEffectIconStyle,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        onPressed: () => setSB(() => y -= 1),
-                        icon: const Icon(Icons.chevron_left),
-                      ),
-                      Text(
-                        '$y',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => setSB(() => y += 1),
-                        icon: const Icon(Icons.chevron_right),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                          Text(
+                            '$y',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
 
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (int i = 1; i <= 12; i++)
-                        InkWell(
-                          borderRadius: BorderRadius.circular(999),
-                          onTap: () => setSB(() => m = i),
-                          child: Container(
-                            width: 72,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
+                          IconButton(
+                            onPressed: () => setSB(() => y += 1),
+                            style: noEffectIconStyle,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          for (int i = 1; i <= 12; i++)
+                            InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              color:
-                                  (m == i)
-                                      ? Theme.of(context).colorScheme.primary
-                                          .withValues(alpha: 0.12)
-                                      : const Color(0xFFF0F5FA),
-                            ),
-                            child: Center(
-                              child: Text(
-                                loc
-                                    .formatMonthYear(DateTime(2000, i, 1))
-                                    .split(' ')
-                                    .first
-                                    .substring(0, 3),
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                              splashColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                              hoverColor: Colors.transparent,
+                              focusColor: Colors.transparent,
+                              overlayColor: kTransparentOverlay,
+                              onTap: () => setSB(() => m = i),
+                              child: Container(
+                                width: 72,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(999),
                                   color:
                                       (m == i)
-                                          ? Theme.of(
-                                            context,
-                                          ).colorScheme.primary
-                                          : Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withValues(alpha: 0.12)
+                                          : const Color(0xFFF0F5FA),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    loc
+                                        .formatMonthYear(DateTime(2000, i, 1))
+                                        .split(' ')
+                                        .first
+                                        .substring(0, 3),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          (m == i)
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed:
+                              () => Navigator.pop(ctx2, DateTime(y, m, 1)),
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            surfaceTintColor: Colors.transparent,
+                            overlayColor: Colors.transparent,
+                            splashFactory: NoSplash.splashFactory,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
+                          child: const Text('Apply'),
                         ),
+                      ),
                     ],
                   ),
-
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx2, DateTime(y, m, 1)),
-                      child: const Text('Apply'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             );
           },
@@ -3921,12 +5066,6 @@ class RangeEvent {
     return !d.isBefore(s) && !d.isAfter(e);
   }
 
-  bool isStartDay(DateTime day) {
-    return day.year == start.year &&
-        day.month == start.month &&
-        day.day == start.day;
-  }
-
   Map<String, dynamic> toMap() => {
     'id': id,
     'title': title,
@@ -3950,6 +5089,431 @@ class RangeEvent {
           (m['endIso'] as String?) ??
           DateTime.now().toIso8601String().substring(0, 10),
       colorValue: (m['colorValue'] as num?)?.toInt() ?? Colors.blue.toARGB32(),
+    );
+  }
+}
+
+class ReleaseItem {
+  final String id;
+  final String title;
+  final ReleaseStatus status;
+  final int? repeatEveryDays;
+  final String? repeatSourceId;
+  final bool generatedRepeat;
+
+  const ReleaseItem({
+    required this.id,
+    required this.title,
+    required this.status,
+    this.repeatEveryDays,
+    this.repeatSourceId,
+    this.generatedRepeat = false,
+  });
+
+  ReleaseItem copyWith({
+    String? id,
+    String? title,
+    ReleaseStatus? status,
+    int? repeatEveryDays,
+    String? repeatSourceId,
+    bool? generatedRepeat,
+    bool clearRepeatSourceId = false,
+    bool clearRepeatEveryDays = false,
+  }) => ReleaseItem(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    status: status ?? this.status,
+    repeatEveryDays:
+        clearRepeatEveryDays ? null : (repeatEveryDays ?? this.repeatEveryDays),
+    repeatSourceId:
+        clearRepeatSourceId ? null : (repeatSourceId ?? this.repeatSourceId),
+    generatedRepeat: generatedRepeat ?? this.generatedRepeat,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'status': status.name,
+    'repeatEveryDays': repeatEveryDays,
+    'repeatSourceId': repeatSourceId,
+    'generatedRepeat': generatedRepeat,
+  };
+
+  factory ReleaseItem.fromMap(Map<String, dynamic> m) {
+    final s = (m['status'] as String?) ?? ReleaseStatus.planned.name;
+    final status = ReleaseStatus.values.firstWhere(
+      (e) => e.name == s,
+      orElse: () => ReleaseStatus.planned,
+    );
+
+    return ReleaseItem(
+      id:
+          (m['id'] as String?) ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
+      title: (m['title'] as String?) ?? '',
+      status: status,
+      repeatEveryDays: (m['repeatEveryDays'] as num?)?.toInt(),
+      repeatSourceId: m['repeatSourceId'] as String?,
+      generatedRepeat: (m['generatedRepeat'] as bool?) ?? false,
+    );
+  }
+}
+
+class RecurringReleaseSeed {
+  final String id;
+  final String title;
+  final String startDayKey;
+  final int intervalDays;
+
+  const RecurringReleaseSeed({
+    required this.id,
+    required this.title,
+    required this.startDayKey,
+    required this.intervalDays,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'startDayKey': startDayKey,
+    'intervalDays': intervalDays,
+  };
+
+  factory RecurringReleaseSeed.fromMap(Map<String, dynamic> m) {
+    return RecurringReleaseSeed(
+      id:
+          (m['id'] as String?) ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
+      title: (m['title'] as String?) ?? '',
+      startDayKey: (m['startDayKey'] as String?) ?? '',
+      intervalDays: (m['intervalDays'] as num?)?.toInt() ?? 1,
+    );
+  }
+}
+
+class ReleaseSwipeRow extends StatefulWidget {
+  final ReleaseItem release;
+  final bool isEditing;
+  final TextEditingController editController;
+  final FocusNode editFocusNode;
+
+  final VoidCallback onStartEdit;
+  final ValueChanged<String> onSubmitEdit;
+  final VoidCallback onToggleStatus;
+  final VoidCallback onDelete;
+  final VoidCallback onToggleRepeat;
+
+  const ReleaseSwipeRow({
+    super.key,
+    required this.release,
+    required this.isEditing,
+    required this.editController,
+    required this.editFocusNode,
+    required this.onStartEdit,
+    required this.onSubmitEdit,
+    required this.onToggleStatus,
+    required this.onDelete,
+    required this.onToggleRepeat,
+  });
+
+  @override
+  State<ReleaseSwipeRow> createState() => _ReleaseSwipeRowState();
+}
+
+class _ReleaseSwipeRowState extends State<ReleaseSwipeRow> {
+  static const double _maxReveal = 58;
+  double _offsetX = 0;
+  bool _committing = false;
+
+  void _submitEdit() {
+    if (_committing) return;
+    _committing = true;
+    widget.onSubmitEdit(widget.editController.text);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.isEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.editFocusNode.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ReleaseSwipeRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.isEditing && !oldWidget.isEditing) {
+      _committing = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.editFocusNode.requestFocus();
+      });
+    }
+
+    if (!widget.isEditing && oldWidget.isEditing) {
+      _committing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRepeat =
+        widget.release.repeatEveryDays != null ||
+        widget.release.repeatSourceId != null ||
+        widget.release.generatedRepeat;
+
+    final repeatLabel =
+        widget.release.repeatEveryDays != null
+            ? '${widget.release.repeatEveryDays}'
+            : null;
+
+    final isDone = widget.release.status == ReleaseStatus.published;
+
+    const repeatOnColor = kRepeatOnColor;
+    const repeatOffColor = kRepeatOffColor;
+
+    const doneRepeatColor = Color.fromARGB(255, 255, 117, 163);
+    const undoneRepeatColor = Color.fromARGB(255, 255, 117, 163);
+
+    const doneNormalColor = Color.fromARGB(255, 52, 102, 143);
+    const undoneNormalColor = Color.fromARGB(255, 117, 148, 188);
+
+    return SizedBox(
+      height: 48,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  width: _offsetX,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: InkWell(
+                      onTap: widget.onToggleRepeat,
+                      borderRadius: BorderRadius.circular(12),
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      focusColor: Colors.transparent,
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        color: Colors.transparent,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              Icons.repeat_rounded,
+                              size: 24,
+                              color: isRepeat ? repeatOnColor : repeatOffColor,
+                            ),
+                            if (repeatLabel != null)
+                              Positioned(
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 1.5,
+                                    vertical: 0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    repeatLabel,
+                                    style: TextStyle(
+                                      fontSize:
+                                          repeatLabel.length >= 2 ? 6.8 : 7.6,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.0,
+                                      color:
+                                          isRepeat
+                                              ? repeatOnColor
+                                              : repeatOffColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                if (widget.isEditing) return;
+                setState(() {
+                  _offsetX = (_offsetX + details.delta.dx).clamp(0, _maxReveal);
+                });
+              },
+              onHorizontalDragEnd: (_) {
+                if (widget.isEditing) return;
+                setState(() {
+                  _offsetX = _offsetX > 20 ? _maxReveal : 0;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                transform: Matrix4.translationValues(_offsetX, 0, 0),
+                child: Material(
+                  color: Colors.white,
+                  shadowColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  child: Row(
+                    children: [
+                      InkWell(
+                        onTap: widget.onToggleStatus,
+                        borderRadius: BorderRadius.circular(6),
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        overlayColor: WidgetStateProperty.all(
+                          Colors.transparent,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            isDone
+                                ? Icons.cloud_done
+                                : Icons.cloud_upload_outlined,
+                            color:
+                                isRepeat
+                                    ? (isDone
+                                        ? doneRepeatColor
+                                        : undoneRepeatColor)
+                                    : (isDone
+                                        ? doneNormalColor
+                                        : undoneNormalColor),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child:
+                            widget.isEditing
+                                ? TextField(
+                                  controller: widget.editController,
+                                  focusNode: widget.editFocusNode,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: const InputDecoration(
+                                    hintText: '업로드 제목을 입력하세요',
+                                    hintStyle: TextStyle(
+                                      color: Color.fromARGB(255, 157, 177, 198),
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    border: InputBorder.none,
+                                    isCollapsed: true,
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    height: 1.2,
+                                    color: Colors.black87,
+                                  ),
+                                  onSubmitted: (_) => _submitEdit(),
+                                  onTapOutside: (_) => _submitEdit(),
+                                )
+                                : InkWell(
+                                  onTap: widget.onStartEdit,
+                                  splashColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  overlayColor: WidgetStateProperty.all(
+                                    Colors.transparent,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      widget.release.title,
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        height: 1.2,
+                                        fontWeight:
+                                            isDone
+                                                ? FontWeight.w700
+                                                : FontWeight.w400,
+                                        color:
+                                            isDone
+                                                ? const Color.fromARGB(
+                                                  255,
+                                                  52,
+                                                  96,
+                                                  143,
+                                                )
+                                                : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color:
+                              isDone
+                                  ? const Color.fromARGB(25, 52, 96, 143)
+                                  : const Color.fromARGB(20, 117, 148, 188),
+                        ),
+                        child: Text(
+                          isDone ? '완료' : '계획',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color:
+                                isDone
+                                    ? const Color.fromARGB(255, 52, 96, 143)
+                                    : const Color.fromARGB(255, 102, 168, 254),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: widget.onDelete,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        style: IconButton.styleFrom(
+                          overlayColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          surfaceTintColor: Colors.transparent,
+                        ),
+                        icon: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Color.fromARGB(255, 160, 160, 160),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

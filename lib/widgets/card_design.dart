@@ -11,6 +11,7 @@ class A4MiniCard extends StatelessWidget {
     this.selected = false,
     required this.selectionMode,
     this.coverPath,
+    this.genreText,
   });
 
   final String title;
@@ -18,6 +19,7 @@ class A4MiniCard extends StatelessWidget {
   final bool selected;
   final bool selectionMode;
   final String? coverPath;
+  final String? genreText;
 
   static const Color border = Color.fromARGB(221, 159, 188, 208);
 
@@ -27,6 +29,24 @@ class A4MiniCard extends StatelessWidget {
 
   static const double captionGap = 7;
   static const double captionHeight = 70;
+  static const double genreBadgeTopSpace = 18;
+
+  Widget _genreBadge(double scale) {
+    final text = genreText?.trim();
+    if (text == null || text.isEmpty) return const SizedBox.shrink();
+
+    return IgnorePointer(
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11 * scale,
+          fontWeight: FontWeight.w500,
+          color: const Color.fromARGB(255, 156, 194, 231),
+          height: 1.0,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,111 +65,92 @@ class A4MiniCard extends StatelessWidget {
         final capH = captionHeight * scale;
         final gap = captionGap * scale;
         final radius = 13 * scale;
+        final badgeTopSpace = genreBadgeTopSpace * scale;
+        final hasBadge = genreText?.trim().isNotEmpty ?? false;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Stack(
+          clipBehavior: Clip.none,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              height: cardH,
-              width: cardW,
-              clipBehavior: hasCover ? Clip.none : Clip.hardEdge,
-              decoration:
-                  hasCover
-                      ? null
-                      : BoxDecoration(
-                        borderRadius: BorderRadius.circular(radius),
-                        border:
-                            (selectionMode && selected)
-                                ? Border.all(
-                                  color: const Color.fromARGB(
-                                    255,
-                                    91,
-                                    179,
-                                    255,
-                                  ),
-                                  width: 1.7,
-                                )
-                                : Border.all(color: border, width: 0.5),
-                      ),
-              child:
-                  hasCover
-                      ? Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(radius),
-                            clipBehavior: Clip.antiAlias,
-                            child: Image.file(
-                              File(coverPath!),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          if (selectionMode && selected)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(radius),
-                                    border: Border.all(
-                                      color: const Color.fromARGB(
-                                        255,
-                                        91,
-                                        179,
-                                        255,
-                                      ),
-                                      width: 1.7,
-                                    ),
-                                  ),
-                                ),
+            Padding(
+              padding: EdgeInsets.only(top: hasBadge ? badgeTopSpace : 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    height: cardH,
+                    width: cardW,
+                    clipBehavior: Clip.hardEdge,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      border:
+                          (selectionMode && selected)
+                              ? Border.all(
+                                color: const Color.fromARGB(255, 91, 179, 255),
+                                width: 1.7,
+                              )
+                              : Border.all(color: border, width: 0.5),
+                    ),
+                    child:
+                        hasCover
+                            ? ClipRRect(
+                              borderRadius: BorderRadius.circular(radius),
+                              clipBehavior: Clip.antiAlias,
+                              child: Image.file(
+                                File(coverPath!),
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                            : const Center(
+                              child: Icon(
+                                Icons.menu_book_outlined,
+                                size: 25,
+                                color: Color.fromARGB(221, 111, 159, 192),
                               ),
                             ),
+                  ),
+                  SizedBox(height: gap),
+                  SizedBox(
+                    width: cardW,
+                    height: capH,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Expanded(
+                            child: Text(
+                              preview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color.fromARGB(221, 83, 129, 159),
+                                fontWeight: FontWeight.w400,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
                         ],
-                      )
-                      : const Center(
-                        child: Icon(
-                          Icons.menu_book_outlined,
-                          size: 25,
-                          color: Color.fromARGB(221, 111, 159, 192),
-                        ),
-                      ),
-            ),
-            SizedBox(height: gap),
-            SizedBox(
-              width: cardW,
-              height: capH,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: Text(
-                        preview,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color.fromARGB(221, 83, 129, 159),
-                          fontWeight: FontWeight.w400,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+
+            if (hasBadge)
+              Positioned(left: 5 * scale, top: 0, child: _genreBadge(scale)),
           ],
         );
       },

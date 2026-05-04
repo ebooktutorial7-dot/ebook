@@ -26,7 +26,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'all_books_page.dart';
 import 'book_builder_page.dart';
 import 'edit_episodes_page.dart';
-import 'login_page.dart';
 import 'simple_memo_page.dart';
 
 class EbookListPage extends StatefulWidget {
@@ -67,6 +66,7 @@ class _EbookListPageState extends State<EbookListPage>
   late final EbookListController controller;
   final DateTime _selectedDate = DateTime.now();
   bool _reduceTransparencyFlag = false;
+
   Future<_CalendarOnlyPreviewData>? _calendarPreviewFuture;
 
   Future<void> _openBookAtChapter(EpisodePreview p) async {
@@ -388,7 +388,10 @@ class _EbookListPageState extends State<EbookListPage>
   }
 
   static const double _shelfHeight =
-      A4MiniCard.a4Height + A4MiniCard.captionGap + A4MiniCard.captionHeight;
+      A4MiniCard.genreBadgeTopSpace +
+      A4MiniCard.a4Height +
+      A4MiniCard.captionGap +
+      A4MiniCard.captionHeight;
   static const double _memoSquare = 110;
 
   TabController? _genreController;
@@ -435,21 +438,11 @@ class _EbookListPageState extends State<EbookListPage>
 
     DayLog todayLog = DayLog.empty();
 
-    for (final g in Genre.values.where((e) => e != Genre.main)) {
-      final rawDay = prefs.getString('calendar_day_${g.name}_$todayKey');
-      if (rawDay == null || rawDay.isEmpty) continue;
-
+    final rawDay = prefs.getString('calendar_day_$todayKey');
+    if (rawDay != null && rawDay.isNotEmpty) {
       try {
         final decoded = jsonDecode(rawDay);
-        final log = DayLog.fromMap(Map<String, dynamic>.from(decoded));
-
-        todayLog = DayLog(
-          goalChars: todayLog.goalChars + log.goalChars,
-          note: todayLog.note,
-          sessions: [...todayLog.sessions, ...log.sessions],
-          tasks: [...todayLog.tasks, ...log.tasks],
-          releases: [...todayLog.releases, ...log.releases],
-        );
+        todayLog = DayLog.fromMap(Map<String, dynamic>.from(decoded));
       } catch (_) {}
     }
 
@@ -466,45 +459,6 @@ class _EbookListPageState extends State<EbookListPage>
       events: events,
       todayLog: todayLog,
       todayEventCount: todayEventCount,
-    );
-  }
-
-  String _formatInt(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      final idxFromEnd = s.length - i;
-      buf.write(s[i]);
-      if (idxFromEnd > 1 && idxFromEnd % 3 == 1) {
-        buf.write(',');
-      }
-    }
-    return buf.toString();
-  }
-
-  Widget _miniPreviewPill({required IconData icon, required String text}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0xFFF8FBFF),
-        border: Border.all(color: const Color(0xFFE3EDF7), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: const Color(0xFF7594BC)),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF5F7D9B),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -630,12 +584,10 @@ class _EbookListPageState extends State<EbookListPage>
 
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
+
     if (!context.mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
+
+    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
   }
 
   Future<void> _createNewBook(Genre genre) async {
@@ -1003,10 +955,8 @@ class _EbookListPageState extends State<EbookListPage>
                             context,
                             MaterialPageRoute(
                               builder:
-                                  (_) => CalendarPage(
-                                    genre: Genre.main,
-                                    initialDate: _selectedDate,
-                                  ),
+                                  (_) =>
+                                      CalendarPage(initialDate: _selectedDate),
                             ),
                           );
                           if (mounted) {
@@ -1096,6 +1046,12 @@ class _EbookListPageState extends State<EbookListPage>
           final book = books[i];
           final originalIndex = controller.ebooks.indexOf(book);
 
+          final genreName = book['genre'] as String?;
+          final genre = Genre.values.firstWhere(
+            (e) => e.name == genreName,
+            orElse: () => Genre.webNovel,
+          );
+
           return GestureDetector(
             onTap: () {
               if (originalIndex >= 0) _editEbook(originalIndex);
@@ -1108,6 +1064,7 @@ class _EbookListPageState extends State<EbookListPage>
                 selected: false,
                 coverPath: book['coverPath'] as String?,
                 selectionMode: false,
+                genreText: _isMainTab ? genreLabel(genre) : null,
               ),
             ),
           );
@@ -1117,8 +1074,6 @@ class _EbookListPageState extends State<EbookListPage>
   }
 
   Widget _buildCalendarPreviewCard() {
-    final genre = _genreTabs[_genreIndex];
-
     return FutureBuilder<_CalendarOnlyPreviewData>(
       future: _calendarPreviewFuture,
       builder: (context, snap) {
@@ -1135,10 +1090,6 @@ class _EbookListPageState extends State<EbookListPage>
         final data = snap.data!;
         final log = data.todayLog;
 
-        final goal = log.goalChars;
-        final written = log.writtenChars;
-        final progress = goal <= 0 ? 0.0 : (written / goal).clamp(0.0, 1.0);
-
         final doneTasks = log.tasks.where((e) => e.done).length;
         final totalTasks = log.tasks.length;
         final releaseCount = log.releases.length;
@@ -1150,11 +1101,7 @@ class _EbookListPageState extends State<EbookListPage>
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder:
-                      (_) => CalendarPage(
-                        genre: genre,
-                        initialDate: data.selectedDate,
-                      ),
+                  builder: (_) => CalendarPage(initialDate: _selectedDate),
                 ),
               );
 
@@ -1207,84 +1154,87 @@ class _EbookListPageState extends State<EbookListPage>
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _miniPreviewPill(
-                          icon: Icons.flag,
-                          text:
-                              goal > 0
-                                  ? '오늘 목표 ${_formatInt(goal)}자'
-                                  : '오늘 목표 없음',
-                        ),
-                        _miniPreviewPill(
-                          icon: Icons.edit_note,
-                          text: '오늘 작성 ${_formatInt(written)}자',
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 9,
-                      borderRadius: BorderRadius.circular(999),
-                      color: const Color(0xFF7594BC),
-                      backgroundColor: const Color(0xFFEAF2FA),
-                    ),
-                  ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.check_box_outlined,
+                            size: 15,
+                            color: Color(0xFF7594BC),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$doneTasks/$totalTasks',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF5F7D9B),
+                            ),
+                          ),
 
-                  const SizedBox(height: 10),
+                          const SizedBox(width: 14),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      goal > 0
-                          ? '진행률 ${(progress * 100).toStringAsFixed(0)}% · 남은 ${_formatInt((goal - written).clamp(0, 1 << 30))}자'
-                          : '오늘 목표를 설정하면 진행률이 표시됩니다.',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        height: 1.35,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF5F7D9B),
+                          const Icon(
+                            Icons.cloud_upload_outlined,
+                            size: 15,
+                            color: Color(0xFF7594BC),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$releaseCount개',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF5F7D9B),
+                            ),
+                          ),
+
+                          const SizedBox(width: 14),
+
+                          const Icon(
+                            Icons.event_note_outlined,
+                            size: 15,
+                            color: Color(0xFFFF75A3),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${data.todayEventCount}개',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF5F7D9B),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
 
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FBFF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFE3EDF7),
-                          width: 1,
-                        ),
-                      ),
+                    child: Center(
                       child: Text(
-                        '할 일 $doneTasks/$totalTasks · 업로드 $releaseCount개 · 오늘 일정 ${data.todayEventCount}개',
+                        totalTasks == 0 &&
+                                releaseCount == 0 &&
+                                data.todayEventCount == 0
+                            ? '오늘 등록된 기록이 없습니다.'
+                            : '오늘 할 일 $doneTasks/$totalTasks · 업로드 $releaseCount개 · 일정 ${data.todayEventCount}개',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F3A56),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Color.fromARGB(221, 83, 129, 159),
+                          height: 1.3,
                         ),
                       ),
                     ),

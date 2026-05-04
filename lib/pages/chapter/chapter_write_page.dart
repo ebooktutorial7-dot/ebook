@@ -128,6 +128,8 @@ class ChapterWritePage extends StatefulWidget {
   final String? persistentKey;
   final Genre genre;
   final DateTime writingDate;
+  final int? initialOpenPage;
+
   const ChapterWritePage({
     super.key,
     required this.documentId,
@@ -137,6 +139,7 @@ class ChapterWritePage extends StatefulWidget {
     this.persistentKey,
     required this.genre,
     required this.writingDate,
+    this.initialOpenPage,
   });
 
   @override
@@ -195,6 +198,23 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   String _buildDraftFingerprint(String title, String deltaJson) {
     return '$title\n$deltaJson';
+  }
+
+  bool _didInitialPageJump = false;
+
+  void _tryJumpToInitialPage() {
+    if (_didInitialPageJump) return;
+    final targetPage = widget.initialOpenPage;
+    if (targetPage == null) return;
+    if (!_scrollCtrl.hasClients) return;
+    if (_pageCount <= 0) return;
+
+    _didInitialPageJump = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _jumpToPage(targetPage);
+    });
   }
 
   void _onTitleChanged() {
@@ -308,11 +328,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     return '$y$m$day';
   }
 
-  String _prefsKeyForDay(String genreKey, String yyyymmdd) =>
-      'calendar_day_${genreKey}_$yyyymmdd';
+  String _prefsKeyForDay(String yyyymmdd) => 'calendar_day_$yyyymmdd';
 
-  String _prefsMonthIndexKey(String genreKey, int year, int month) =>
-      'calendar_month_index_${genreKey}_${year.toString().padLeft(4, '0')}${month.toString().padLeft(2, '0')}';
+  String _prefsMonthIndexKey(int year, int month) =>
+      'calendar_month_index_${year.toString().padLeft(4, '0')}${month.toString().padLeft(2, '0')}';
 
   String? _resolveFontFamily(String key) {
     switch (key) {
@@ -819,6 +838,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   void _attemptRestoreScroll() {
     if (_restoreTried) return;
+    if (widget.initialOpenPage != null) {
+      _restoreTried = true;
+      return;
+    }
     if (!_scrollCtrl.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _attemptRestoreScroll(),
@@ -1166,7 +1189,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     final currentChars = _getCharCount();
 
-    final genreKey = widget.genre.name;
     final day = DateTime(
       widget.writingDate.year,
       widget.writingDate.month,
@@ -1174,8 +1196,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     );
 
     final dayKey = _keyOf(day);
-    final dayPrefsKey = _prefsKeyForDay(genreKey, dayKey);
-    final monthIndexKey = _prefsMonthIndexKey(genreKey, day.year, day.month);
+    final dayPrefsKey = _prefsKeyForDay(dayKey);
+    final monthIndexKey = _prefsMonthIndexKey(day.year, day.month);
 
     final chapterSessionId = 'chapter:${widget.documentId}:$_baseKey:$dayKey';
 
@@ -1433,6 +1455,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _recomputePaginationFromStoredHeight();
             _attemptRestoreScroll();
+            _tryJumpToInitialPage();
           });
 
           final bool isKeyboardUp =

@@ -17,7 +17,7 @@ dependencies:
   # ===== DB =====
   isar: ^3.1.0
   isar_flutter_libs: ^3.1.0
-  
+
   speech_to_text: ^7.4.0-beta.8
 
   # ===== Storage / Path =====
@@ -60,6 +60,7 @@ dependencies:
 
   # 공유 기능
   share_plus: ^10.0.2
+  font_awesome_flutter: ^11.0.0
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +74,7 @@ flutter:
 
   assets:
     - lib/assets/fonts/
+    - lib/assets/icons/google_g.png
 
   fonts:
     - family: Inter
