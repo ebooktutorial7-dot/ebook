@@ -26,6 +26,16 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>카메라로 사진을 촬영하여 에디터에 첨부하기 위해 필요합니다.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>음성 입력을 위해 마이크를 사용합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>이미지나 콘텐츠를 사진 앨범에 저장하기 위해 필요합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>앨범에서 사진을 선택하여 에디터에 첨부하기 위해 필요합니다.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>음성을 텍스트로 변환해 글쓰기에 사용합니다.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -48,16 +58,19 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
-	<key>NSMicrophoneUsageDescription</key>
-	<string>음성 입력을 위해 마이크를 사용합니다.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>음성을 텍스트로 변환해 글쓰기에 사용합니다.</string>
+	<key>GIDClientID</key>
+	<string>574290558433-k7j2apemmr9c3cf3v1ejqu9gb6r4jkpj.apps.googleusercontent.com</string>
 
-	<key>NSCameraUsageDescription</key>
-	<string>카메라로 사진을 촬영하여 에디터에 첨부하기 위해 필요합니다.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>앨범에서 사진을 선택하여 에디터에 첨부하기 위해 필요합니다.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>이미지나 콘텐츠를 사진 앨범에 저장하기 위해 필요합니다.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.574290558433-k7j2apemmr9c3cf3v1ejqu9gb6r4jkpj</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

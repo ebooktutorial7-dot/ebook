@@ -6,12 +6,16 @@ import 'utils/migrations.dart';
 
 import 'package:flutter/cupertino.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 
+import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'package:ebook_tutorial_app/firebase_options.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:ebook_tutorial_app/pages/ebook_list_page.dart';
@@ -27,6 +31,16 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    try {
+      await GoogleSignIn.instance.initialize(
+        clientId:
+            '574290558433-k7j2apemmr9c3cf3v1ejqu9gb6r4jkpj.apps.googleusercontent.com',
+      );
+      debugPrint('GoogleSignIn 초기화 성공');
+    } catch (e) {
+      debugPrint('GoogleSignIn 초기화 실패: $e');
+    }
   } catch (e) {
     runApp(
       const MaterialApp(
@@ -157,10 +171,90 @@ class WelcomePage extends StatefulWidget {
 class _WelcomePageState extends State<WelcomePage> {
   bool _isLoading = false;
 
-  void _showPreparing(String name) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$name 로그인은 준비 중입니다.')));
+  void _showAuthError(String provider, Object e) {
+    debugPrint('[$provider 로그인 오류] $e');
+
+    final message =
+        e is FirebaseAuthException
+            ? (e.message ?? '$provider 로그인에 실패했습니다.')
+            : '$provider 로그인 실패: $e';
+
+    AppToast.show(context, message);
+  }
+
+  Future<void> _loginWithGoogle() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+
+        await FirebaseAuth.instance.signInWithPopup(provider);
+      } else {
+        final googleUser = await GoogleSignIn.instance.authenticate(
+          scopeHint: const ['email', 'profile'],
+        );
+
+        final googleAuth = googleUser.authentication;
+
+        final credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const EbookListPage()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showAuthError('Google', e);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loginWithApple() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final provider =
+          AppleAuthProvider()
+            ..addScope('email')
+            ..addScope('name');
+
+      if (kIsWeb) {
+        await FirebaseAuth.instance.signInWithPopup(provider);
+      } else {
+        await FirebaseAuth.instance.signInWithProvider(provider);
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const EbookListPage()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showAuthError('Apple', e);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _loginAnonymously() async {
@@ -180,9 +274,7 @@ class _WelcomePageState extends State<WelcomePage> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('비회원 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')),
-      );
+      AppToast.show(context, '비회원 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -209,10 +301,10 @@ class _WelcomePageState extends State<WelcomePage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFFFF1F7),
-              Color(0xFFFFD6E8),
+              Color.fromARGB(255, 255, 255, 255),
+              Color.fromARGB(255, 216, 245, 255),
               Color(0xFFEAF8FF),
-              Color(0xFFBDEEFF),
+              Color.fromARGB(255, 255, 255, 255),
             ],
             stops: [0.0, 0.38, 0.72, 1.0],
           ),
@@ -246,23 +338,19 @@ class _WelcomePageState extends State<WelcomePage> {
                               onGuestPressed:
                                   _isLoading ? null : _loginAnonymously,
                               onGooglePressed:
-                                  _isLoading
-                                      ? null
-                                      : () => _showPreparing('Google'),
+                                  _isLoading ? null : _loginWithGoogle,
                               onApplePressed:
-                                  _isLoading
-                                      ? null
-                                      : () => _showPreparing('Apple'),
+                                  _isLoading ? null : _loginWithApple,
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 10),
 
                             const Text(
                               '계정은 설정에서 언제든 연결하실 수 있습니다.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Color.fromARGB(255, 255, 255, 255),
+                                color: Color.fromARGB(186, 129, 178, 207),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -439,14 +527,18 @@ class _GlassActionButton extends StatelessWidget {
                     : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(icon, size: 20, color: const Color(0xFF172554)),
+                        Icon(
+                          icon,
+                          size: 20,
+                          color: const Color.fromARGB(186, 129, 178, 207),
+                        ),
                         const SizedBox(width: 9),
                         Text(
                           label,
                           style: const TextStyle(
                             fontSize: 15.5,
-                            color: Color(0xFF172554),
-                            fontWeight: FontWeight.w800,
+                            color: Color.fromARGB(186, 129, 178, 207),
+                            fontWeight: FontWeight.w500,
                             letterSpacing: -0.2,
                           ),
                         ),

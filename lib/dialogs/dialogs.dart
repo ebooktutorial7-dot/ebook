@@ -185,6 +185,7 @@ Future<void> showMoreDialog({
   required BuildContext context,
   required GlassTheme theme,
   required VoidCallback onPickMode,
+  required VoidCallback onSettings,
   required VoidCallback onLogout,
 }) {
   final buttonTheme = theme.copyWith(
@@ -226,6 +227,18 @@ Future<void> showMoreDialog({
                     ),
                   ),
                   const SizedBox(height: 16),
+                  GlassActionButton(
+                    theme: buttonTheme,
+                    icon: Icons.settings_outlined,
+                    label: '설정',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onSettings();
+                    },
+                  ),
+
+                  const SizedBox(height: 8),
+
                   GlassActionButton(
                     theme: buttonTheme,
                     icon: Icons.logout,

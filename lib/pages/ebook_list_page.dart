@@ -19,7 +19,7 @@ import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/utils/delta_utils.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/widgets/card_design.dart';
-
+import 'settings_page.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -741,6 +741,12 @@ class _EbookListPageState extends State<EbookListPage>
                               },
                             ),
                       ),
+                    );
+                  },
+                  onSettings: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsPage()),
                     );
                   },
                   onLogout: () => _logout(context),

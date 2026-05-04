@@ -28,7 +28,7 @@ import 'package:ebook_tutorial_app/widgets/mini_flat_toolbar.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/models/writing_settings.dart';
-
+import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'package:ebook_tutorial_app/pages/png.dart';
 
 const String kBgAlphaKey = 'bgAlpha';
@@ -428,9 +428,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       await _initSpeech();
       if (!_speechReady) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('음성 인식을 사용할 수 없습니다.')));
+        AppToast.show(context, '음성 인식을 사용할 수 없습니다.');
         return;
       }
     }
@@ -473,111 +471,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     }
   }
 
-  void _showAppSnackBar({
-    required String message,
-    required IconData icon,
-    required Color iconBgColor,
-    required Color cardColor,
-    String? actionLabel,
-    VoidCallback? onActionTap,
-  }) {
-    final messenger = ScaffoldMessenger.of(context);
-
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          padding: EdgeInsets.zero,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-          duration: const Duration(seconds: 2),
-          content: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: const Color(0x22FFFFFF), width: 0.7),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: iconBgColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, size: 16, color: Colors.white),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      height: 1.25,
-                    ),
-                  ),
-                ),
-                if (actionLabel != null && onActionTap != null) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      messenger.hideCurrentSnackBar();
-                      onActionTap();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        actionLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      );
+  void _showAppToast(String message) {
+    if (!mounted) return;
+    AppToast.show(context, message);
   }
 
-  void _showErrorSnackBar(
-    String message, {
-    String? actionLabel,
-    VoidCallback? onActionTap,
-  }) {
-    _showAppSnackBar(
-      message: message,
-      icon: Icons.error_outline,
-      iconBgColor: const Color(0xFFFF5A5F),
-      cardColor: const Color(0xFF2C2323),
-      actionLabel: actionLabel,
-      onActionTap: onActionTap,
-    );
+  void _showErrorToast(String message) {
+    _showAppToast(message);
   }
 
   @override
@@ -751,11 +651,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _isListening = false;
     });
 
-    _showErrorSnackBar(
-      '음성 인식 오류: ${error.errorMsg}',
-      actionLabel: '재시도',
-      onActionTap: _toggleSpeechInput,
-    );
+    _showErrorToast('음성 인식 오류: ${error.errorMsg}');
   }
 
   void _jumpToPagePreview(int page) {
