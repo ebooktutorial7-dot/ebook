@@ -17,10 +17,12 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:archive/archive_io.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ebook_tutorial_app/services/google_drive_backup_service.dart';
 import 'package:ebook_tutorial_app/pages/pdf_preview_page.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart';
 import 'package:ebook_tutorial_app/pages/canvas_doc_engine.dart';
@@ -218,12 +220,16 @@ class _PdfPopupItem extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: const Color(0xFF1F3A56)),
             const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF1F3A56),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF1F3A56),
+                ),
               ),
             ),
           ],
@@ -245,6 +251,8 @@ class _PreviewPageTarget {
 
 class _BookBuilderPageState extends State<BookBuilderPage>
     with SingleTickerProviderStateMixin {
+  final GoogleDriveBackupService _googleDriveBackupService =
+      GoogleDriveBackupService();
   late final TextEditingController _titleCtrl;
   late final TextEditingController _penNameCtrl;
   late List<Map<String, dynamic>> _delta;
@@ -1417,6 +1425,580 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     navigator.pop(data);
   }
 
+  String _safeDriveBackupFileName(String rawTitle, {String extension = 'zip'}) {
+    final title = rawTitle.trim().isEmpty ? 'book_backup' : rawTitle.trim();
+
+    final safe = title
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+    return '${safe}_$stamp.$extension';
+  }
+
+  Future<Map<String, dynamic>> _buildGoogleDriveBackupData({
+    required Map<String, String> assetPathMap,
+  }) async {
+    final saveDelta = _buildDeltaForSave();
+
+    _delta = saveDelta;
+
+    await _persistTitle(_titleCtrl.text.trim());
+    await _persistPenName(_penNameCtrl.text.trim());
+    await _persistChapters();
+    await _persistMeta();
+
+    final chaptersJson =
+        _chapters.map((chapter) {
+          final json = _chapterToJson(chapter);
+
+          final coverPath = chapter.coverPath;
+          if (coverPath != null && assetPathMap.containsKey(coverPath)) {
+            json['coverZipPath'] = assetPathMap[coverPath];
+          }
+
+          return json;
+        }).toList();
+
+    return <String, dynamic>{
+      'backupVersion': 2,
+      'backupType': 'ebook_tutorial_app_book_zip',
+      'createdAt': DateTime.now().toIso8601String(),
+
+      'title': _titleCtrl.text.trim(),
+      'delta': saveDelta,
+      'drawings': _drawings,
+      'penName': _penNameCtrl.text.trim(),
+      'updatedAt': DateTime.now().toIso8601String(),
+      'index': _currentIndex,
+      'documentId': widget.documentId,
+
+      'chapters': chaptersJson,
+
+      'summary': _summaryCtrl.text.trim(),
+      'keywords': _keywords,
+      'workType': _workTypeCtrl.text.trim(),
+      'category': _categoryCtrl.text.trim(),
+      'ageRating': _ageRatingCtrl.text.trim(),
+
+      'coverPath': _coverPath,
+      'coverZipPath': _coverPath == null ? null : assetPathMap[_coverPath],
+
+      'assetManifest':
+          assetPathMap.entries
+              .map(
+                (entry) => <String, dynamic>{
+                  'originalPath': entry.key,
+                  'zipPath': entry.value,
+                },
+              )
+              .toList(),
+    };
+  }
+
+  bool _isLocalExistingFilePath(String? path) {
+    if (path == null || path.trim().isEmpty) return false;
+
+    final value = path.trim();
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return false;
+    }
+
+    return File(value).existsSync();
+  }
+
+  List<String> _collectImagePathsFromDelta(List<Map<String, dynamic>> delta) {
+    final paths = <String>[];
+
+    for (final op in delta) {
+      final insert = op['insert'];
+
+      if (insert is Map && insert['image'] is String) {
+        final imagePath = insert['image'] as String;
+
+        if (_isLocalExistingFilePath(imagePath)) {
+          paths.add(imagePath);
+        }
+      }
+    }
+
+    return paths;
+  }
+
+  Future<File> _createBookBackupZipFile() async {
+    final tempDir = await getTemporaryDirectory();
+
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final backupRoot = Directory(
+      p.join(tempDir.path, 'ebook_drive_backup_$stamp'),
+    );
+
+    final payloadDir = Directory(p.join(backupRoot.path, 'payload'));
+    final assetsDir = Directory(p.join(payloadDir.path, 'assets'));
+
+    await assetsDir.create(recursive: true);
+
+    final assetPathMap = <String, String>{};
+
+    final imagePaths = <String>{};
+
+    if (_isLocalExistingFilePath(_coverPath)) {
+      imagePaths.add(_coverPath!);
+    }
+
+    for (final chapter in _chapters) {
+      if (_isLocalExistingFilePath(chapter.coverPath)) {
+        imagePaths.add(chapter.coverPath!);
+      }
+
+      imagePaths.addAll(_collectImagePathsFromDelta(chapter.delta));
+    }
+
+    imagePaths.addAll(_collectImagePathsFromDelta(_delta));
+
+    var assetIndex = 1;
+
+    for (final originalPath in imagePaths) {
+      final originalFile = File(originalPath);
+      if (!await originalFile.exists()) continue;
+
+      final ext =
+          p.extension(originalPath).isEmpty
+              ? '.bin'
+              : p.extension(originalPath);
+
+      final assetFileName =
+          'asset_${assetIndex.toString().padLeft(4, '0')}$ext';
+      final zipRelativePath = 'assets/$assetFileName';
+
+      final copiedFile = File(p.join(assetsDir.path, assetFileName));
+      await originalFile.copy(copiedFile.path);
+
+      assetPathMap[originalPath] = zipRelativePath;
+      assetIndex++;
+    }
+
+    final backupData = await _buildGoogleDriveBackupData(
+      assetPathMap: assetPathMap,
+    );
+
+    final manifestFile = File(p.join(payloadDir.path, 'book_backup.json'));
+
+    await manifestFile.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(backupData),
+      encoding: utf8,
+    );
+
+    final zipFileName = _safeDriveBackupFileName(
+      _titleCtrl.text,
+      extension: 'zip',
+    );
+
+    final zipFile = File(p.join(tempDir.path, zipFileName));
+
+    if (await zipFile.exists()) {
+      await zipFile.delete();
+    }
+
+    final encoder = ZipFileEncoder();
+
+    encoder.create(zipFile.path);
+    await encoder.addDirectory(payloadDir);
+    encoder.close();
+
+    return zipFile;
+  }
+
+  Future<void> _saveCurrentBookToGoogleDrive() async {
+    _hideCloudSubmenu();
+
+    if (!mounted) return;
+    AppToast.show(context, 'Google Drive에 ZIP 백업 저장 중입니다');
+
+    try {
+      final zipFile = await _createBookBackupZipFile();
+
+      final result = await _googleDriveBackupService.uploadZipFile(
+        zipFile: zipFile,
+        fileName: p.basename(zipFile.path),
+      );
+
+      if (!mounted) return;
+
+      final savedName = result.name ?? p.basename(zipFile.path);
+      AppToast.show(context, 'Google Drive 저장 완료: $savedName');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, 'Google Drive 저장 실패: $e');
+    }
+  }
+
+  Future<GoogleDriveBackupFile?> _showGoogleDriveBackupPicker(
+    List<GoogleDriveBackupFile> files,
+  ) async {
+    if (files.isEmpty) {
+      if (!mounted) return null;
+      AppToast.show(context, 'Google Drive 백업 파일이 없습니다');
+      return null;
+    }
+
+    return showCupertinoModalPopup<GoogleDriveBackupFile>(
+      context: context,
+      builder: (ctx) {
+        return CupertinoActionSheet(
+          title: const Text('Google Drive 불러오기'),
+          message: const Text('불러올 백업 파일을 선택하세요.'),
+          actions:
+              files.map((file) {
+                final dateText =
+                    file.modifiedTime == null
+                        ? ''
+                        : DateFormat(
+                          'yyyy.MM.dd HH:mm',
+                        ).format(file.modifiedTime!.toLocal());
+
+                final sizeText =
+                    file.sizeBytes == null ? '' : _formatBytes(file.sizeBytes);
+
+                final subtitle = [
+                  if (dateText.isNotEmpty) dateText,
+                  if (sizeText.isNotEmpty) sizeText,
+                ].join(' · ');
+
+                return CupertinoActionSheetAction(
+                  onPressed: () => Navigator.pop(ctx, file),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        file.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: CupertinoColors.systemGrey,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _confirmGoogleDriveRestore() async {
+    final result = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return CupertinoAlertDialog(
+          title: const Text('백업 불러오기'),
+          content: const Text(
+            '현재 화면의 책 내용이 Google Drive 백업 내용으로 교체됩니다. 계속하시겠습니까?',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('불러오기'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result == true;
+  }
+
+  List<Map<String, dynamic>> _asDeltaList(dynamic value) {
+    final list = value as List<dynamic>? ?? const [];
+    return list
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList(growable: true);
+  }
+
+  List<Map<String, dynamic>> _restoreDeltaImagePaths(
+    List<Map<String, dynamic>> delta,
+    Map<String, String> originalPathToLocalPath,
+  ) {
+    return delta
+        .map((op) {
+          final copied = Map<String, dynamic>.from(op);
+          final insert = copied['insert'];
+
+          if (insert is Map) {
+            final insertMap = Map<String, dynamic>.from(insert);
+            final imagePath = insertMap['image'];
+
+            if (imagePath is String &&
+                originalPathToLocalPath.containsKey(imagePath)) {
+              insertMap['image'] = originalPathToLocalPath[imagePath];
+              copied['insert'] = insertMap;
+            }
+          }
+
+          return copied;
+        })
+        .toList(growable: true);
+  }
+
+  String? _restoreAssetPath({
+    required String? originalPath,
+    required String? zipPath,
+    required Map<String, String> originalPathToLocalPath,
+    required Map<String, String> zipPathToLocalPath,
+  }) {
+    if (zipPath != null && zipPathToLocalPath.containsKey(zipPath)) {
+      return zipPathToLocalPath[zipPath];
+    }
+
+    if (zipPath != null && zipPathToLocalPath.containsKey('payload/$zipPath')) {
+      return zipPathToLocalPath['payload/$zipPath'];
+    }
+
+    if (originalPath != null &&
+        originalPathToLocalPath.containsKey(originalPath)) {
+      return originalPathToLocalPath[originalPath];
+    }
+
+    return null;
+  }
+
+  Future<void> _restoreBookFromGoogleDriveZipBytes(List<int> zipBytes) async {
+    final archive = ZipDecoder().decodeBytes(zipBytes);
+
+    ArchiveFile? backupJsonFile;
+
+    for (final file in archive.files) {
+      final name = file.name.replaceAll('\\', '/');
+      if (file.isFile && name.endsWith('book_backup.json')) {
+        backupJsonFile = file;
+        break;
+      }
+    }
+
+    if (backupJsonFile == null) {
+      throw Exception('book_backup.json을 찾을 수 없습니다');
+    }
+
+    final backupJsonBytes = List<int>.from(backupJsonFile.content as List);
+    final backup =
+        jsonDecode(utf8.decode(backupJsonBytes)) as Map<String, dynamic>;
+
+    final appDocDir = await getApplicationDocumentsDirectory();
+
+    final restoredRoot = Directory(
+      p.join(
+        appDocDir.path,
+        'google_drive_restore_${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+
+    final zipPathToLocalPath = <String, String>{};
+
+    for (final file in archive.files) {
+      final normalizedName = file.name.replaceAll('\\', '/');
+
+      if (!file.isFile) continue;
+
+      final isAsset =
+          normalizedName.contains('/assets/') ||
+          normalizedName.startsWith('assets/');
+
+      if (!isAsset) continue;
+
+      final relativePath =
+          normalizedName.startsWith('payload/')
+              ? normalizedName.substring('payload/'.length)
+              : normalizedName;
+
+      final outFile = File(p.join(restoredRoot.path, relativePath));
+
+      await outFile.parent.create(recursive: true);
+      await outFile.writeAsBytes(List<int>.from(file.content as List));
+
+      zipPathToLocalPath[relativePath] = outFile.path;
+      zipPathToLocalPath[normalizedName] = outFile.path;
+    }
+
+    final originalPathToLocalPath = <String, String>{};
+
+    final assetManifest = backup['assetManifest'];
+    if (assetManifest is List) {
+      for (final item in assetManifest) {
+        if (item is! Map) continue;
+
+        final originalPath = item['originalPath'] as String?;
+        final zipPath = item['zipPath'] as String?;
+
+        if (originalPath == null || zipPath == null) continue;
+
+        final localPath =
+            zipPathToLocalPath[zipPath] ??
+            zipPathToLocalPath['payload/$zipPath'];
+
+        if (localPath != null) {
+          originalPathToLocalPath[originalPath] = localPath;
+        }
+      }
+    }
+
+    final restoredDelta = _restoreDeltaImagePaths(
+      _asDeltaList(backup['delta']),
+      originalPathToLocalPath,
+    );
+
+    final restoredDrawings = (backup['drawings'] as List<dynamic>? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList(growable: true);
+
+    final restoredChapters = <ChapterItem>[];
+
+    final rawChapters = backup['chapters'];
+    if (rawChapters is List) {
+      for (final raw in rawChapters) {
+        if (raw is! Map) continue;
+
+        final m = Map<String, dynamic>.from(raw);
+
+        final updatedStr = m['updatedAt'] as String?;
+        final updatedAt =
+            updatedStr == null || updatedStr.isEmpty
+                ? null
+                : DateTime.tryParse(updatedStr);
+
+        final restoredChapterDelta = _restoreDeltaImagePaths(
+          _asDeltaList(m['delta']),
+          originalPathToLocalPath,
+        );
+
+        restoredChapters.add(
+          ChapterItem(
+            title: (m['title'] as String?) ?? '복원된 회차',
+            index:
+                ((m['index'] as num?) ?? (restoredChapters.length + 1)).toInt(),
+            coverPath: _restoreAssetPath(
+              originalPath: m['cover'] as String?,
+              zipPath: m['coverZipPath'] as String?,
+              originalPathToLocalPath: originalPathToLocalPath,
+              zipPathToLocalPath: zipPathToLocalPath,
+            ),
+            episodeTitle: m['episodeTitle'] as String?,
+            delta: restoredChapterDelta,
+            sizeBytes: (m['sizeBytes'] as num?)?.toInt(),
+            charCount: (m['charCount'] as num?)?.toInt(),
+            updatedAt: updatedAt,
+            pinned: (m['pinned'] as bool?) ?? false,
+          ),
+        );
+      }
+    }
+
+    final restoredCoverPath = _restoreAssetPath(
+      originalPath: backup['coverPath'] as String?,
+      zipPath: backup['coverZipPath'] as String?,
+      originalPathToLocalPath: originalPathToLocalPath,
+      zipPathToLocalPath: zipPathToLocalPath,
+    );
+
+    setState(() {
+      _titleCtrl.text = (backup['title'] as String?) ?? '';
+      _penNameCtrl.text = (backup['penName'] as String?) ?? '';
+
+      _summaryCtrl.text = (backup['summary'] as String?) ?? '';
+      _workTypeCtrl.text = (backup['workType'] as String?) ?? '';
+      _categoryCtrl.text = (backup['category'] as String?) ?? '';
+      _ageRatingCtrl.text = (backup['ageRating'] as String?) ?? '';
+
+      _keywords
+        ..clear()
+        ..addAll(
+          (backup['keywords'] as List<dynamic>? ?? const [])
+              .map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty),
+        );
+
+      _coverPath = restoredCoverPath;
+      _drawings = restoredDrawings;
+
+      _chapters
+        ..clear()
+        ..addAll(restoredChapters);
+
+      _delta = restoredDelta;
+      _currentIndex = 0;
+    });
+
+    await _persistTitle(_titleCtrl.text.trim());
+    await _persistPenName(_penNameCtrl.text.trim());
+    await _persistMeta();
+    await _persistCoverPath(_coverPath);
+    await _persistChapters();
+
+    if (_chapters.isNotEmpty) {
+      _refreshPreviewFromChapters();
+    } else {
+      unawaited(_rebuildPagination());
+    }
+  }
+
+  Future<void> _loadCurrentBookFromGoogleDrive() async {
+    _hideCloudSubmenu();
+
+    if (!mounted) return;
+    AppToast.show(context, 'Google Drive 백업 목록을 불러오는 중입니다');
+
+    try {
+      final files = await _googleDriveBackupService.listBackupZipFiles();
+
+      if (!mounted) return;
+
+      final selected = await _showGoogleDriveBackupPicker(files);
+      if (selected == null) return;
+
+      if (!mounted) return;
+
+      final ok = await _confirmGoogleDriveRestore();
+      if (!ok) return;
+
+      if (!mounted) return;
+      AppToast.show(context, 'Google Drive 백업을 다운로드 중입니다');
+
+      final bytes = await _googleDriveBackupService.downloadFileBytes(
+        fileId: selected.id,
+      );
+
+      await _restoreBookFromGoogleDriveZipBytes(bytes);
+
+      if (!mounted) return;
+      AppToast.show(context, 'Google Drive 백업 불러오기 완료');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, 'Google Drive 불러오기 실패: $e');
+    }
+  }
+
   void _toggleView() {
     setState(() => _isPageView = !_isPageView);
     _ensureItemKeys();
@@ -2007,7 +2589,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               showWhenUnlinked: false,
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
-              offset: const Offset(0, 0),
+              offset: const Offset(-23, 0),
               child: Material(
                 color: Colors.transparent,
                 child: KeyedSubtree(
@@ -2020,7 +2602,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     backgroundColor: Colors.white.withValues(alpha: 0.96),
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 170),
+                      constraints: const BoxConstraints(maxWidth: 210),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -2056,14 +2638,32 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                           const SizedBox(height: 10),
                           _PdfPopupItem(
                             icon: Icons.cloud_outlined,
-                            label: 'iCloud',
+                            label: 'iCloud Backup',
                             onTap: () {},
                           ),
                           const SizedBox(height: 6),
                           _PdfPopupItem(
+                            icon: Icons.cloud_download_outlined,
+                            label: 'iCloud 불러오기',
+                            onTap: () {
+                              // 기능 없음
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          _PdfPopupItem(
                             icon: Icons.cloud_outlined,
-                            label: 'Google Drive',
-                            onTap: () {},
+                            label: 'Google Drive Backup',
+                            onTap: () {
+                              unawaited(_saveCurrentBookToGoogleDrive());
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          _PdfPopupItem(
+                            icon: Icons.cloud_download_outlined,
+                            label: 'Google Drive 불러오기',
+                            onTap: () {
+                              unawaited(_loadCurrentBookFromGoogleDrive());
+                            },
                           ),
                         ],
                       ),
@@ -2129,7 +2729,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               showWhenUnlinked: false,
               targetAnchor: Alignment.bottomCenter,
               followerAnchor: Alignment.topCenter,
-              offset: const Offset(0, 0),
+              offset: const Offset(-7, 0),
               child: Material(
                 color: Colors.transparent,
                 child: KeyedSubtree(
