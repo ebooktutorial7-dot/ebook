@@ -1769,6 +1769,22 @@ class _PngPageState extends State<PngPage> {
     return file;
   }
 
+  Future<void> _shareXFiles({
+    required List<XFile> files,
+    String? text,
+    String? subject,
+    Rect? sharePositionOrigin,
+  }) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        files: files,
+        text: text,
+        subject: subject,
+        sharePositionOrigin: sharePositionOrigin,
+      ),
+    );
+  }
+
   Future<void> _onDownloadTap() async {
     if (_isLoading) return;
     if (_pages.isEmpty) return;
@@ -1856,8 +1872,8 @@ class _PngPageState extends State<PngPage> {
         );
 
         if (!mounted) return;
-        await Share.shareXFiles(
-          [
+        await _shareXFiles(
+          files: [
             XFile(
               file.path,
               mimeType: 'application/pdf',
@@ -1919,8 +1935,8 @@ class _PngPageState extends State<PngPage> {
         return;
       }
 
-      await Share.shareXFiles(
-        files,
+      await _shareXFiles(
+        files: files,
         text: widget.title,
         sharePositionOrigin: shareOrigin,
       );

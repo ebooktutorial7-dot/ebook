@@ -18,10 +18,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:archive/archive_io.dart';
+import 'package:file_picker/file_picker.dart' as fp;
+import 'package:share_plus/share_plus.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:ebook_tutorial_app/services/google_drive_backup_service.dart';
 import 'package:ebook_tutorial_app/pages/pdf_preview_page.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart';
@@ -1437,6 +1440,81 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     return '${safe}_$stamp.$extension';
   }
 
+  Future<void> _exportCurrentBookToFilesApp() async {
+    _hideCloudSubmenu();
+
+    if (!mounted) return;
+    AppToast.show(context, '백업 ZIP 파일을 준비 중입니다');
+
+    final box = context.findRenderObject() as RenderBox?;
+    final sharePositionOrigin =
+        box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+
+    try {
+      final zipFile = await _createBookBackupZipFile();
+      final fileName = p.basename(zipFile.path);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(zipFile.path, name: fileName, mimeType: 'application/zip'),
+          ],
+          text: '책 백업 파일입니다.',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+
+      if (!mounted) return;
+      AppToast.show(context, '공유 화면에서 iCloud Drive 또는 파일 앱을 선택하세요');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, '백업 파일 내보내기 실패: $e');
+    }
+  }
+
+  Future<void> _importBookBackupFromFilesApp() async {
+    _hideCloudSubmenu();
+
+    if (!mounted) return;
+    AppToast.show(context, '백업 ZIP 파일을 선택하세요');
+
+    try {
+      final result = await fp.FilePicker.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: ['zip'],
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final picked = result.files.single;
+
+      final bytes =
+          picked.bytes ??
+          (picked.path == null ? null : await File(picked.path!).readAsBytes());
+
+      if (bytes == null) {
+        if (!mounted) return;
+        AppToast.show(context, '백업 파일을 읽을 수 없습니다');
+        return;
+      }
+
+      if (!mounted) return;
+
+      final ok = await _confirmGoogleDriveRestore();
+      if (!ok) return;
+
+      await _restoreBookFromBackupZipBytes(bytes);
+
+      if (!mounted) return;
+      AppToast.show(context, '백업 불러오기 완료');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, '백업 불러오기 실패: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> _buildGoogleDriveBackupData({
     required Map<String, String> assetPathMap,
   }) async {
@@ -1785,7 +1863,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     return null;
   }
 
-  Future<void> _restoreBookFromGoogleDriveZipBytes(List<int> zipBytes) async {
+  Future<void> _restoreBookFromBackupZipBytes(List<int> zipBytes) async {
     final archive = ZipDecoder().decodeBytes(zipBytes);
 
     ArchiveFile? backupJsonFile;
@@ -1989,7 +2067,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         fileId: selected.id,
       );
 
-      await _restoreBookFromGoogleDriveZipBytes(bytes);
+      await _restoreBookFromBackupZipBytes(bytes);
 
       if (!mounted) return;
       AppToast.show(context, 'Google Drive 백업 불러오기 완료');
@@ -2639,14 +2717,16 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                           _PdfPopupItem(
                             icon: Icons.cloud_outlined,
                             label: 'iCloud Backup',
-                            onTap: () {},
+                            onTap: () {
+                              unawaited(_exportCurrentBookToFilesApp());
+                            },
                           ),
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.cloud_download_outlined,
                             label: 'iCloud 불러오기',
                             onTap: () {
-                              // 기능 없음
+                              unawaited(_importBookBackupFromFilesApp());
                             },
                           ),
                           const SizedBox(height: 6),

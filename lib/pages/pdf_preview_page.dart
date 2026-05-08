@@ -534,6 +534,22 @@ Future<File> _writeBytesToTempStandalone({
   return file;
 }
 
+Future<void> _shareXFiles({
+  required List<XFile> files,
+  String? text,
+  String? subject,
+  Rect? sharePositionOrigin,
+}) async {
+  await SharePlus.instance.share(
+    ShareParams(
+      files: files,
+      text: text,
+      subject: subject,
+      sharePositionOrigin: sharePositionOrigin,
+    ),
+  );
+}
+
 Future<T> _withDocPage<T>(
   PdfDocument doc,
   int pageNumber,
@@ -761,8 +777,8 @@ Future<void> sharePdfBytesWithPick({
           bytes: pdfBytes,
           fileName: '$base.pdf',
         );
-        await Share.shareXFiles(
-          [
+        await _shareXFiles(
+          files: [
             XFile(
               file.path,
               mimeType: 'application/pdf',
@@ -790,8 +806,8 @@ Future<void> sharePdfBytesWithPick({
         bytes: outBytes,
         fileName: '$base.pdf',
       );
-      await Share.shareXFiles(
-        [
+      await _shareXFiles(
+        files: [
           XFile(
             file.path,
             mimeType: 'application/pdf',
@@ -840,8 +856,8 @@ Future<void> sharePdfBytesWithPick({
       return;
     }
 
-    await Share.shareXFiles(
-      xfiles,
+    await _shareXFiles(
+      files: xfiles,
       text: safeTitle,
       sharePositionOrigin: sharePositionOrigin,
     );
@@ -2116,8 +2132,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
         if (pick.rangeMode == ShareRangeMode.all) {
           final file = await _writePdfToTempFile(fileNameBase: widget.title);
           if (!mounted) return;
-          await Share.shareXFiles(
-            [
+          await _shareXFiles(
+            files: [
               XFile(
                 file.path,
                 mimeType: 'application/pdf',
@@ -2143,8 +2159,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
           fileName: '$base.pdf',
         );
         if (!mounted) return;
-        await Share.shareXFiles(
-          [
+        await _shareXFiles(
+          files: [
             XFile(
               file.path,
               mimeType: 'application/pdf',
@@ -2170,8 +2186,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
         _toast(_shareEmptyToast);
         return;
       }
-      await Share.shareXFiles(
-        files,
+      await _shareXFiles(
+        files: files,
         text: widget.title,
         sharePositionOrigin: origin,
       );
