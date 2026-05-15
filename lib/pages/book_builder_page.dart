@@ -179,6 +179,7 @@ class BookBuilderPage extends StatefulWidget {
   final int pageIndex;
   final String initialPenName;
   final String? documentId;
+  final String? initialCoverPath;
   final int? initialOpenChapterIndex;
   final bool initialAutoAddChapter;
 
@@ -192,6 +193,7 @@ class BookBuilderPage extends StatefulWidget {
     required this.pageIndex,
     this.initialPenName = '',
     this.documentId,
+    this.initialCoverPath,
     this.initialOpenChapterIndex,
     this.initialAutoAddChapter = false,
   });
@@ -250,6 +252,35 @@ class _PreviewPageTarget {
     required this.chapterIndex,
     required this.localPage,
   });
+}
+
+class _DocxRun {
+  final String text;
+  final Map<String, dynamic> attributes;
+
+  const _DocxRun({required this.text, this.attributes = const {}});
+}
+
+class _DocxParagraph {
+  final String text;
+  final List<_DocxRun> runs;
+  final int? headingLevel;
+  final bool pageBreak;
+  final bool pageBreakBefore;
+
+  const _DocxParagraph({
+    this.text = '',
+    this.runs = const [],
+    this.headingLevel,
+    this.pageBreak = false,
+    this.pageBreakBefore = false,
+  });
+
+  List<_DocxRun> get effectiveRuns {
+    if (runs.isNotEmpty) return runs;
+    if (text.isEmpty) return const [];
+    return [_DocxRun(text: text)];
+  }
 }
 
 class _BookBuilderPageState extends State<BookBuilderPage>
@@ -495,6 +526,75 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
   }
 
+  String? _imageSourceFromDeltaValue(dynamic raw) {
+    if (raw is! String) return null;
+
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    if (value.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) {
+          final src = decoded['source'];
+          if (src is String && src.trim().isNotEmpty) {
+            return src.trim();
+          }
+        }
+      } catch (_) {}
+    }
+
+    return value;
+  }
+
+  Future<File?> _resolveBookImageFile(String src) async {
+    final raw = src.trim();
+    if (raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct;
+
+    final appDir = await getApplicationDocumentsDirectory();
+
+    final fromDocuments = File(p.join(appDir.path, raw));
+    if (await fromDocuments.exists()) return fromDocuments;
+
+    return null;
+  }
+
+  List<Map<String, dynamic>> _deltaForRenderImages(
+    List<Map<String, dynamic>> delta,
+  ) {
+    return delta
+        .map((op) {
+          final m = Map<String, dynamic>.from(op);
+          final insertRaw = m['insert'];
+
+          if (insertRaw is Map) {
+            final insert = Map<String, dynamic>.from(insertRaw);
+
+            if (insert.containsKey('image')) {
+              final src = _imageSourceFromDeltaValue(insert['image']);
+              if (src != null && src.isNotEmpty) {
+                insert['image'] = src;
+                m['insert'] = insert;
+              }
+            }
+          }
+
+          return m;
+        })
+        .toList(growable: true);
+  }
+
+  ChapterItem _chapterForRenderImages(ChapterItem c) {
+    return c.copyWith(delta: _deltaForRenderImages(c.delta));
+  }
+
+  List<ChapterItem> _chaptersForRenderImages(Iterable<ChapterItem> chapters) {
+    return chapters.map(_chapterForRenderImages).toList(growable: false);
+  }
+
   Future<void> _primeImageSizesFromChunks({
     required List<dynamic> chunks,
     required int epoch,
@@ -508,8 +608,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
       for (final op in chunkJson) {
         final insert = op['insert'];
-        if (insert is Map && insert['image'] is String) {
-          final src = insert['image'] as String;
+        if (insert is Map && insert.containsKey('image')) {
+          final src = _imageSourceFromDeltaValue(insert['image']);
+          if (src == null || src.isEmpty) continue;
           if (src.isEmpty) continue;
           if (_imageSizeCache.containsKey(src)) continue;
 
@@ -518,8 +619,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               continue;
             }
 
-            final f = File(src);
-            if (!await f.exists()) continue;
+            final f = await _resolveBookImageFile(src);
+            if (f == null) continue;
 
             final bytes = await f.readAsBytes();
             final codec = await ui.instantiateImageCodec(bytes);
@@ -539,22 +640,218 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
   }
 
+  String _safeZipEntryName(String raw, {String fallback = 'file'}) {
+    final trimmed = raw.trim().isEmpty ? fallback : raw.trim();
+
+    final safe = trimmed
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    return safe.isEmpty ? fallback : safe;
+  }
+
+  Future<void> _exportPdfPagesAsZipWithCover() async {
+    final ctx = context;
+
+    _hideEpubSubmenu();
+    _hidePdfSubmenu();
+
+    final title =
+        _titleCtrl.text.trim().isEmpty ? 'document' : _titleCtrl.text.trim();
+
+    final chapters =
+        _chapters.isNotEmpty
+            ? _chaptersForRenderImages(_chapters)
+            : <ChapterItem>[
+              ChapterItem(
+                title: title,
+                index: 1,
+                delta: _deltaForRenderImages(_buildDeltaForSave()),
+              ),
+            ];
+
+    if (!ctx.mounted) return;
+    AppToast.show(ctx, 'PDF를 준비 중입니다');
+
+    try {
+      final pdfBytes = await buildBookPdf(
+        chapters: chapters,
+        showChapterTitle: true,
+      );
+
+      final pagesCount = await pdfPageCountFromBytes(pdfBytes);
+
+      if (!ctx.mounted) return;
+
+      final currentPage = (_currentIndex + 1).clamp(1, pagesCount);
+
+      final pick = await showShareOptionsDialog(
+        context: ctx,
+        currentPage: currentPage,
+        pagesCount: pagesCount,
+        dialogTitle: 'ZIP 공유',
+        confirmLabel: 'ZIP',
+        barrierColor: kDialogBarrierColor,
+      );
+
+      if (pick == null) return;
+
+      if (!ctx.mounted) return;
+      AppToast.show(ctx, 'ZIP 파일을 만드는 중입니다');
+
+      final pickedFiles = await createPickedPdfFilesForZip(
+        title: title,
+        pdfBytes: pdfBytes,
+        pick: pick,
+      );
+
+      if (!ctx.mounted) return;
+
+      if (pickedFiles.isEmpty) {
+        AppToast.show(ctx, 'ZIP에 넣을 파일이 없습니다');
+        return;
+      }
+
+      final zipFile = await _createPdfPageZipFileWithCover(
+        title: title,
+        pickedFiles: pickedFiles,
+        pick: pick,
+      );
+
+      if (!ctx.mounted) return;
+
+      final box = ctx.findRenderObject() as RenderBox?;
+      final sharePositionOrigin =
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              zipFile.path,
+              name: p.basename(zipFile.path),
+              mimeType: 'application/zip',
+            ),
+          ],
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+
+      if (!ctx.mounted) return;
+      AppToast.show(ctx, 'ZIP 공유 완료');
+    } catch (e) {
+      if (!ctx.mounted) return;
+      AppToast.show(ctx, 'ZIP 공유 실패: $e');
+    }
+  }
+
+  Future<File> _createPdfPageZipFileWithCover({
+    required String title,
+    required List<File> pickedFiles,
+    required SharePickResult pick,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+    final safeTitle = _safeZipEntryName(title, fallback: 'document');
+    final zipFile = File(
+      p.join(tempDir.path, '${safeTitle}_pdf_pages_$stamp.zip'),
+    );
+
+    if (await zipFile.exists()) {
+      await zipFile.delete();
+    }
+
+    final manifest = <String, dynamic>{
+      'type': 'ebook_tutorial_app_pdf_page_zip',
+      'createdAt': DateTime.now().toIso8601String(),
+      'title': title,
+      'format': switch (pick.format) {
+        ShareFormat.pdf => 'pdf',
+        ShareFormat.png => 'png',
+        ShareFormat.jpg => 'jpg',
+      },
+      'rangeMode': switch (pick.rangeMode) {
+        ShareRangeMode.current => 'current',
+        ShareRangeMode.all => 'all',
+        ShareRangeMode.range => 'range',
+      },
+      'startPage': pick.startPage,
+      'endPage': pick.endPage,
+      'hasCover': _isLocalExistingFilePath(_coverPath),
+    };
+
+    final manifestFile = File(
+      p.join(
+        tempDir.path,
+        'manifest_${DateTime.now().microsecondsSinceEpoch}.json',
+      ),
+    );
+
+    await manifestFile.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(manifest),
+      encoding: utf8,
+      flush: true,
+    );
+
+    final encoder = ZipFileEncoder();
+    encoder.create(zipFile.path);
+
+    for (var i = 0; i < pickedFiles.length; i++) {
+      final file = pickedFiles[i];
+      if (!await file.exists()) continue;
+
+      final ext = p.extension(file.path).toLowerCase();
+      final entryName =
+          pickedFiles.length == 1
+              ? 'pages/$safeTitle${ext.isEmpty ? '.pdf' : ext}'
+              : 'pages/${safeTitle}_${(i + 1).toString().padLeft(3, '0')}${ext.isEmpty ? '.dat' : ext}';
+
+      encoder.addFile(file, entryName);
+    }
+
+    if (_isLocalExistingFilePath(_coverPath)) {
+      final coverFile = File(_coverPath!);
+      final coverExt = p.extension(coverFile.path).toLowerCase();
+      final coverEntryName =
+          'cover/cover${coverExt.isEmpty ? '.jpg' : coverExt}';
+
+      encoder.addFile(coverFile, coverEntryName);
+    }
+    encoder.close();
+
+    try {
+      if (await manifestFile.exists()) {
+        await manifestFile.delete();
+      }
+    } catch (_) {}
+
+    return zipFile;
+  }
+
   Future<ui.Image?> _loadImage(String src, {int? targetWidthPx}) async {
-    final cached = _imageCache[src];
+    final resolvedSrc = _imageSourceFromDeltaValue(src) ?? src;
+
+    final cached = _imageCache[resolvedSrc];
     if (cached != null) return cached;
+
     try {
       Uint8List bytes;
-      if (src.startsWith('http://') || src.startsWith('https://')) {
+
+      if (resolvedSrc.startsWith('http://') ||
+          resolvedSrc.startsWith('https://')) {
         return null;
       } else {
-        final f = File(src);
-        if (!await f.exists()) return null;
+        final f = await _resolveBookImageFile(resolvedSrc);
+        if (f == null) return null;
         bytes = await f.readAsBytes();
       }
+
       final completer = Completer<ui.Image>();
       ui.decodeImageFromList(bytes, (img) => completer.complete(img));
       final img = await completer.future;
-      _imageCache[src] = img;
+
+      _imageCache[resolvedSrc] = img;
       return img;
     } catch (_) {
       return null;
@@ -659,6 +956,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   @override
   void initState() {
     super.initState();
+
+    _coverPath = widget.initialCoverPath;
 
     var safeDelta = widget.initialDeltaJson
         .map((e) => Map<String, dynamic>.from(e))
@@ -769,23 +1068,48 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (savedPen?.isNotEmpty == true) _penNameCtrl.text = savedPen!;
   }
 
+  Future<String?> _resolveCoverPath(String? value) async {
+    final raw = value?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct.path;
+
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final byFileName = File(p.join(appDocDir.path, p.basename(raw)));
+
+    if (await byFileName.exists()) return byFileName.path;
+
+    return null;
+  }
+
   Future<void> _persistCoverPath(String? path) async {
     if (widget.documentId == null) return;
     await _ensurePrefs();
-    if (path == null || path.isEmpty) {
+
+    final raw = path?.trim();
+
+    if (raw == null || raw.isEmpty) {
       await _prefs!.remove(_coverKey);
     } else {
-      await _prefs!.setString(_coverKey, path);
+      await _prefs!.setString(_coverKey, p.basename(raw));
     }
   }
 
   Future<void> _loadPersistedCover() async {
-    if (widget.documentId == null) return;
-    await _ensurePrefs();
-    final saved = _prefs!.getString(_coverKey);
+    String? saved = widget.initialCoverPath;
+
+    if (widget.documentId != null) {
+      await _ensurePrefs();
+      saved = _prefs!.getString(_coverKey) ?? saved;
+    }
+
+    final resolved = await _resolveCoverPath(saved);
+
     if (!mounted) return;
+
     setState(() {
-      _coverPath = saved;
+      _coverPath = resolved;
     });
   }
 
@@ -1059,8 +1383,12 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (picked == null) return;
     final tmpFile = File(picked.path);
     final appDocDir = await getApplicationDocumentsDirectory();
-    final fileName =
-        'cover_${widget.documentId ?? 'local'}_${DateTime.now().millisecondsSinceEpoch}${p.extension(picked.path)}';
+    final ext =
+        p.extension(picked.path).isEmpty
+            ? '.jpg'
+            : p.extension(picked.path).toLowerCase();
+
+    final fileName = 'cover_${widget.documentId ?? 'local'}$ext';
 
     final savedPath = p.join(appDocDir.path, fileName);
     final savedFile = await tmpFile.copy(savedPath);
@@ -1289,7 +1617,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     for (var i = 0; i < targets.length; i++) {
       merged.addAll(
         _withEpisodeTitleDelta(
-          targets[i].delta,
+          _deltaForRenderImages(targets[i].delta),
           episodeTitle: targets[i].title,
         ),
       );
@@ -1403,11 +1731,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     final navigator = Navigator.of(context);
     final saveDelta = _buildDeltaForSave();
     _delta = saveDelta;
+
     await _persistTitle(_titleCtrl.text.trim());
     await _persistPenName(_penNameCtrl.text.trim());
+    await _persistCoverPath(_coverPath); // 추가
 
     await _persistChapters();
     await _persistMeta();
+
     final data = <String, dynamic>{
       'title': _titleCtrl.text.trim(),
       'delta': saveDelta,
@@ -1424,6 +1755,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       'ageRating': _ageRatingCtrl.text.trim(),
       'coverPath': _coverPath,
     };
+
     if (!mounted) return;
     navigator.pop(data);
   }
@@ -2494,7 +2826,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                       onPressed: () async {
                         Navigator.pop(context);
                         final bytes = await buildBookPdf(
-                          chapters: [c],
+                          chapters: [_chapterForRenderImages(c)],
                           showChapterTitle: true,
                         );
                         if (!mounted) return;
@@ -2614,6 +2946,738 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ),
           ),
     );
+  }
+
+  String _docxXmlEscape(String value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+  }
+
+  List<_DocxParagraph> _docxParagraphsFromDelta(
+    List<Map<String, dynamic>> delta,
+  ) {
+    final paragraphs = <_DocxParagraph>[];
+    final runs = <_DocxRun>[];
+    int? paragraphHeadingLevel;
+
+    Map<String, dynamic> normalizeAttrs(dynamic attributes) {
+      if (attributes is Map) {
+        return Map<String, dynamic>.from(attributes);
+      }
+      return <String, dynamic>{};
+    }
+
+    void flushParagraph() {
+      paragraphs.add(
+        _DocxParagraph(
+          runs: List<_DocxRun>.unmodifiable(runs),
+          headingLevel: paragraphHeadingLevel,
+        ),
+      );
+      runs.clear();
+      paragraphHeadingLevel = null;
+    }
+
+    void applyLineAttributes(Map<String, dynamic> attrs) {
+      final headerValue = attrs['header'];
+      if (headerValue is num) {
+        paragraphHeadingLevel = headerValue.toInt();
+      }
+    }
+
+    for (final op in delta) {
+      final insert = op['insert'];
+      final attrs = normalizeAttrs(op['attributes']);
+
+      if (insert is String) {
+        final parts = insert.split('\n');
+
+        for (var i = 0; i < parts.length; i++) {
+          final part = parts[i];
+
+          if (part.isNotEmpty) {
+            runs.add(_DocxRun(text: part, attributes: attrs));
+          }
+
+          if (i != parts.length - 1) {
+            applyLineAttributes(attrs);
+            flushParagraph();
+          }
+        }
+
+        continue;
+      }
+
+      if (insert is Map) {
+        if (insert['page_break'] == true) {
+          if (runs.isNotEmpty) {
+            flushParagraph();
+          }
+          paragraphs.add(const _DocxParagraph(pageBreak: true));
+          continue;
+        }
+
+        final imagePath = insert['image'];
+        if (imagePath is String && imagePath.trim().isNotEmpty) {
+          if (runs.isNotEmpty) {
+            flushParagraph();
+          }
+
+          paragraphs.add(
+            _DocxParagraph(
+              runs: [_DocxRun(text: '[이미지: ${p.basename(imagePath)}]')],
+            ),
+          );
+          continue;
+        }
+      }
+    }
+
+    if (runs.isNotEmpty) {
+      flushParagraph();
+    }
+
+    return paragraphs;
+  }
+
+  List<_DocxParagraph> _buildDocxParagraphsForBook(List<ChapterItem> chapters) {
+    final paragraphs = <_DocxParagraph>[];
+    final title = _titleCtrl.text.trim();
+    final penName = _penNameCtrl.text.trim();
+    final summary = _summaryCtrl.text.trim();
+
+    if (title.isNotEmpty) {
+      paragraphs.add(_DocxParagraph(text: title, headingLevel: 1));
+    }
+
+    if (penName.isNotEmpty) {
+      paragraphs.add(_DocxParagraph(text: penName, headingLevel: 3));
+    }
+
+    if (summary.isNotEmpty) {
+      paragraphs.add(const _DocxParagraph());
+      paragraphs.add(_DocxParagraph(text: summary));
+    }
+
+    if (paragraphs.isNotEmpty) {
+      paragraphs.add(const _DocxParagraph());
+    }
+
+    if (chapters.isEmpty) {
+      paragraphs.addAll(_docxParagraphsFromDelta(_delta));
+    } else {
+      for (var i = 0; i < chapters.length; i++) {
+        final chapter = chapters[i];
+
+        paragraphs.add(
+          _DocxParagraph(
+            text: chapter.title,
+            headingLevel: 2,
+            pageBreakBefore: i > 0,
+          ),
+        );
+
+        paragraphs.addAll(_docxParagraphsFromDelta(chapter.delta));
+      }
+    }
+
+    if (paragraphs.isEmpty) {
+      paragraphs.add(const _DocxParagraph());
+    }
+
+    return paragraphs;
+  }
+
+  String _docxRunXml(_DocxRun run, int? headingLevel) {
+    final s = _settingsController.settings;
+    final attrs = run.attributes;
+
+    final text = _docxXmlEscape(run.text);
+    final colorHex = _docxColorFromAttribute(attrs['color'], s.textColor);
+
+    final fontSize = _docxFontSizeFromAttribute(
+      _docxSizeAttribute(attrs),
+      fallbackPt: s.fontSize,
+      headingLevel: headingLevel,
+    );
+
+    final isBold = headingLevel != null || _docxAttrBool(attrs, 'bold');
+    final isItalic = _docxAttrBool(attrs, 'italic');
+    final isUnderline = _docxAttrBool(attrs, 'underline');
+    final isStrike = _docxAttrBool(attrs, 'strike');
+
+    final boldXml = isBold ? '<w:b/>' : '';
+    final italicXml = isItalic ? '<w:i/>' : '';
+    final underlineXml = isUnderline ? '<w:u w:val="single"/>' : '';
+    final strikeXml = isStrike ? '<w:strike/>' : '';
+
+    return '''<w:r>
+    <w:rPr>
+      <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Malgun Gothic"/>
+      $boldXml
+      $italicXml
+      $underlineXml
+      $strikeXml
+      <w:color w:val="$colorHex"/>
+      <w:sz w:val="$fontSize"/>
+      <w:szCs w:val="$fontSize"/>
+    </w:rPr>
+    <w:t xml:space="preserve">$text</w:t>
+  </w:r>''';
+  }
+
+  String _docxParagraphXml(_DocxParagraph paragraph) {
+    if (paragraph.pageBreak) {
+      return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    }
+
+    final s = _settingsController.settings;
+    final headingLevel = paragraph.headingLevel;
+
+    final after = headingLevel == null ? '120' : '200';
+    final center = headingLevel == 1 ? '<w:jc w:val="center"/>' : '';
+    final pageBreakBefore =
+        paragraph.pageBreakBefore ? '<w:pageBreakBefore/>' : '';
+    final lineTwips = (s.fontSize * s.lineHeight * 20).round().clamp(240, 1600);
+
+    final runsXml = paragraph.effectiveRuns
+        .map((run) => _docxRunXml(run, headingLevel))
+        .join('\n');
+
+    return '''<w:p>
+  <w:pPr>$pageBreakBefore$center<w:spacing w:after="$after" w:line="$lineTwips" w:lineRule="auto"/></w:pPr>
+  $runsXml
+</w:p>''';
+  }
+
+  String _buildDocxDocumentXml(
+    List<_DocxParagraph> paragraphs, {
+    bool includeCover = false,
+  }) {
+    final coverXml = includeCover ? _docxCoverImageXml(relId: 'rIdCover') : '';
+    final body = paragraphs.map(_docxParagraphXml).join('\n');
+
+    final s = _settingsController.settings;
+
+    final topMargin = (s.verticalMargin * 20).round().clamp(360, 2880);
+    final bottomMargin = (s.verticalMargin * 20).round().clamp(360, 2880);
+    final leftMargin = (s.horizontalMargin * 20).round().clamp(360, 2880);
+    final rightMargin = (s.horizontalMargin * 20).round().clamp(360, 2880);
+
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+$coverXml
+$body
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="$topMargin" w:right="$rightMargin" w:bottom="$bottomMargin" w:left="$leftMargin" w:header="720" w:footer="720" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>''';
+  }
+
+  String _buildDocxContentTypesXml({Set<String> imageExtensions = const {}}) {
+    final imageDefaults = imageExtensions
+        .map((ext) {
+          final cleanExt = ext.replaceFirst('.', '').toLowerCase();
+          return '<Default Extension="$cleanExt" ContentType="${_docxImageContentType(ext)}"/>';
+        })
+        .join('\n  ');
+
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  $imageDefaults
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>''';
+  }
+
+  String _buildDocxDocumentRelsXml({required String? coverTarget}) {
+    final coverRel =
+        coverTarget == null
+            ? ''
+            : '''
+  <Relationship Id="rIdCover" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="$coverTarget"/>''';
+
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+$coverRel
+</Relationships>''';
+  }
+
+  String _docxCoverImageXml({required String relId}) {
+    const widthEmu = 3960000;
+    const heightEmu = 5940000;
+
+    return '''<w:p>
+  <w:pPr>
+    <w:jc w:val="center"/>
+    <w:spacing w:after="240"/>
+  </w:pPr>
+  <w:r>
+    <w:drawing>
+      <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0">
+        <wp:extent cx="$widthEmu" cy="$heightEmu"/>
+        <wp:docPr id="1" name="Cover Image"/>
+        <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:nvPicPr>
+                <pic:cNvPr id="0" name="cover"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="$relId"/>
+                <a:stretch>
+                  <a:fillRect/>
+                </a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm>
+                  <a:off x="0" y="0"/>
+                  <a:ext cx="$widthEmu" cy="$heightEmu"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect">
+                  <a:avLst/>
+                </a:prstGeom>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>''';
+  }
+
+  String _buildDocxRelsXml() {
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>''';
+  }
+
+  String _buildDocxCoreXml() {
+    final title = _docxXmlEscape(_titleCtrl.text.trim());
+    final author = _docxXmlEscape(_penNameCtrl.text.trim());
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>$title</dc:title>
+  <dc:creator>$author</dc:creator>
+  <cp:lastModifiedBy>$author</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">$createdAt</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">$createdAt</dcterms:modified>
+</cp:coreProperties>''';
+  }
+
+  String _buildDocxAppXml() {
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>ebook_tutorial_app</Application>
+</Properties>''';
+  }
+
+  String _docxColorHex(Color color) {
+    final argb = color.toARGB32();
+    return (argb & 0x00FFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+  }
+
+  String _docxImageContentType(String ext) {
+    switch (ext.toLowerCase()) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.bmp':
+        return 'image/bmp';
+      case '.webp':
+        return 'image/webp';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  String _docxColorFromAttribute(dynamic value, Color fallback) {
+    if (value is String) {
+      final raw = value.trim();
+
+      if (raw.startsWith('#')) {
+        var hex = raw.substring(1).toUpperCase();
+
+        if (hex.length == 8) {
+          hex = hex.substring(2);
+        }
+
+        if (hex.length == 6 && RegExp(r'^[0-9A-F]{6}$').hasMatch(hex)) {
+          return hex;
+        }
+      }
+
+      if (raw.startsWith('0x') || raw.startsWith('0X')) {
+        final parsed = int.tryParse(raw.substring(2), radix: 16);
+        if (parsed != null) {
+          return (parsed & 0x00FFFFFF)
+              .toRadixString(16)
+              .padLeft(6, '0')
+              .toUpperCase();
+        }
+      }
+    }
+
+    if (value is int) {
+      return (value & 0x00FFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0')
+          .toUpperCase();
+    }
+
+    return _docxColorHex(fallback);
+  }
+
+  dynamic _docxSizeAttribute(Map<String, dynamic> attrs) {
+    return attrs['size'] ??
+        attrs['fontSize'] ??
+        attrs['font_size'] ??
+        attrs['font-size'];
+  }
+
+  int _docxFontSizeFromAttribute(
+    dynamic value, {
+    required double fallbackPt,
+    required int? headingLevel,
+  }) {
+    double pt = fallbackPt;
+
+    if (value is num) {
+      pt = value.toDouble();
+    } else if (value is String) {
+      final raw = value.trim().toLowerCase();
+
+      if (raw == 'small') {
+        pt = fallbackPt * 0.85;
+      } else if (raw == 'large') {
+        pt = fallbackPt * 1.30;
+      } else if (raw == 'huge') {
+        pt = fallbackPt * 1.70;
+      } else {
+        final match = RegExp(r'[\d.]+').firstMatch(raw);
+        if (match != null) {
+          pt = double.tryParse(match.group(0)!) ?? fallbackPt;
+        }
+      }
+    } else {
+      if (headingLevel == 1) {
+        pt = fallbackPt + 7;
+      } else if (headingLevel == 2) {
+        pt = fallbackPt + 4;
+      } else if (headingLevel == 3) {
+        pt = fallbackPt + 2;
+      }
+    }
+
+    return (pt * 2).round().clamp(16, 120);
+  }
+
+  bool _docxAttrBool(Map<String, dynamic> attrs, String key) {
+    final value = attrs[key];
+    return value == true || value == 'true';
+  }
+
+  Future<File> _createBookDocxFile({
+    required List<ChapterItem> chapters,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+
+    final docxRoot = Directory(p.join(tempDir.path, 'book_docx_export_$stamp'));
+
+    final relsDir = Directory(p.join(docxRoot.path, '_rels'));
+    final wordDir = Directory(p.join(docxRoot.path, 'word'));
+    final docPropsDir = Directory(p.join(docxRoot.path, 'docProps'));
+
+    final wordRelsDir = Directory(p.join(wordDir.path, '_rels'));
+    final mediaDir = Directory(p.join(wordDir.path, 'media'));
+
+    await relsDir.create(recursive: true);
+    await wordDir.create(recursive: true);
+    await wordRelsDir.create(recursive: true);
+    await mediaDir.create(recursive: true);
+    await docPropsDir.create(recursive: true);
+
+    String? coverTarget;
+    File? copiedCoverFile;
+    final imageExtensions = <String>{};
+
+    if (_isLocalExistingFilePath(_coverPath)) {
+      final coverFile = File(_coverPath!);
+      final ext =
+          p.extension(coverFile.path).isEmpty
+              ? '.jpg'
+              : p.extension(coverFile.path).toLowerCase();
+
+      imageExtensions.add(ext);
+
+      copiedCoverFile = File(p.join(mediaDir.path, 'cover$ext'));
+      await coverFile.copy(copiedCoverFile.path);
+
+      coverTarget = 'media/cover$ext';
+    }
+
+    final paragraphs = _buildDocxParagraphsForBook(chapters);
+
+    final contentTypesFile = File(p.join(docxRoot.path, '[Content_Types].xml'));
+    final relsFile = File(p.join(relsDir.path, '.rels'));
+    final documentFile = File(p.join(wordDir.path, 'document.xml'));
+    final coreFile = File(p.join(docPropsDir.path, 'core.xml'));
+    final appFile = File(p.join(docPropsDir.path, 'app.xml'));
+
+    await contentTypesFile.writeAsString(
+      _buildDocxContentTypesXml(imageExtensions: imageExtensions),
+      encoding: utf8,
+    );
+
+    await documentFile.writeAsString(
+      _buildDocxDocumentXml(paragraphs, includeCover: coverTarget != null),
+      encoding: utf8,
+    );
+
+    final documentRelsFile = File(
+      p.join(wordRelsDir.path, 'document.xml.rels'),
+    );
+
+    await documentRelsFile.writeAsString(
+      _buildDocxDocumentRelsXml(coverTarget: coverTarget),
+      encoding: utf8,
+    );
+
+    await relsFile.writeAsString(_buildDocxRelsXml(), encoding: utf8);
+
+    await coreFile.writeAsString(_buildDocxCoreXml(), encoding: utf8);
+
+    await appFile.writeAsString(_buildDocxAppXml(), encoding: utf8);
+
+    final docxFile = File(
+      p.join(
+        tempDir.path,
+        _safeDriveBackupFileName(_titleCtrl.text, extension: 'docx'),
+      ),
+    );
+
+    if (await docxFile.exists()) {
+      await docxFile.delete();
+    }
+
+    final encoder = ZipFileEncoder();
+
+    encoder.create(docxFile.path);
+    encoder.addFile(contentTypesFile, '[Content_Types].xml');
+    encoder.addFile(relsFile, '_rels/.rels');
+    encoder.addFile(documentFile, 'word/document.xml');
+    encoder.addFile(documentRelsFile, 'word/_rels/document.xml.rels');
+    encoder.addFile(coreFile, 'docProps/core.xml');
+    encoder.addFile(appFile, 'docProps/app.xml');
+
+    if (copiedCoverFile != null && coverTarget != null) {
+      encoder.addFile(copiedCoverFile, 'word/$coverTarget');
+    }
+
+    encoder.close();
+
+    return docxFile;
+  }
+
+  Future<void> _exportCurrentBookToDocx() async {
+    _hideEpubSubmenu();
+
+    if (!mounted) return;
+
+    AppToast.show(context, 'MS Word 파일을 준비 중입니다');
+
+    final box = context.findRenderObject() as RenderBox?;
+    final sharePositionOrigin =
+        box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+
+    try {
+      final docxFile = await _createBookDocxFile(
+        chapters:
+            _chapters.isEmpty
+                ? const <ChapterItem>[]
+                : List.unmodifiable(_chapters),
+      );
+
+      final fileName = p.basename(docxFile.path);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              docxFile.path,
+              name: fileName,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ),
+          ],
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+
+      if (!mounted) return;
+      AppToast.show(context, 'MS Word 파일 공유를 열었습니다');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, 'MS Word 파일 생성 실패: $e');
+    }
+  }
+
+  String _plainTextFromDelta(List<Map<String, dynamic>> delta) {
+    final buffer = StringBuffer();
+
+    for (final op in delta) {
+      final insert = op['insert'];
+
+      if (insert is String) {
+        buffer.write(insert);
+        continue;
+      }
+
+      if (insert is Map) {
+        if (insert['page_break'] == true) {
+          buffer.write('\n\n');
+          continue;
+        }
+
+        final imagePath = insert['image'];
+        if (imagePath is String && imagePath.trim().isNotEmpty) {
+          buffer.writeln('[이미지: ${p.basename(imagePath)}]');
+          continue;
+        }
+      }
+    }
+
+    return buffer.toString();
+  }
+
+  String _buildTxtContentForBook(List<ChapterItem> chapters) {
+    final buffer = StringBuffer();
+
+    final title = _titleCtrl.text.trim();
+    final penName = _penNameCtrl.text.trim();
+    final summary = _summaryCtrl.text.trim();
+
+    if (title.isNotEmpty) {
+      buffer.writeln(title);
+    }
+
+    if (penName.isNotEmpty) {
+      buffer.writeln(penName);
+    }
+
+    if (summary.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln(summary);
+    }
+
+    if (buffer.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln();
+    }
+
+    if (chapters.isEmpty) {
+      buffer.write(_plainTextFromDelta(_delta));
+    } else {
+      for (var i = 0; i < chapters.length; i++) {
+        final chapter = chapters[i];
+
+        buffer.writeln(chapter.title);
+        buffer.writeln();
+        buffer.write(_plainTextFromDelta(chapter.delta).trimRight());
+
+        if (i != chapters.length - 1) {
+          buffer.writeln();
+          buffer.writeln();
+          buffer.writeln();
+        }
+      }
+    }
+
+    return '${buffer.toString().trimRight()}\n';
+  }
+
+  Future<File> _createBookTxtFile({required List<ChapterItem> chapters}) async {
+    final tempDir = await getTemporaryDirectory();
+
+    final txtFile = File(
+      p.join(
+        tempDir.path,
+        _safeDriveBackupFileName(_titleCtrl.text, extension: 'txt'),
+      ),
+    );
+
+    if (await txtFile.exists()) {
+      await txtFile.delete();
+    }
+
+    final content = _buildTxtContentForBook(chapters);
+
+    // 한글 깨짐 방지를 위해 UTF-8 BOM 추가
+    final bytes = <int>[0xEF, 0xBB, 0xBF, ...utf8.encode(content)];
+
+    await txtFile.writeAsBytes(bytes, flush: true);
+
+    return txtFile;
+  }
+
+  Future<void> _exportCurrentBookToTxt() async {
+    _hideEpubSubmenu();
+
+    if (!mounted) return;
+
+    AppToast.show(context, 'TXT 파일을 준비 중입니다');
+
+    final box = context.findRenderObject() as RenderBox?;
+    final sharePositionOrigin =
+        box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+
+    try {
+      final txtFile = await _createBookTxtFile(
+        chapters:
+            _chapters.isEmpty
+                ? const <ChapterItem>[]
+                : List.unmodifiable(_chapters),
+      );
+
+      final fileName = p.basename(txtFile.path);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(txtFile.path, name: fileName, mimeType: 'text/plain')],
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+
+      if (!mounted) return;
+      AppToast.show(context, 'TXT 파일 공유를 열었습니다');
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, 'TXT 파일 생성 실패: $e');
+    }
   }
 
   void _hideCloudSubmenu() {
@@ -2856,29 +3920,28 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                             ],
                           ),
                           const SizedBox(height: 10),
-
                           _PdfPopupItem(
                             icon: Icons.description_outlined,
-                            label: 'DOXK : MS Word',
-                            onTap: () {},
+                            label: 'DOCX : MS Word',
+                            onTap: () {
+                              unawaited(_exportCurrentBookToDocx());
+                            },
                           ),
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.text_snippet_outlined,
                             label: 'TXT',
-                            onTap: () {},
-                          ),
-                          const SizedBox(height: 6),
-                          _PdfPopupItem(
-                            icon: Icons.code_outlined,
-                            label: 'Markdown',
-                            onTap: () {},
+                            onTap: () {
+                              unawaited(_exportCurrentBookToTxt());
+                            },
                           ),
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.archive_outlined,
                             label: 'zip',
-                            onTap: () {},
+                            onTap: () {
+                              unawaited(_exportPdfPagesAsZipWithCover());
+                            },
                           ),
                         ],
                       ),
@@ -3031,7 +4094,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
                                 _hidePdfSubmenu();
                                 final bytes = await buildBookPdf(
-                                  chapters: _previewTargetChapters,
+                                  chapters: _chaptersForRenderImages(
+                                    _previewTargetChapters,
+                                  ),
                                 );
                                 if (!mounted) return;
                                 await Navigator.of(context).push(
@@ -3078,7 +4143,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                 }
                                 try {
                                   final bytes = await buildBookPdf(
-                                    chapters: targetChapters,
+                                    chapters: _chaptersForRenderImages(
+                                      targetChapters,
+                                    ),
                                     showChapterTitle: true,
                                   );
                                   if (!mounted) return;
@@ -4876,50 +5943,89 @@ class _A4PortraitCoverCard extends StatelessWidget {
 class _MiniCoverCard extends StatelessWidget {
   final double width;
   final String? imagePath;
+
   const _MiniCoverCard({this.width = 79, this.imagePath});
+
+  Future<String?> _resolveImagePath(String? value) async {
+    final raw = value?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct.path;
+
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final byFileName = File(p.join(appDocDir.path, p.basename(raw)));
+
+    if (await byFileName.exists()) return byFileName.path;
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final h = width * 1.5;
     final miniRadius = scaledCoverRadius(width);
-    final hasImage =
-        imagePath != null &&
-        imagePath!.isNotEmpty &&
-        File(imagePath!).existsSync();
-    return Container(
-      width: width,
-      height: h,
 
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(miniRadius),
-        color:
-            hasImage
-                ? Colors.transparent
-                : const Color(0xFFFFFFFF).withValues(alpha: 0.04),
+    return FutureBuilder<String?>(
+      future: _resolveImagePath(imagePath),
+      builder: (context, snap) {
+        final resolvedPath = snap.data;
+        final hasImage =
+            resolvedPath != null &&
+            resolvedPath.isNotEmpty &&
+            File(resolvedPath).existsSync();
 
-        border:
-            hasImage
-                ? null
-                : Border.all(
-                  color: const Color.fromARGB(255, 170, 193, 216),
-                  width: 0.5,
-                ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child:
-          hasImage
-              ? Image.file(File(imagePath!), fit: BoxFit.cover)
-              : const Center(
-                child: Text(
-                  '+ 표지 사진',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                    color: Color.fromARGB(255, 171, 193, 217),
+        return Container(
+          width: width,
+          height: h,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(miniRadius),
+            color:
+                hasImage
+                    ? Colors.transparent
+                    : const Color(0xFFFFFFFF).withValues(alpha: 0.04),
+            border:
+                hasImage
+                    ? null
+                    : Border.all(
+                      color: const Color.fromARGB(255, 170, 193, 216),
+                      width: 0.5,
+                    ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child:
+              hasImage
+                  ? Image.file(
+                    File(resolvedPath),
+                    fit: BoxFit.cover,
+                    errorBuilder:
+                        (_, __, ___) => const Center(
+                          child: Text(
+                            '+ 표지 사진',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                              color: Color.fromARGB(255, 171, 193, 217),
+                            ),
+                          ),
+                        ),
+                  )
+                  : const Center(
+                    child: Text(
+                      '+ 표지 사진',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.2,
+                        color: Color.fromARGB(255, 171, 193, 217),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+        );
+      },
     );
   }
 }

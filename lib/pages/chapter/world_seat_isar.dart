@@ -64,6 +64,7 @@ class CharacterEntity {
   @Index()
   late String kind;
 
+  int order = 0;
   int? colorArgb;
 
   late String name;

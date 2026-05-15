@@ -1,9 +1,14 @@
 // character.dart
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
+
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 enum KeywordInputMode { hashtag, phrase }
 
@@ -288,12 +293,6 @@ class _CoverThumb extends StatelessWidget {
         final cardH = cardW * _ratio2to3;
         final cardRadius = scaledCoverRadius(cardW);
 
-        File? coverFile;
-        if (coverPath != null && coverPath!.isNotEmpty) {
-          final f = File(coverPath!);
-          if (f.existsSync()) coverFile = f;
-        }
-
         const placeholder = Center(
           child: Text(
             '+ 사진',
@@ -308,34 +307,41 @@ class _CoverThumb extends StatelessWidget {
         return SizedBox(
           width: cardW,
           height: cardH,
-          child: GestureDetector(
-            onTap: onTap,
-            onLongPress: coverFile != null ? onLongPressPreview : null,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(cardRadius),
-                color:
-                    coverFile != null
-                        ? Colors.transparent
-                        : const Color(0xFFFFFFFF).withValues(alpha: 0.04),
-                border:
-                    coverFile != null
-                        ? null
-                        : Border.all(
-                          color: const Color.fromARGB(255, 170, 193, 216),
-                          width: 0.5,
-                        ),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child:
-                  coverFile != null
-                      ? Image.file(
-                        coverFile,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => placeholder,
-                      )
-                      : placeholder,
-            ),
+          child: FutureBuilder<File?>(
+            future: resolveCharacterCoverFile(coverPath),
+            builder: (context, snapshot) {
+              final coverFile = snapshot.data;
+
+              return GestureDetector(
+                onTap: onTap,
+                onLongPress: coverFile != null ? onLongPressPreview : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(cardRadius),
+                    color:
+                        coverFile != null
+                            ? Colors.transparent
+                            : const Color(0xFFFFFFFF).withValues(alpha: 0.04),
+                    border:
+                        coverFile != null
+                            ? null
+                            : Border.all(
+                              color: const Color.fromARGB(255, 170, 193, 216),
+                              width: 0.5,
+                            ),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child:
+                      coverFile != null
+                          ? Image.file(
+                            coverFile,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => placeholder,
+                          )
+                          : placeholder,
+                ),
+              );
+            },
           ),
         );
       },
@@ -751,6 +757,29 @@ class _InlineLabeledField extends StatelessWidget {
   }
 }
 
+Future<File?> resolveCharacterCoverFile(String? coverPath) async {
+  final raw = coverPath?.trim();
+  if (raw == null || raw.isEmpty) return null;
+
+  // 1) 절대경로 그대로 존재하면 사용
+  final direct = File(raw);
+  if (await direct.exists()) return direct;
+
+  final appDir = await getApplicationDocumentsDirectory();
+
+  // 2) Documents 기준 상대경로면 사용
+  final fromDocuments = File(p.join(appDir.path, raw));
+  if (await fromDocuments.exists()) return fromDocuments;
+
+  // 3) 예전 절대경로가 깨졌을 때 파일명만으로 character_covers에서 복구
+  final fromCharacterCovers = File(
+    p.join(appDir.path, 'character_covers', p.basename(raw)),
+  );
+  if (await fromCharacterCovers.exists()) return fromCharacterCovers;
+
+  return null;
+}
+
 class _WorldPageState extends State<WorldPage> {
   static const Color _defaultCharacterColor = ui.Color.fromARGB(
     182,
@@ -881,6 +910,49 @@ class _WorldPageState extends State<WorldPage> {
     });
   }
 
+  Future<void> _pickCoverImage() async {
+    final picker = ImagePicker();
+
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 92,
+    );
+
+    if (picked == null) return;
+
+    final appDir = await getApplicationDocumentsDirectory();
+
+    final imageDir = Directory(p.join(appDir.path, 'character_covers'));
+
+    if (!await imageDir.exists()) {
+      await imageDir.create(recursive: true);
+    }
+
+    final ext =
+        p.extension(picked.path).isNotEmpty ? p.extension(picked.path) : '.jpg';
+
+    final characterId =
+        _character.id.trim().isNotEmpty
+            ? _character.id.trim()
+            : DateTime.now().microsecondsSinceEpoch.toString();
+
+    final fileName =
+        '${characterId}_${DateTime.now().microsecondsSinceEpoch}$ext';
+
+    final relativePath = p.join('character_covers', fileName);
+    final savedPath = p.join(appDir.path, relativePath);
+
+    await File(picked.path).copy(savedPath);
+
+    if (!mounted) return;
+
+    setState(() {
+      // ✅ 절대경로 말고 상대경로 저장
+      _coverPath = relativePath;
+      _character = _buildCharacterFromControllers();
+    });
+  }
+
   Future<void> _pickCharacterColor() async {
     final result = await _showPrettyWheelBottomSheet(
       context,
@@ -955,7 +1027,7 @@ class _WorldPageState extends State<WorldPage> {
                         children: [
                           _CoverThumb(
                             coverPath: _coverPath,
-                            onTap: () async {},
+                            onTap: _pickCoverImage,
                             onLongPressPreview: () {},
                           ),
                           const SizedBox(height: 8),

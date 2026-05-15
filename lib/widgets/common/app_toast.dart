@@ -1,9 +1,12 @@
 // lib/widgets/common/app_toast.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 /// 앱 전체에서 동일한 디자인으로 표시되는 토스트 (중복 방지 포함)
 class AppToast {
-  static OverlayEntry? _currentToast; // 🔹 현재 표시 중인 토스트를 저장
+  static OverlayEntry? _currentToast;
+  static Timer? _timer;
 
   static void show(
     BuildContext context,
@@ -12,13 +15,17 @@ class AppToast {
     Alignment alignment = Alignment.center,
     double bottomOffset = 100,
   }) {
-    // 🔸 기존 토스트 제거 (중복 방지)
-    _currentToast?.remove();
-    _currentToast = null;
+    // 기존 자동 제거 예약 취소
+    _timer?.cancel();
+    _timer = null;
+
+    // 기존 토스트 안전 제거
+    _removeCurrentToast();
 
     final overlay =
         Overlay.maybeOf(context, rootOverlay: true) ??
-        Navigator.of(context, rootNavigator: true).overlay;
+        Navigator.maybeOf(context, rootNavigator: true)?.overlay;
+
     if (overlay == null) return;
 
     final entry = OverlayEntry(
@@ -41,11 +48,32 @@ class AppToast {
     overlay.insert(entry);
     _currentToast = entry;
 
-    // 🔹 일정 시간 후 자동 제거
-    Future.delayed(duration, () {
-      entry.remove();
-      if (_currentToast == entry) _currentToast = null;
+    // 일정 시간 후 자동 제거
+    _timer = Timer(duration, () {
+      if (_currentToast == entry) {
+        _removeCurrentToast();
+      } else {
+        _safeRemove(entry);
+      }
     });
+  }
+
+  static void _removeCurrentToast() {
+    final entry = _currentToast;
+    _currentToast = null;
+
+    if (entry == null) return;
+    _safeRemove(entry);
+  }
+
+  static void _safeRemove(OverlayEntry entry) {
+    try {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    } catch (_) {
+      // 이미 제거된 OverlayEntry면 무시
+    }
   }
 }
 
@@ -65,9 +93,11 @@ class _ToastBubbleState extends State<_ToastBubble>
   @override
   void initState() {
     super.initState();
-    // 🔸 살짝 fade-in 효과
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _opacity = 1.0);
+      if (mounted) {
+        setState(() => _opacity = 1.0);
+      }
     });
   }
 
@@ -81,10 +111,10 @@ class _ToastBubbleState extends State<_ToastBubble>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 7),
           decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.30), // 💙 반투명 파란색
-            borderRadius: BorderRadius.circular(25), // 🔵 알약형
+            color: Colors.blue.withValues(alpha: 0.30),
+            borderRadius: BorderRadius.circular(25),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.9), // ✅ 흰색 테두리
+              color: Colors.white.withValues(alpha: 0.9),
               width: 1.1,
             ),
           ),

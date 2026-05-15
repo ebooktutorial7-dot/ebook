@@ -2,11 +2,14 @@
 
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:characters/characters.dart';
 import 'package:flutter/services.dart' show NetworkAssetBundle, rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
+import 'dart:convert';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'package:ebook_tutorial_app/pages/book_builder_page.dart'
     show ChapterItem;
@@ -272,8 +275,43 @@ Future<Uint8List?> _loadEmojiPng(String cluster) {
 }
 
 String? _normalizeImageSource(dynamic raw) {
-  if (raw is String) return raw;
-  if (raw is Map && raw['source'] is String) return raw['source'] as String;
+  if (raw is String) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    if (value.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map && decoded['source'] is String) {
+          final src = (decoded['source'] as String).trim();
+          return src.isEmpty ? null : src;
+        }
+      } catch (_) {}
+    }
+
+    return value;
+  }
+
+  if (raw is Map && raw['source'] is String) {
+    final src = (raw['source'] as String).trim();
+    return src.isEmpty ? null : src;
+  }
+
+  return null;
+}
+
+Future<File?> _resolvePdfImageFile(String source) async {
+  final raw = source.trim();
+  if (raw.isEmpty) return null;
+
+  final direct = File(raw);
+  if (await direct.exists()) return direct;
+
+  final appDir = await getApplicationDocumentsDirectory();
+  final fromDocuments = File(p.join(appDir.path, raw));
+
+  if (await fromDocuments.exists()) return fromDocuments;
+
   return null;
 }
 
@@ -285,8 +323,9 @@ Future<Uint8List?> _loadImageBytes(String source) async {
       return bd.buffer.asUint8List();
     }
 
-    final file = File(source);
-    if (!file.existsSync()) return null;
+    final file = await _resolvePdfImageFile(source);
+    if (file == null) return null;
+
     return await file.readAsBytes();
   } catch (_) {
     return null;
@@ -871,15 +910,11 @@ Future<List<pw.Widget>> _deltaToPdfWidgets({
       out.add(
         pw.Padding(
           padding: const pw.EdgeInsets.symmetric(vertical: 12),
-          child: pw.Align(
-            alignment: () {
-              final a = currentBlockAttrs?['align'];
-              if (a == 'center') return pw.Alignment.center;
-              if (a == 'right' || a == 'end') return pw.Alignment.centerRight;
-              return pw.Alignment.centerLeft;
-            }(),
+          child: pw.Container(
+            width: double.infinity,
+            alignment: pw.Alignment.center,
             child: pw.Container(
-              constraints: const pw.BoxConstraints(maxWidth: 420),
+              constraints: const pw.BoxConstraints(maxWidth: 360),
               child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
             ),
           ),

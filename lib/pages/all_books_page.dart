@@ -11,6 +11,7 @@ import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/widgets/card_design.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 
 class AllBooksPage extends StatefulWidget {
   const AllBooksPage({
@@ -46,7 +47,8 @@ class _AllBooksPageState extends State<AllBooksPage> {
   void initState() {
     super.initState();
     _ebooks = widget.ebooks.map((e) => Map<String, dynamic>.from(e)).toList();
-    _sortBooksByLatestEdit();
+    _normalizeBookOrder();
+    _sortBooksByManualOrder();
     _initReduceTransparency();
 
     if (widget.startInSelectionMode) {
@@ -82,20 +84,41 @@ class _AllBooksPageState extends State<AllBooksPage> {
     widget.onChanged(next);
   }
 
-  DateTime _parseUpdatedAt(Map<String, dynamic> book) {
-    final raw = book['updatedAt'];
-    if (raw is String) {
-      return DateTime.tryParse(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  void _normalizeBookOrder() {
+    for (int i = 0; i < _ebooks.length; i++) {
+      _ebooks[i]['bookOrder'] ??= i;
+
+      // 이동용 key가 안정적으로 유지되게 documentId도 미리 만들어 둠
+      _ebooks[i]['documentId'] ??= _newDocumentId();
     }
-    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  void _sortBooksByLatestEdit() {
+  void _sortBooksByManualOrder() {
     _ebooks.sort((a, b) {
-      final aTime = _parseUpdatedAt(a);
-      final bTime = _parseUpdatedAt(b);
-      return bTime.compareTo(aTime); // 최신 편집이 앞
+      final ao = a['bookOrder'];
+      final bo = b['bookOrder'];
+
+      final ai = ao is int ? ao : 0;
+      final bi = bo is int ? bo : 0;
+
+      return ai.compareTo(bi);
     });
+  }
+
+  void _reorderBooks(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _ebooks.length) return;
+    if (newIndex < 0 || newIndex >= _ebooks.length) return;
+    if (oldIndex == newIndex) return;
+
+    setState(() {
+      final moved = _ebooks.removeAt(oldIndex);
+      _ebooks.insert(newIndex, moved);
+      for (int i = 0; i < _ebooks.length; i++) {
+        _ebooks[i]['bookOrder'] = i;
+      }
+    });
+
+    _emitChange();
   }
 
   void _enterSelectionMode() {
@@ -142,8 +165,15 @@ class _AllBooksPageState extends State<AllBooksPage> {
                         _ebooks.removeAt(i);
                       }
                     }
+
                     _exitSelectionMode();
+
+                    for (int i = 0; i < _ebooks.length; i++) {
+                      _ebooks[i]['bookOrder'] = i;
+                    }
                   });
+                  Navigator.pop(context);
+                  _emitChange();
                   Navigator.pop(context);
                   _emitChange();
                 },
@@ -365,8 +395,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   result['updatedAt'] ?? DateTime.now().toIso8601String();
 
               book['coverPath'] = result['coverPath'] as String?;
-
-              _sortBooksByLatestEdit();
             });
 
             _emitChange();
@@ -389,8 +417,23 @@ class _AllBooksPageState extends State<AllBooksPage> {
               final crossAxisCount = (constraints.maxWidth / (_cardWidth + 16))
                   .floor()
                   .clamp(2, 6);
+              if (_selectionMode) {
+                return GridView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: _cardWidth / _cardTotalHeight,
+                  ),
+                  itemCount: _ebooks.length,
+                  itemBuilder: (_, i) {
+                    return _buildCardItem(index: i);
+                  },
+                );
+              }
 
-              return GridView.builder(
+              return ReorderableGridView.builder(
                 physics: const BouncingScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
@@ -399,8 +442,35 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   childAspectRatio: _cardWidth / _cardTotalHeight,
                 ),
                 itemCount: _ebooks.length,
+                onReorder: _reorderBooks,
+
+                // 이동 디자인: 그림자 없음, 배경 없음, 살짝 확대
+                dragWidgetBuilderV2: DragWidgetBuilderV2(
+                  isScreenshotDragWidget: false,
+                  builder: (index, child, screenshot) {
+                    return Material(
+                      type: MaterialType.transparency,
+                      color: Colors.transparent,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      child: AnimatedScale(
+                        scale: 1.05,
+                        duration: const Duration(milliseconds: 80),
+                        curve: Curves.easeOut,
+                        child: child,
+                      ),
+                    );
+                  },
+                ),
+
                 itemBuilder: (_, i) {
-                  return _buildCardItem(index: i);
+                  final book = _ebooks[i];
+
+                  return KeyedSubtree(
+                    key: ValueKey('book_${book['documentId']}'),
+                    child: _buildCardItem(index: i),
+                  );
                 },
               );
             },

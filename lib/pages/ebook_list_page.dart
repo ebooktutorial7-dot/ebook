@@ -8,7 +8,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'calendar_page.dart';
-
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:ebook_tutorial_app/controllers/ebook_list_controller.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/services/ebook_service.dart';
@@ -70,11 +71,13 @@ class _EbookListPageState extends State<EbookListPage>
   Future<_CalendarOnlyPreviewData>? _calendarPreviewFuture;
 
   Future<void> _openBookAtChapter(EpisodePreview p) async {
-    final book = controller.ebooks.firstWhere(
+    final bookIndex = controller.ebooks.indexWhere(
       (b) => (b['documentId'] as String?) == p.bookId,
-      orElse: () => const <String, dynamic>{},
     );
-    if (book.isEmpty) return;
+
+    if (bookIndex < 0) return;
+
+    final book = controller.ebooks[bookIndex];
 
     final genreName = book['genre'] as String?;
     final g = Genre.values.firstWhere(
@@ -82,7 +85,7 @@ class _EbookListPageState extends State<EbookListPage>
       orElse: () => Genre.webNovel,
     );
 
-    await Navigator.push<Map<String, dynamic>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder:
@@ -103,13 +106,36 @@ class _EbookListPageState extends State<EbookListPage>
                 pageIndex: 0,
                 initialPenName: (book['penName'] as String?) ?? '',
                 documentId: p.bookId,
+                initialCoverPath:
+                    (book['coverPath'] as String?) ?? p.bookCoverPath, // 추가
                 initialOpenChapterIndex: p.chapterIndex,
               ),
             ),
       ),
     );
 
+    if (!mounted || result == null) return;
+
+    await controller.editEbookAt(
+      index: bookIndex,
+      title: (result['title'] as String?) ?? (book['title'] as String),
+      delta: result['delta'] as List<dynamic>,
+      drawings:
+          (result['drawings'] as List?)?.cast<Map<String, dynamic>>() ??
+          <Map<String, dynamic>>[],
+    );
+
+    controller.ebooks[bookIndex]['genre'] = g.name;
+    controller.ebooks[bookIndex]['documentId'] =
+        (result['documentId'] as String?) ?? p.bookId;
+    controller.ebooks[bookIndex]['coverPath'] = result['coverPath'] as String?;
+    controller.ebooks[bookIndex]['updatedAt'] =
+        DateTime.now().toIso8601String();
+
+    await controller.persistEbooks();
+
     if (!mounted) return;
+    AppToast.show(context, '저장 완료');
     setState(() {});
   }
 
@@ -311,7 +337,9 @@ class _EbookListPageState extends State<EbookListPage>
       final bookId = (b['documentId'] as String?) ?? '';
       if (bookId.isEmpty) continue;
 
-      final bookCoverPath = prefs.getString('book_cover_$bookId')?.trim();
+      final bookCoverPath = await _resolveBookCoverPath(
+        (b['coverPath'] as String?) ?? prefs.getString('book_cover_$bookId'),
+      );
 
       final raw = prefs.getString('book_chapters_$bookId');
       if (raw == null || raw.isEmpty) continue;
@@ -335,8 +363,9 @@ class _EbookListPageState extends State<EbookListPage>
         final sizeBytes = (m['sizeBytes'] as num?)?.toInt();
         final charCount = (m['charCount'] as num?)?.toInt();
 
-        final coverPath =
-            ((m['cover'] as String?) ?? (m['coverPath'] as String?))?.trim();
+        final coverPath = await _resolveBookCoverPath(
+          (m['cover'] as String?) ?? (m['coverPath'] as String?),
+        );
 
         final pinned = (m['pinned'] as bool?) ?? false;
 
@@ -519,21 +548,11 @@ class _EbookListPageState extends State<EbookListPage>
               );
               return g == selected;
             }).toList();
-
-    DateTime parseUpdatedAt(Map<String, dynamic> book) {
-      final raw = book['updatedAt'];
-      if (raw is String) {
-        return DateTime.tryParse(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      }
-      return DateTime.fromMillisecondsSinceEpoch(0);
-    }
-
     books.sort((a, b) {
-      final aTime = parseUpdatedAt(a);
-      final bTime = parseUpdatedAt(b);
-      return bTime.compareTo(aTime);
+      final ai = _bookOrderOf(a, controller.ebooks.indexOf(a));
+      final bi = _bookOrderOf(b, controller.ebooks.indexOf(b));
+      return ai.compareTo(bi);
     });
-
     return books;
   }
 
@@ -555,13 +574,64 @@ class _EbookListPageState extends State<EbookListPage>
 
     _reloadCalendarPreview();
 
-    controller.init().then((_) {
+    controller.init().then((_) async {
+      await _restoreBookCoverPathsFromPrefs();
+
+      final changed = _normalizeControllerBookOrder();
+      if (changed) {
+        await controller.persistEbooks();
+      }
+
       if (mounted) {
         setState(() {
           _reloadCalendarPreview();
         });
       }
     });
+  }
+
+  Future<String?> _resolveBookCoverPath(String? value) async {
+    final raw = value?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct.path;
+
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final byFileName = File(p.join(appDocDir.path, p.basename(raw)));
+
+    if (await byFileName.exists()) return byFileName.path;
+
+    return null;
+  }
+
+  Future<void> _restoreBookCoverPathsFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    var changed = false;
+
+    for (final book in controller.ebooks) {
+      final docId = book['documentId'] as String?;
+      if (docId == null || docId.isEmpty) continue;
+
+      final current = await _resolveBookCoverPath(book['coverPath'] as String?);
+      if (current != null) {
+        book['coverPath'] = current;
+        changed = true;
+        continue;
+      }
+
+      final saved = prefs.getString('book_cover_$docId');
+      final resolved = await _resolveBookCoverPath(saved);
+
+      if (resolved != null) {
+        book['coverPath'] = resolved;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await controller.persistEbooks();
+    }
   }
 
   @override
@@ -581,6 +651,39 @@ class _EbookListPageState extends State<EbookListPage>
 
   String _newDocumentId() =>
       'doc_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+
+  int _bookOrderOf(Map<String, dynamic> book, int fallback) {
+    final raw = book['bookOrder'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return fallback;
+  }
+
+  int _nextBookOrder() {
+    var maxOrder = -1;
+
+    for (var i = 0; i < controller.ebooks.length; i++) {
+      final order = _bookOrderOf(controller.ebooks[i], i);
+      if (order > maxOrder) maxOrder = order;
+    }
+
+    return maxOrder + 1;
+  }
+
+  bool _normalizeControllerBookOrder() {
+    var changed = false;
+
+    for (int i = 0; i < controller.ebooks.length; i++) {
+      final raw = controller.ebooks[i]['bookOrder'];
+
+      if (raw is! num) {
+        controller.ebooks[i]['bookOrder'] = i;
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
 
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
@@ -629,6 +732,8 @@ class _EbookListPageState extends State<EbookListPage>
         (result['documentId'] as String?) ?? docId;
     controller.ebooks.last['coverPath'] = result['coverPath'] as String?;
     controller.ebooks.last['updatedAt'] = DateTime.now().toIso8601String();
+    controller.ebooks.last['bookOrder'] = _nextBookOrder();
+
     await controller.persistEbooks();
 
     if (!mounted) return;
@@ -645,11 +750,20 @@ class _EbookListPageState extends State<EbookListPage>
       if (!mounted) return;
     }
     final String docId = cur['documentId'] as String;
+    final prefs = await SharedPreferences.getInstance();
+
+    final curCover = (cur['coverPath'] as String?)?.trim();
+    final savedCover = prefs.getString('book_cover_$docId')?.trim();
+
+    final initialCoverPath =
+        (curCover != null && curCover.isNotEmpty) ? curCover : savedCover;
     final genreName = cur['genre'] as String?;
     final genre = Genre.values.firstWhere(
       (e) => e.name == genreName,
       orElse: () => Genre.webNovel,
     );
+
+    if (!mounted) return;
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
@@ -667,6 +781,7 @@ class _EbookListPageState extends State<EbookListPage>
                 pageIndex: index,
                 initialPenName: (cur['penName'] as String?) ?? '',
                 documentId: docId,
+                initialCoverPath: initialCoverPath,
               ),
             ),
       ),
@@ -782,11 +897,11 @@ class _EbookListPageState extends State<EbookListPage>
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: InkWell(
-                      onTap: () {
+                      onTap: () async {
                         final genre = _genreTabs[_genreIndex];
                         final genreBooks = _filteredEbooks();
 
-                        Navigator.push(
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder:
@@ -810,12 +925,21 @@ class _EbookListPageState extends State<EbookListPage>
                                       controller.ebooks.addAll(nextGenreBooks);
                                     }
 
+                                    _normalizeControllerBookOrder();
+
                                     await controller.persistEbooks();
-                                    if (mounted) setState(() {});
+
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
                                   },
                                 ),
                           ),
                         );
+
+                        if (mounted) {
+                          setState(() {});
+                        }
                       },
                       borderRadius: BorderRadius.circular(8),
                       splashFactory: NoSplash.splashFactory,

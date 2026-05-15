@@ -11,9 +11,33 @@ import 'package:ebook_tutorial_app/pages/chapter/timeline.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:ebook_tutorial_app/pages/chapter/faction.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
+
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:isar/isar.dart';
 import 'world_seat_isar.dart';
+
+Future<File?> resolveCharacterCoverFile(String? coverPath) async {
+  final raw = coverPath?.trim();
+  if (raw == null || raw.isEmpty) return null;
+
+  final direct = File(raw);
+  if (await direct.exists()) return direct;
+
+  final appDir = await getApplicationDocumentsDirectory();
+
+  final fromDocuments = File(p.join(appDir.path, raw));
+  if (await fromDocuments.exists()) return fromDocuments;
+
+  final fromCharacterCovers = File(
+    p.join(appDir.path, 'character_covers', p.basename(raw)),
+  );
+  if (await fromCharacterCovers.exists()) return fromCharacterCovers;
+
+  return null;
+}
 
 Future<bool> showDeleteSheet({
   required BuildContext context,
@@ -1457,6 +1481,8 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
   bool _loading = true;
   List<Character> _characters = [];
 
+  int? _draggingProtagonistIndex;
+
   List<Character> _seedExampleCharacters() {
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -1636,7 +1662,7 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
       if (idx >= 0) {
         _characters[idx] = result;
       } else {
-        _characters = [result, ..._characters];
+        _characters = [..._characters, result];
       }
     });
 
@@ -1664,9 +1690,107 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
       _characters.removeWhere((x) => x.id == c.id);
     });
 
+    unawaited(
+      _store.persistOrderByKind(
+        kind: c.kind,
+        uidsInOrder:
+            _characters
+                .where((x) => x.kind == c.kind)
+                .map((x) => x.id)
+                .toList(),
+      ),
+    );
+
     _restoreTried = false;
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _attemptRestoreScroll(),
+    );
+  }
+
+  void _reorderCharactersByKind({
+    required CharacterKind kind,
+    required int oldIndex,
+    required int newIndex,
+  }) {
+    final group = _characters.where((c) => c.kind == kind).toList();
+
+    if (oldIndex < 0 || oldIndex >= group.length) return;
+
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex > group.length) newIndex = group.length;
+    if (oldIndex == newIndex) return;
+
+    final moved = group.removeAt(oldIndex);
+    group.insert(newIndex, moved);
+
+    final protagonists =
+        kind == CharacterKind.protagonist
+            ? group
+            : _characters
+                .where((c) => c.kind == CharacterKind.protagonist)
+                .toList();
+
+    final supporting =
+        kind == CharacterKind.supporting
+            ? group
+            : _characters
+                .where((c) => c.kind == CharacterKind.supporting)
+                .toList();
+
+    setState(() {
+      _characters = [...protagonists, ...supporting];
+    });
+
+    unawaited(
+      _store.persistOrderByKind(
+        kind: kind,
+        uidsInOrder: group.map((c) => c.id).toList(),
+      ),
+    );
+  }
+
+  void _reorderGridCharactersByKind({
+    required CharacterKind kind,
+    required int oldIndex,
+    required int newIndex,
+  }) {
+    final group = _characters.where((c) => c.kind == kind).toList();
+
+    if (oldIndex < 0 || oldIndex >= group.length) return;
+    if (newIndex < 0 || newIndex >= group.length) return;
+    if (oldIndex == newIndex) return;
+
+    // ✅ 그리드는 newIndex 보정하지 않음
+    final moved = group.removeAt(oldIndex);
+    group.insert(newIndex, moved);
+
+    final protagonists =
+        kind == CharacterKind.protagonist
+            ? group
+            : _characters
+                .where((c) => c.kind == CharacterKind.protagonist)
+                .toList();
+
+    final supporting =
+        kind == CharacterKind.supporting
+            ? group
+            : _characters
+                .where((c) => c.kind == CharacterKind.supporting)
+                .toList();
+
+    setState(() {
+      _characters = [...protagonists, ...supporting];
+    });
+
+    unawaited(
+      _store.persistOrderByKind(
+        kind: kind,
+        uidsInOrder: group.map((c) => c.id).toList(),
+      ),
     );
   }
 
@@ -1707,6 +1831,20 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
           _CharacterSliverList(
             items: protagonists,
             sheetStyle: true,
+            draggingIndex: _draggingProtagonistIndex,
+            onReorderStart: (i) {
+              setState(() => _draggingProtagonistIndex = i);
+            },
+            onReorderEnd: (_) {
+              setState(() => _draggingProtagonistIndex = null);
+            },
+            onReorder: (oldIndex, newIndex) {
+              _reorderCharactersByKind(
+                kind: CharacterKind.protagonist,
+                oldIndex: oldIndex,
+                newIndex: newIndex,
+              );
+            },
             onTap: (c) => _openEditor(initial: c),
             onEdit: (c) => _openEditor(initial: c),
             onDelete: _delete,
@@ -1724,6 +1862,13 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
           ),
           _SupportingCharacterGrid(
             items: supporting,
+            onReorder: (oldIndex, newIndex) {
+              _reorderGridCharactersByKind(
+                kind: CharacterKind.supporting,
+                oldIndex: oldIndex,
+                newIndex: newIndex,
+              );
+            },
             onTap: (c) => _openEditor(initial: c),
             onDelete: _delete,
             emptyText: '아직 등장 인물이 없습니다.\n오른쪽 위 + 로 추가하세요.',
@@ -1770,6 +1915,10 @@ class _CharacterSliverList extends StatelessWidget {
   final void Function(Character) onTap;
   final void Function(Character) onEdit;
   final void Function(Character) onDelete;
+  final void Function(int oldIndex, int newIndex) onReorder;
+  final void Function(int index) onReorderStart;
+  final void Function(int index) onReorderEnd;
+  final int? draggingIndex;
   final String? emptyText;
   final bool sheetStyle;
 
@@ -1778,6 +1927,10 @@ class _CharacterSliverList extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    required this.onReorder,
+    required this.onReorderStart,
+    required this.onReorderEnd,
+    required this.draggingIndex,
     this.emptyText,
     this.sheetStyle = false,
   });
@@ -1804,33 +1957,62 @@ class _CharacterSliverList extends StatelessWidget {
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      sliver: SliverList.separated(
+      sliver: SliverReorderableList(
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        onReorderStart: onReorderStart,
+        onReorderEnd: onReorderEnd,
+        proxyDecorator: (child, index, animation) {
+          return Material(
+            type: MaterialType.transparency,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            child: AnimatedScale(
+              scale: 1.05,
+              duration: const Duration(milliseconds: 80),
+              curve: Curves.easeOut,
+              child: child,
+            ),
+          );
+        },
+        onReorder: onReorder,
         itemBuilder: (context, i) {
           final c = items[i];
+          final isDragging = draggingIndex == i;
 
-          return InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => onTap(c),
-            splashFactory: NoSplash.splashFactory,
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            overlayColor: WidgetStateProperty.all(Colors.transparent),
-            child:
-                sheetStyle
-                    ? _CharacterSheetCard(
-                      character: c,
-                      onEdit: () => onEdit(c),
-                      onDelete: () => onDelete(c),
-                    )
-                    : _CharacterSimpleCard(
-                      character: c,
-                      onEdit: () => onEdit(c),
-                      onDelete: () => onDelete(c),
-                    ),
+          return ReorderableDelayedDragStartListener(
+            key: ValueKey('protagonist_${c.id}'),
+            index: i,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: AnimatedScale(
+                scale: isDragging ? 1.04 : 1.0,
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.easeOut,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onTap(c),
+                  splashFactory: NoSplash.splashFactory,
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  child:
+                      sheetStyle
+                          ? _CharacterSheetCard(
+                            character: c,
+                            onEdit: () => onEdit(c),
+                            onDelete: () => onDelete(c),
+                          )
+                          : _CharacterSimpleCard(
+                            character: c,
+                            onEdit: () => onEdit(c),
+                            onDelete: () => onDelete(c),
+                          ),
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -1842,17 +2024,120 @@ class _SupportingCharacterGrid extends StatelessWidget {
   final List<Character> items;
   final void Function(Character) onTap;
   final void Function(Character) onDelete;
+  final void Function(int oldIndex, int newIndex) onReorder;
   final String? emptyText;
 
   const _SupportingCharacterGrid({
     required this.items,
     required this.onTap,
     required this.onDelete,
+    required this.onReorder,
     this.emptyText,
   });
 
   String _clean(String s) => s.trim();
   String _fallback(String s, String fb) => _clean(s).isEmpty ? fb : _clean(s);
+
+  Widget _buildCard(Character c) {
+    final name = _fallback(c.name, 'Unnamed');
+    final profile = _clean(c.specialNote);
+
+    final Color accent = (c.color ?? const Color(0xFFB0C1D8)).withValues(
+      alpha: 1.0,
+    );
+
+    return InkWell(
+      onTap: () => onTap(c),
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
+      focusColor: Colors.transparent,
+      overlayColor: WidgetStateProperty.all(Colors.transparent),
+      borderRadius: BorderRadius.circular(14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          color: Colors.transparent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: _SheetCover(coverPath: c.coverPath)),
+
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      height: 40,
+                      child: Container(width: 3, color: accent),
+                    ),
+
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: InkWell(
+                        onTap: () => onDelete(c),
+                        borderRadius: BorderRadius.circular(999),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.close,
+                            size: 17,
+                            color: Color.fromARGB(255, 222, 237, 255),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          height: 1.05,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Expanded(
+                        child: Text(
+                          profile.isEmpty ? 'Tap to edit' : profile,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.15,
+                            color:
+                                profile.isEmpty
+                                    ? const Color.fromARGB(255, 170, 193, 216)
+                                    : const Color.fromARGB(221, 141, 194, 230),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1876,125 +2161,41 @@ class _SupportingCharacterGrid extends StatelessWidget {
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate((context, i) {
-          final c = items[i];
-          final name = _fallback(c.name, 'Unnamed');
-          final profile = _clean(c.specialNote);
+      sliver: ReorderableSliverGridView.count(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 2 / 3.05,
+        onReorder: onReorder,
 
-          final Color accent = (c.color ?? const Color(0xFFB0C1D8)).withValues(
-            alpha: 1.0,
-          );
-
-          return InkWell(
-            onTap: () => onTap(c),
-            splashFactory: NoSplash.splashFactory,
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            overlayColor: WidgetStateProperty.all(Colors.transparent),
-            borderRadius: BorderRadius.circular(14),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                color: Colors.transparent,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: _SheetCover(coverPath: c.coverPath),
-                          ),
-
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            height: 40,
-                            child: Container(width: 3, color: accent),
-                          ),
-
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: InkWell(
-                              onTap: () => onDelete(c),
-                              borderRadius: BorderRadius.circular(999),
-                              child: const Padding(
-                                padding: EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.close,
-                                  size: 17,
-                                  color: Color.fromARGB(255, 222, 237, 255),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                height: 1.05,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Expanded(
-                              child: Text(
-                                profile.isEmpty ? 'Tap to edit' : profile,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  height: 1.15,
-                                  color:
-                                      profile.isEmpty
-                                          ? const Color.fromARGB(
-                                            255,
-                                            170,
-                                            193,
-                                            216,
-                                          )
-                                          : const Color.fromARGB(
-                                            221,
-                                            141,
-                                            194,
-                                            230,
-                                          ),
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+        // ✅ 주인공 proxyDecorator 느낌과 동일하게:
+        // 배경/그림자 제거 + 이동 중 살짝 확대
+        dragWidgetBuilderV2: DragWidgetBuilderV2(
+          isScreenshotDragWidget: false,
+          builder: (index, child, screenshot) {
+            return Material(
+              type: MaterialType.transparency,
+              color: Colors.transparent,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              child: AnimatedScale(
+                scale: 1.05,
+                duration: const Duration(milliseconds: 80),
+                curve: Curves.easeOut,
+                child: child,
               ),
-            ),
-          );
-        }, childCount: items.length),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 2 / 3.05,
+            );
+          },
         ),
+
+        children: [
+          for (final c in items)
+            KeyedSubtree(
+              key: ValueKey('supporting_${c.id}'),
+              child: _buildCard(c),
+            ),
+        ],
       ),
     );
   }
@@ -2182,40 +2383,40 @@ class _SheetCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    File? f;
-    final p = coverPath?.trim() ?? '';
-    if (p.isNotEmpty) {
-      final file = File(p);
-      if (file.existsSync()) f = file;
-    }
+    return FutureBuilder<File?>(
+      future: resolveCharacterCoverFile(coverPath),
+      builder: (context, snapshot) {
+        final f = snapshot.data;
 
-    if (f == null) {
-      return Container(
-        color: const Color.fromARGB(112, 235, 247, 255),
-        child: const Center(
-          child: Icon(
-            Icons.add,
-            size: 20,
-            color: Color.fromARGB(255, 186, 221, 255),
-          ),
-        ),
-      );
-    }
-
-    return Image.file(
-      f,
-      fit: BoxFit.cover,
-      errorBuilder:
-          (_, __, ___) => Container(
-            color: const Color.fromARGB(255, 236, 244, 252),
+        if (f == null) {
+          return Container(
+            color: const Color.fromARGB(112, 235, 247, 255),
             child: const Center(
               child: Icon(
-                Icons.broken_image,
-                size: 22,
-                color: Color.fromARGB(255, 170, 193, 216),
+                Icons.add,
+                size: 20,
+                color: Color.fromARGB(255, 186, 221, 255),
               ),
             ),
-          ),
+          );
+        }
+
+        return Image.file(
+          f,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (_, __, ___) => Container(
+                color: const Color.fromARGB(255, 236, 244, 252),
+                child: const Center(
+                  child: Icon(
+                    Icons.broken_image,
+                    size: 22,
+                    color: Color.fromARGB(255, 170, 193, 216),
+                  ),
+                ),
+              ),
+        );
+      },
     );
   }
 }
@@ -2289,25 +2490,26 @@ class _MiniCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    File? f;
-    if (coverPath != null && coverPath!.trim().isNotEmpty) {
-      final file = File(coverPath!.trim());
-      if (file.existsSync()) f = file;
-    }
+    return FutureBuilder<File?>(
+      future: resolveCharacterCoverFile(coverPath),
+      builder: (context, snapshot) {
+        final f = snapshot.data;
 
-    return Container(
-      width: 44,
-      height: 58,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        color: const Color.fromARGB(255, 170, 193, 216),
-        border: Border.all(color: const Color.fromARGB(255, 170, 193, 216)),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child:
-          f == null
-              ? const Center(child: Icon(Icons.person, size: 20))
-              : Image.file(f, fit: BoxFit.cover),
+        return Container(
+          width: 44,
+          height: 58,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: const Color.fromARGB(255, 170, 193, 216),
+            border: Border.all(color: const Color.fromARGB(255, 170, 193, 216)),
+          ),
+          clipBehavior: Clip.hardEdge,
+          child:
+              f == null
+                  ? const Center(child: Icon(Icons.person, size: 20))
+                  : Image.file(f, fit: BoxFit.cover),
+        );
+      },
     );
   }
 }
@@ -2320,11 +2522,16 @@ class CharacterStoreIsar {
   // UI → Isar Entity
   // -----------------------
 
-  CharacterEntity _toEntity(Character c, {required int now}) {
+  CharacterEntity _toEntity(
+    Character c, {
+    required int now,
+    required int order,
+  }) {
     return CharacterEntity()
       ..documentId = documentId
       ..uid = c.id
       ..kind = c.kind.key
+      ..order = order
       ..colorArgb = c.color?.toARGB32()
       ..name = c.name
       ..birthday = c.birthday
@@ -2374,12 +2581,10 @@ class CharacterStoreIsar {
       specialNote: e.specialNote,
       coverPath: e.coverPath,
       sheetAssetPath: e.sheetAssetPath,
-
       personalityKeywords: List<String>.from(e.personalityKeywords),
       likes: List<String>.from(e.likes),
       dislikes: List<String>.from(e.dislikes),
       physicalNotes: List<String>.from(e.physicalNotes),
-
       palette:
           e.palette
               .map(
@@ -2389,7 +2594,6 @@ class CharacterStoreIsar {
                 ),
               )
               .toList(),
-
       images:
           e.images
               .map(
@@ -2397,6 +2601,31 @@ class CharacterStoreIsar {
               )
               .toList(),
     );
+  }
+
+  int _kindRank(String kind) {
+    if (kind == CharacterKind.protagonist.key) return 0;
+    return 1;
+  }
+
+  Future<int> _nextOrderForKind(CharacterKind kind) async {
+    final isar = await WorldSeatIsar.instance;
+
+    final rows =
+        await isar.characterEntitys
+            .filter()
+            .documentIdEqualTo(documentId)
+            .kindEqualTo(kind.key)
+            .findAll();
+
+    var maxOrder = -1;
+    for (final row in rows) {
+      if (row.order > maxOrder) {
+        maxOrder = row.order;
+      }
+    }
+
+    return maxOrder + 1;
   }
 
   // -----------------------
@@ -2410,8 +2639,17 @@ class CharacterStoreIsar {
         await isar.characterEntitys
             .where()
             .documentIdEqualTo(documentId)
-            .sortByUpdatedAtDesc()
             .findAll();
+
+    rows.sort((a, b) {
+      final kindCompare = _kindRank(a.kind).compareTo(_kindRank(b.kind));
+      if (kindCompare != 0) return kindCompare;
+
+      final orderCompare = a.order.compareTo(b.order);
+      if (orderCompare != 0) return orderCompare;
+
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
 
     return rows.map(_toModel).toList(growable: false);
   }
@@ -2420,8 +2658,37 @@ class CharacterStoreIsar {
     final isar = await WorldSeatIsar.instance;
     final now = DateTime.now().millisecondsSinceEpoch;
 
+    final existing = await isar.characterEntitys.getByUid(c.id);
+    final order = existing?.order ?? await _nextOrderForKind(c.kind);
+
     await isar.writeTxn(() async {
-      await isar.characterEntitys.putByUid(_toEntity(c, now: now));
+      await isar.characterEntitys.putByUid(
+        _toEntity(c, now: now, order: order),
+      );
+    });
+  }
+
+  Future<void> persistOrderByKind({
+    required CharacterKind kind,
+    required List<String> uidsInOrder,
+  }) async {
+    final isar = await WorldSeatIsar.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    await isar.writeTxn(() async {
+      for (int i = 0; i < uidsInOrder.length; i++) {
+        final uid = uidsInOrder[i];
+
+        final row = await isar.characterEntitys.getByUid(uid);
+        if (row == null) continue;
+        if (row.documentId != documentId) continue;
+        if (row.kind != kind.key) continue;
+
+        row.order = i;
+        row.updatedAt = now + i;
+
+        await isar.characterEntitys.put(row);
+      }
     });
   }
 

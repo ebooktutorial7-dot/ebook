@@ -12,9 +12,82 @@ import 'dart:ui' as ui;
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+
 import 'package:ebook_tutorial_app/utils/iterable_extensions.dart';
 import 'package:isar/isar.dart';
 import 'package:ebook_tutorial_app/pages/chapter/world_seat_isar.dart';
+
+bool _isRemoteFactionImage(String value) {
+  final s = value.toLowerCase();
+  return s.startsWith('http://') || s.startsWith('https://');
+}
+
+Future<String> _copyFactionImageToDocuments({
+  required String documentId,
+  required String diagramId,
+  required String sourcePath,
+}) async {
+  final appDir = await getApplicationDocumentsDirectory();
+
+  final safeDocumentId = documentId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+  final imageDir = Directory(
+    p.join(appDir.path, 'faction_images', safeDocumentId),
+  );
+
+  if (!await imageDir.exists()) {
+    await imageDir.create(recursive: true);
+  }
+
+  final ext =
+      p.extension(sourcePath).isNotEmpty ? p.extension(sourcePath) : '.jpg';
+
+  final safeDiagramId = diagramId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+  final fileName =
+      '${safeDiagramId}_${DateTime.now().microsecondsSinceEpoch}$ext';
+
+  final relativePath = p.join('faction_images', safeDocumentId, fileName);
+
+  final savedPath = p.join(appDir.path, relativePath);
+
+  await File(sourcePath).copy(savedPath);
+
+  return relativePath;
+}
+
+Future<File?> resolveFactionImageFile(String? imageUrl) async {
+  final raw = imageUrl?.trim();
+  if (raw == null || raw.isEmpty) return null;
+
+  if (_isRemoteFactionImage(raw)) return null;
+
+  // 1) 절대경로가 아직 살아 있으면 사용
+  final direct = File(raw);
+  if (await direct.exists()) return direct;
+
+  final appDir = await getApplicationDocumentsDirectory();
+
+  // 2) Documents 기준 상대경로 복구
+  final fromDocuments = File(p.join(appDir.path, raw));
+  if (await fromDocuments.exists()) return fromDocuments;
+
+  // 3) 예전 깨진 절대경로 대비: 파일명으로 faction_images 안에서 검색
+  final root = Directory(p.join(appDir.path, 'faction_images'));
+  if (await root.exists()) {
+    final fileName = p.basename(raw);
+
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is File && p.basename(entity.path) == fileName) {
+        return entity;
+      }
+    }
+  }
+
+  return null;
+}
 
 class _GlassTextEditDialog extends StatefulWidget {
   final String title;
@@ -1414,13 +1487,24 @@ class _FactionPageState extends State<FactionPage> {
       imageQuality: 88,
       maxWidth: 1200,
     );
+
     if (x == null) return;
 
+    final savedRelativePath = await _copyFactionImageToDocuments(
+      documentId: widget.documentId,
+      diagramId: diagramId,
+      sourcePath: x.path,
+    );
+
+    if (!mounted) return;
+
     setState(() {
-      n.imageUrl = x.path;
+      // ✅ x.path 직접 저장하지 말고 Documents 기준 상대경로 저장
+      n.imageUrl = savedRelativePath;
       _bumpGeom();
     });
-    _queueSave();
+
+    await _queueSave(immediate: true);
   }
 
   Future<void> _openDiagramActionSheet(String diagramId) async {
@@ -1679,16 +1763,24 @@ class _FactionPageState extends State<FactionPage> {
 
   Future<void> _precacheDiagramImages() async {
     for (final n in doc.diagrams) {
-      final p = n.imageUrl;
-      if (p == null || p.trim().isEmpty) continue;
+      final imageUrl = n.imageUrl;
+      if (imageUrl == null || imageUrl.trim().isEmpty) continue;
 
       try {
-        final provider =
-            (p.startsWith("http://") || p.startsWith("https://"))
-                ? NetworkImage(p)
-                : FileImage(File(p)) as ImageProvider;
+        if (_isRemoteFactionImage(imageUrl)) {
+          if (!mounted) return;
 
-        await precacheImage(provider, context);
+          await precacheImage(NetworkImage(imageUrl), context);
+
+          continue;
+        }
+
+        final file = await resolveFactionImageFile(imageUrl);
+        if (file == null) continue;
+
+        if (!mounted) return;
+
+        await precacheImage(FileImage(file), context);
       } catch (_) {}
     }
   }
@@ -3621,7 +3713,8 @@ class _DiagramWidgetState extends State<_DiagramWidget> {
   }
 
   Widget _buildDiagramImage(String url, int targetPx) {
-    final isNet = url.startsWith('http://') || url.startsWith('https://');
+    final isNet = _isRemoteFactionImage(url);
+
     if (isNet) {
       return Image.network(
         url,
@@ -3631,12 +3724,24 @@ class _DiagramWidgetState extends State<_DiagramWidget> {
         errorBuilder: (_, __, ___) => const SizedBox.expand(),
       );
     }
-    return Image.file(
-      File(url),
-      fit: BoxFit.cover,
-      cacheWidth: targetPx,
-      cacheHeight: targetPx,
-      errorBuilder: (_, __, ___) => const SizedBox.expand(),
+
+    return FutureBuilder<File?>(
+      future: resolveFactionImageFile(url),
+      builder: (context, snapshot) {
+        final file = snapshot.data;
+
+        if (file == null) {
+          return const SizedBox.expand();
+        }
+
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          cacheWidth: targetPx,
+          cacheHeight: targetPx,
+          errorBuilder: (_, __, ___) => const SizedBox.expand(),
+        );
+      },
     );
   }
 

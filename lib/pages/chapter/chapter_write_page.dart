@@ -9,6 +9,9 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -174,6 +177,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   bool _restoreTried = false;
   bool _isRestoringDraft = false;
+  bool _isPersistingEditorImages = false;
 
   Timer? _saveDebounce;
   Timer? _selectionSaveDebounce;
@@ -187,6 +191,321 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   String get _prefsKeyFocus => 'chapter_write_focus_$_baseKey';
   String get _prefsKeyDraftTitle => 'chapter_write_draft_title_$_baseKey';
   String get _prefsKeyDraftDelta => 'chapter_write_draft_delta_$_baseKey';
+  String get _prefsKeyImagePathMap => 'chapter_write_image_path_map_$_baseKey';
+
+  bool _isRemoteImageSource(String src) {
+    final s = src.toLowerCase();
+    return s.startsWith('http://') ||
+        s.startsWith('https://') ||
+        s.startsWith('data:');
+  }
+
+  Map<String, dynamic>? _imageDataToMap(dynamic data) {
+    if (data is String) {
+      final trimmed = data.trim();
+
+      if (trimmed.startsWith('{')) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map) {
+            return Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {}
+      }
+
+      return <String, dynamic>{'source': data};
+    }
+
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+
+    return null;
+  }
+
+  String _portableImageSource(String absolutePath, Directory appDir) {
+    final abs = p.normalize(absolutePath);
+    final root = p.normalize(appDir.path);
+
+    if (abs == root || abs.startsWith('$root${Platform.pathSeparator}')) {
+      return p.relative(abs, from: root);
+    }
+
+    return absolutePath;
+  }
+
+  Future<List<Map<String, dynamic>>> _deltaForExternalRenderImages(
+    List<Map<String, dynamic>> delta,
+  ) async {
+    final result = <Map<String, dynamic>>[];
+
+    for (final op in delta) {
+      final m = Map<String, dynamic>.from(op);
+      final insertRaw = m['insert'];
+
+      if (insertRaw is Map) {
+        final insert = Map<String, dynamic>.from(insertRaw);
+
+        if (insert.containsKey('image')) {
+          final imageMap = _imageDataToMap(insert['image']);
+          final sourceRaw = imageMap?['source'];
+
+          if (imageMap != null &&
+              sourceRaw is String &&
+              sourceRaw.trim().isNotEmpty) {
+            final source = sourceRaw.trim();
+
+            if (!_isRemoteImageSource(source)) {
+              final file = await _resolveLocalImageFile(source);
+
+              if (file != null) {
+                _writeImageSourceToInsert(
+                  insert: insert,
+                  imageMap: imageMap,
+                  source: file.path,
+                );
+
+                m['insert'] = insert;
+              }
+            }
+          }
+        }
+      }
+
+      result.add(m);
+    }
+
+    return result;
+  }
+
+  Future<File?> _resolveLocalImageFile(String source) async {
+    final raw = source.trim();
+    if (raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct;
+
+    final appDir = await getApplicationDocumentsDirectory();
+
+    final fromDocuments = File(p.join(appDir.path, raw));
+    if (await fromDocuments.exists()) return fromDocuments;
+
+    return null;
+  }
+
+  void _writeImageSourceToInsert({
+    required Map<String, dynamic> insert,
+    required Map<String, dynamic> imageMap,
+    required String source,
+  }) {
+    imageMap['source'] = source;
+
+    if (imageMap.containsKey('w')) {
+      insert['image'] = jsonEncode(imageMap);
+    } else {
+      insert['image'] = source;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>>
+  _currentNormalizedDeltaWithPersistentImages() async {
+    final normalized = _currentNormalizedDelta();
+    return _persistLocalImagesInDelta(normalized);
+  }
+
+  Future<void> _persistImagesIntoEditorDocument() async {
+    if (_isRestoringDraft) return;
+    if (_isPersistingEditorImages) return;
+
+    _isPersistingEditorImages = true;
+
+    try {
+      final before = _currentNormalizedDelta();
+      final beforeJson = jsonEncode(before);
+
+      final after = await _persistLocalImagesInDelta(before);
+      final afterJson = jsonEncode(after);
+
+      if (beforeJson == afterJson) return;
+      if (!mounted) return;
+
+      final oldSelection = _controller.selection;
+
+      try {
+        _isRestoringDraft = true;
+
+        final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(after);
+        _controller.document = quill.Document.fromJson(editorDelta);
+
+        final max = _controller.document.toPlainText().length;
+        final base = oldSelection.baseOffset.clamp(0, max);
+        final extent = oldSelection.extentOffset.clamp(0, max);
+
+        _controller.updateSelection(
+          TextSelection(baseOffset: base, extentOffset: extent),
+          quill.ChangeSource.local,
+        );
+      } finally {
+        _isRestoringDraft = false;
+      }
+
+      await _persistDraft();
+    } catch (_) {
+    } finally {
+      _isPersistingEditorImages = false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _persistLocalImagesInDelta(
+    List<Map<String, dynamic>> delta,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final rawMap = prefs.getString(_prefsKeyImagePathMap);
+    final Map<String, String> pathMap = {};
+
+    if (rawMap != null && rawMap.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawMap);
+        if (decoded is Map) {
+          decoded.forEach((key, value) {
+            if (key is String && value is String) {
+              pathMap[key] = value;
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
+    final appDir = await getApplicationDocumentsDirectory();
+    final safeKey = _baseKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+    final imageDir = Directory(p.join(appDir.path, 'chapter_images', safeKey));
+
+    if (!await imageDir.exists()) {
+      await imageDir.create(recursive: true);
+    }
+
+    final normalizedAppDir = p.normalize(appDir.path);
+    bool pathMapChanged = false;
+
+    final result = <Map<String, dynamic>>[];
+
+    for (final op in delta) {
+      final m = Map<String, dynamic>.from(op);
+      final insertRaw = m['insert'];
+
+      if (insertRaw is Map) {
+        final insert = Map<String, dynamic>.from(insertRaw);
+
+        if (insert.containsKey('image')) {
+          final imageData = insert['image'];
+          final imageMap = _imageDataToMap(imageData);
+
+          final sourceRaw = imageMap?['source'];
+
+          if (imageMap != null &&
+              sourceRaw is String &&
+              sourceRaw.trim().isNotEmpty &&
+              !_isRemoteImageSource(sourceRaw)) {
+            final source = sourceRaw.trim();
+            final normalizedSource = p.normalize(source);
+
+            // 이미 상대경로면 그대로 유지
+            final isAlreadyPortable =
+                !p.isAbsolute(source) && !source.startsWith('/');
+
+            if (isAlreadyPortable) {
+              _writeImageSourceToInsert(
+                insert: insert,
+                imageMap: imageMap,
+                source: source,
+              );
+              m['insert'] = insert;
+              result.add(m);
+              continue;
+            }
+
+            // 앱 Documents 안의 절대경로면 상대경로로 변환
+            final isInsideDocuments =
+                normalizedSource == normalizedAppDir ||
+                normalizedSource.startsWith(
+                  '$normalizedAppDir${Platform.pathSeparator}',
+                );
+
+            if (isInsideDocuments) {
+              final portable = _portableImageSource(source, appDir);
+
+              _writeImageSourceToInsert(
+                insert: insert,
+                imageMap: imageMap,
+                source: portable,
+              );
+
+              m['insert'] = insert;
+              result.add(m);
+              continue;
+            }
+
+            // 임시/cache 경로면 Documents/chapter_images/... 로 복사
+            final existingMapped = pathMap[source];
+            if (existingMapped != null) {
+              final mappedFile = await _resolveLocalImageFile(existingMapped);
+              if (mappedFile != null) {
+                _writeImageSourceToInsert(
+                  insert: insert,
+                  imageMap: imageMap,
+                  source: existingMapped,
+                );
+
+                m['insert'] = insert;
+                result.add(m);
+                continue;
+              }
+            }
+
+            final sourceFile = File(source);
+
+            if (await sourceFile.exists()) {
+              final ext =
+                  p.extension(source).isNotEmpty ? p.extension(source) : '.jpg';
+
+              final baseName = p
+                  .basenameWithoutExtension(source)
+                  .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+              final fileName =
+                  '${DateTime.now().microsecondsSinceEpoch}_$baseName$ext';
+
+              final savedPath = p.join(imageDir.path, fileName);
+              await sourceFile.copy(savedPath);
+
+              final portable = _portableImageSource(savedPath, appDir);
+
+              pathMap[source] = portable;
+              pathMapChanged = true;
+
+              _writeImageSourceToInsert(
+                insert: insert,
+                imageMap: imageMap,
+                source: portable,
+              );
+
+              m['insert'] = insert;
+            }
+          }
+        }
+      }
+
+      result.add(m);
+    }
+
+    if (pathMapChanged) {
+      await prefs.setString(_prefsKeyImagePathMap, jsonEncode(pathMap));
+    }
+
+    return result;
+  }
 
   List<Map<String, dynamic>> _currentNormalizedDelta() {
     final delta = _controller.document.toDelta().toJson();
@@ -235,7 +554,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     if (_isRestoringDraft) return;
 
     final title = _titleCtrl.text.trim();
-    final normalized = _currentNormalizedDelta();
+    final normalized = await _currentNormalizedDeltaWithPersistentImages();
     final deltaJson = jsonEncode(normalized);
     final fingerprint = _buildDraftFingerprint(title, deltaJson);
 
@@ -510,6 +829,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
       if (mounted) setState(() {});
       _saveSelectionDebounced();
+
+      unawaited(_persistImagesIntoEditorDocument());
       _scheduleAutoSave();
 
       final sel = _controller.selection;
@@ -672,11 +993,18 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   void _recomputePaginationFromStoredHeight() {
     if (!_scrollCtrl.hasClients) return;
+
     final pos = _scrollCtrl.position;
 
     final contentHeight = _pngLikeContentHeightPx;
     final pages = _calcPageCountLikePng(pos, contentHeight);
     final current = _calcCurrentPageLikePng(pos, pages, contentHeight);
+
+    if (pages == _pageCount && current == _currentPage) {
+      return;
+    }
+
+    if (!mounted) return;
 
     setState(() {
       _pageCount = pages;
@@ -721,7 +1049,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _persistScroll();
       _persistSelection();
       _persistFocus();
-      unawaited(_persistDraft());
+
+      unawaited(
+        _persistImagesIntoEditorDocument().then((_) => _persistDraft()),
+      );
+
       unawaited(_saveCalendarWritingLog());
     }
   }
@@ -786,7 +1118,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   Future<void> _save() async {
     _contentSaveDebounce?.cancel();
 
-    final normalized = _currentNormalizedDelta();
+    final normalized = await _currentNormalizedDeltaWithPersistentImages();
 
     await _saveCalendarWritingLog();
     await _clearDraft();
@@ -1440,24 +1772,25 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                             button: true,
                             child: IconButton(
                               tooltip: 'PNG',
-                              onPressed: () {
-                                final delta =
-                                    _controller.document.toDelta().toJson();
-                                final deltaJson =
-                                    List<Map<String, dynamic>>.from(
-                                      delta.map(
-                                        (e) =>
-                                            Map<String, dynamic>.from(e as Map),
-                                      ),
+                              onPressed: () async {
+                                final navigator = Navigator.of(context);
+
+                                final normalized =
+                                    await _currentNormalizedDeltaWithPersistentImages();
+                                final exportDelta =
+                                    await _deltaForExternalRenderImages(
+                                      normalized,
                                     );
+
+                                if (!mounted) return;
+
                                 final mergedForEditor =
                                     _mergeBgAlphaIntoBackgroundForEditor(
-                                      deltaJson,
+                                      exportDelta,
                                     );
-
                                 final ep = _titleCtrl.text.trim();
 
-                                Navigator.of(context).push(
+                                navigator.push(
                                   MaterialPageRoute(
                                     builder:
                                         (_) => PngPage(
@@ -2217,6 +2550,21 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
     return false;
   }
 
+  Future<File?> _resolveEditorImageFile(String src) async {
+    final raw = src.trim();
+    if (raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct;
+
+    final appDir = await getApplicationDocumentsDirectory();
+
+    final fromDocuments = File(p.join(appDir.path, raw));
+    if (await fromDocuments.exists()) return fromDocuments;
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, quill.EmbedContext embedContext) {
     final dynamic data = embedContext.node.value.data;
@@ -2263,14 +2611,38 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
                 const Icon(Icons.broken_image, size: 32, color: Colors.grey),
       );
     } else {
-      final file = File(src);
-      if (!file.existsSync()) return const SizedBox.shrink();
-      image = Image.file(
-        file,
-        fit: BoxFit.contain,
-        errorBuilder:
-            (_, __, ___) =>
-                const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+      image = FutureBuilder<File?>(
+        future: _resolveEditorImageFile(src),
+        builder: (context, snapshot) {
+          final file = snapshot.data;
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox(
+              height: 120,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              ),
+            );
+          }
+
+          if (file == null) {
+            return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+          }
+
+          return Image.file(
+            file,
+            fit: BoxFit.contain,
+            errorBuilder:
+                (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  size: 32,
+                  color: Colors.grey,
+                ),
+          );
+        },
       );
     }
 

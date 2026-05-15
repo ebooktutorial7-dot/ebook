@@ -748,6 +748,77 @@ Future<int> pdfPageCountFromBytes(Uint8List pdfBytes) async {
   }
 }
 
+Future<List<File>> createPickedPdfFilesForZip({
+  required String title,
+  required Uint8List pdfBytes,
+  required SharePickResult pick,
+}) async {
+  PdfDocument? doc;
+  final safeTitle = title.trim().isEmpty ? 'document' : title.trim();
+
+  try {
+    doc = await PdfDocument.openData(pdfBytes);
+    final pagesCount = math.max(1, doc.pageCount);
+
+    final start = pick.startPage.clamp(1, pagesCount);
+    final end = pick.endPage.clamp(1, pagesCount);
+    final pages = <int>[for (int i = start; i <= end; i++) i];
+
+    final base = _safeFileNameStandalone(safeTitle);
+
+    // ===== PDF =====
+    if (pick.format == ShareFormat.pdf) {
+      final isAll = start == 1 && end == pagesCount;
+
+      final Uint8List outBytes;
+      if (pick.rangeMode == ShareRangeMode.all && isAll) {
+        outBytes = pdfBytes;
+      } else {
+        outBytes = await _buildPdfFromRenderedPagesStandalone(
+          doc: doc,
+          pages: pages,
+          title: safeTitle,
+        );
+      }
+
+      if (outBytes.isEmpty) return <File>[];
+
+      final file = await _writeBytesToTempStandalone(
+        bytes: outBytes,
+        fileName: '$base.pdf',
+      );
+
+      return <File>[file];
+    }
+
+    // ===== PNG / JPG =====
+    final tasks = <Future<File?> Function()>[];
+
+    for (final pg in pages) {
+      tasks.add(() async {
+        return _renderImageToTempFileFromDoc(
+          doc: doc!,
+          pageNumber: pg,
+          targetLongSidePx: 2600,
+          baseName: base,
+          format: pick.format,
+        );
+      });
+    }
+
+    final files = await _runWithConcurrencyNullableStandalone<File>(
+      tasks: tasks,
+      concurrency: pick.format == ShareFormat.jpg ? 2 : 3,
+    );
+
+    return files.whereType<File>().toList(growable: false);
+  } finally {
+    try {
+      doc?.dispose();
+    } catch (_) {}
+  }
+}
+
 Future<void> sharePdfBytesWithPick({
   required String title,
   required Uint8List pdfBytes,
