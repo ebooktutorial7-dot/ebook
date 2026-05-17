@@ -177,7 +177,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   bool _restoreTried = false;
   bool _isRestoringDraft = false;
-  bool _isPersistingEditorImages = false;
 
   Timer? _saveDebounce;
   Timer? _selectionSaveDebounce;
@@ -201,15 +200,19 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   Map<String, dynamic>? _imageDataToMap(dynamic data) {
+    if (data == null) return null;
+
+    if (data is quill.CustomBlockEmbed) {
+      return _imageDataToMap(data.data);
+    }
+
     if (data is String) {
       final trimmed = data.trim();
 
       if (trimmed.startsWith('{')) {
         try {
           final decoded = jsonDecode(trimmed);
-          if (decoded is Map) {
-            return Map<String, dynamic>.from(decoded);
-          }
+          return _imageDataToMap(decoded);
         } catch (_) {}
       }
 
@@ -217,7 +220,25 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     }
 
     if (data is Map) {
-      return Map<String, dynamic>.from(data);
+      final m = Map<String, dynamic>.from(data);
+
+      if (m.containsKey('source') || m.containsKey('w')) {
+        return m;
+      }
+
+      if (m.containsKey('image')) {
+        return _imageDataToMap(m['image']);
+      }
+
+      if (m['type'] == 'image' && m.containsKey('data')) {
+        return _imageDataToMap(m['data']);
+      }
+
+      if (m.containsKey('data')) {
+        return _imageDataToMap(m['data']);
+      }
+
+      return m;
     }
 
     return null;
@@ -293,12 +314,53 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     return null;
   }
 
+  dynamic _imageDataFromInsert(Map<String, dynamic> insert) {
+    if (insert.containsKey('image')) {
+      return insert['image'];
+    }
+
+    final custom = insert['custom'];
+
+    if (custom == null) return null;
+
+    if (custom is quill.CustomBlockEmbed) {
+      if (custom.type == 'image') {
+        return custom.data;
+      }
+      return null;
+    }
+
+    if (custom is Map) {
+      if (custom.containsKey('image')) {
+        return custom['image'];
+      }
+
+      if (custom['type'] == 'image' && custom.containsKey('data')) {
+        return custom['data'];
+      }
+
+      if (custom.containsKey('data')) {
+        return custom['data'];
+      }
+    }
+
+    if (custom is String) {
+      return custom;
+    }
+
+    return null;
+  }
+
   void _writeImageSourceToInsert({
     required Map<String, dynamic> insert,
     required Map<String, dynamic> imageMap,
     required String source,
   }) {
     imageMap['source'] = source;
+
+    // 편집 중에는 custom embed를 쓰더라도,
+    // 저장할 때는 일반 image embed 형태로 정리한다.
+    insert.remove('custom');
 
     if (imageMap.containsKey('w')) {
       insert['image'] = jsonEncode(imageMap);
@@ -311,49 +373,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   _currentNormalizedDeltaWithPersistentImages() async {
     final normalized = _currentNormalizedDelta();
     return _persistLocalImagesInDelta(normalized);
-  }
-
-  Future<void> _persistImagesIntoEditorDocument() async {
-    if (_isRestoringDraft) return;
-    if (_isPersistingEditorImages) return;
-
-    _isPersistingEditorImages = true;
-
-    try {
-      final before = _currentNormalizedDelta();
-      final beforeJson = jsonEncode(before);
-
-      final after = await _persistLocalImagesInDelta(before);
-      final afterJson = jsonEncode(after);
-
-      if (beforeJson == afterJson) return;
-      if (!mounted) return;
-
-      final oldSelection = _controller.selection;
-
-      try {
-        _isRestoringDraft = true;
-
-        final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(after);
-        _controller.document = quill.Document.fromJson(editorDelta);
-
-        final max = _controller.document.toPlainText().length;
-        final base = oldSelection.baseOffset.clamp(0, max);
-        final extent = oldSelection.extentOffset.clamp(0, max);
-
-        _controller.updateSelection(
-          TextSelection(baseOffset: base, extentOffset: extent),
-          quill.ChangeSource.local,
-        );
-      } finally {
-        _isRestoringDraft = false;
-      }
-
-      await _persistDraft();
-    } catch (_) {
-    } finally {
-      _isPersistingEditorImages = false;
-    }
   }
 
   Future<List<Map<String, dynamic>>> _persistLocalImagesInDelta(
@@ -398,8 +417,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       if (insertRaw is Map) {
         final insert = Map<String, dynamic>.from(insertRaw);
 
-        if (insert.containsKey('image')) {
-          final imageData = insert['image'];
+        final imageData = _imageDataFromInsert(insert);
+
+        if (imageData != null) {
           final imageMap = _imageDataToMap(imageData);
 
           final sourceRaw = imageMap?['source'];
@@ -827,10 +847,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         _recomputePaginationFromStoredHeight();
       });
 
-      if (mounted) setState(() {});
       _saveSelectionDebounced();
-
-      unawaited(_persistImagesIntoEditorDocument());
       _scheduleAutoSave();
 
       final sel = _controller.selection;
@@ -1014,6 +1031,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   @override
   void dispose() {
+    AppToast.hide();
+
     WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onControllerChanged);
     _focusNode.removeListener(_onFocusChanged);
@@ -1050,9 +1069,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _persistSelection();
       _persistFocus();
 
-      unawaited(
-        _persistImagesIntoEditorDocument().then((_) => _persistDraft()),
-      );
+      unawaited(_persistDraft());
 
       unawaited(_saveCalendarWritingLog());
     }
@@ -1118,6 +1135,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   Future<void> _save() async {
     _contentSaveDebounce?.cancel();
 
+    AppToast.hide();
+
     final normalized = await _currentNormalizedDeltaWithPersistentImages();
 
     await _saveCalendarWritingLog();
@@ -1126,6 +1145,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final result = {'title': _titleCtrl.text.trim(), 'delta': normalized};
 
     if (!mounted) return;
+    AppToast.hide();
     Navigator.of(context).pop(result);
   }
 
@@ -2539,16 +2559,8 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
 
   static const double _minWidth = 90.0;
 
-  bool _isImageEmbedAt(quill.QuillController c, int offset) {
-    try {
-      final leaf = c.document.querySegmentLeafNode(offset).leaf;
-      final data = leaf?.value;
-      if (data is quill.Embed) {
-        return data.value.type == 'image';
-      }
-    } catch (_) {}
-    return false;
-  }
+  static final Map<String, Future<File?>> _fileFutureCache = {};
+  static final Map<String, File?> _fileCache = {};
 
   Future<File?> _resolveEditorImageFile(String src) async {
     final raw = src.trim();
@@ -2563,6 +2575,20 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
     if (await fromDocuments.exists()) return fromDocuments;
 
     return null;
+  }
+
+  Future<File?> _resolveEditorImageFileCached(String src) {
+    final key = src.trim();
+
+    if (_fileCache.containsKey(key)) {
+      return Future<File?>.value(_fileCache[key]);
+    }
+
+    return _fileFutureCache.putIfAbsent(key, () async {
+      final file = await _resolveEditorImageFile(key);
+      _fileCache[key] = file;
+      return file;
+    });
   }
 
   @override
@@ -2603,46 +2629,22 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
 
     Widget image;
     if (src.startsWith('http://') || src.startsWith('https://')) {
-      image = Image.network(
-        src,
-        fit: BoxFit.contain,
-        errorBuilder:
-            (_, __, ___) =>
-                const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+      image = RepaintBoundary(
+        child: Image.network(
+          src,
+          key: ValueKey(src),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          errorBuilder:
+              (_, __, ___) =>
+                  const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+        ),
       );
     } else {
-      image = FutureBuilder<File?>(
-        future: _resolveEditorImageFile(src),
-        builder: (context, snapshot) {
-          final file = snapshot.data;
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const SizedBox(
-              height: 120,
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                ),
-              ),
-            );
-          }
-
-          if (file == null) {
-            return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
-          }
-
-          return Image.file(
-            file,
-            fit: BoxFit.contain,
-            errorBuilder:
-                (_, __, ___) => const Icon(
-                  Icons.broken_image,
-                  size: 32,
-                  color: Colors.grey,
-                ),
-          );
-        },
+      image = _StableEditorImage(
+        src: src,
+        resolveFile: _resolveEditorImageFileCached,
       );
     }
 
@@ -2662,16 +2664,13 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
 
             child: image,
             onResize: (newW) {
-              if (offset == null) {
-                return;
-              }
-              if (!_isImageEmbedAt(embedContext.controller, offset)) {
-                return;
-              }
+              if (offset == null) return;
+
               final Map<String, dynamic> newData = <String, dynamic>{
                 'source': src,
                 'w': newW,
               };
+
               _replaceEmbedData(
                 controller: embedContext.controller,
                 offset: offset,
@@ -2712,13 +2711,10 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
 
   void _deleteEmbedAt({
     required quill.QuillController controller,
+
     required int offset,
   }) {
     controller.replaceText(offset, 1, '', null);
-    controller.updateSelection(
-      TextSelection.collapsed(offset: offset),
-      quill.ChangeSource.local,
-    );
   }
 
   void _replaceEmbedData({
@@ -2733,6 +2729,90 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
     );
 
     controller.replaceText(offset, 1, embed, null);
+  }
+}
+
+class _StableEditorImage extends StatefulWidget {
+  const _StableEditorImage({required this.src, required this.resolveFile});
+
+  final String src;
+  final Future<File?> Function(String src) resolveFile;
+
+  @override
+  State<_StableEditorImage> createState() => _StableEditorImageState();
+}
+
+class _StableEditorImageState extends State<_StableEditorImage>
+    with AutomaticKeepAliveClientMixin {
+  File? _file;
+  bool _loaded = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StableEditorImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.src != widget.src) {
+      _file = null;
+      _loaded = false;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final file = await widget.resolveFile(widget.src);
+
+    if (!mounted) return;
+
+    setState(() {
+      _file = file;
+      _loaded = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    if (!_loaded) {
+      return const SizedBox(
+        height: 120,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
+        ),
+      );
+    }
+
+    final file = _file;
+
+    if (file == null) {
+      return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+    }
+
+    return RepaintBoundary(
+      child: Image.file(
+        file,
+        key: ValueKey(file.path),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) {
+          return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+        },
+      ),
+    );
   }
 }
 
@@ -2764,22 +2844,12 @@ class _ResizableImageBox extends StatefulWidget {
 
 class _ResizableImageBoxState extends State<_ResizableImageBox> {
   late double _w;
-
   bool _selected = false;
 
   @override
   void initState() {
     super.initState();
     _w = widget.width;
-
-    widget.controller.addListener(_syncSelectedFromController);
-    _syncSelectedFromController();
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_syncSelectedFromController);
-    super.dispose();
   }
 
   @override
@@ -2789,45 +2859,11 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
     if ((oldWidget.width - widget.width).abs() > 0.5) {
       _w = widget.width;
     }
-
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_syncSelectedFromController);
-      widget.controller.addListener(_syncSelectedFromController);
-      _syncSelectedFromController();
-    }
   }
 
-  void _syncSelectedFromController() {
-    final off = widget.offset;
-    if (off == null) {
-      if (_selected) setState(() => _selected = false);
-      return;
-    }
-
-    final sel = widget.controller.selection;
-
-    final int s = sel.start;
-    final int e = sel.end;
-
-    final bool hitRange = (s <= off && e >= off + 1);
-    final bool hitCollapsed =
-        sel.isCollapsed && (sel.baseOffset == off || sel.baseOffset == off + 1);
-
-    final bool nextSelected = hitRange || hitCollapsed;
-
-    if (nextSelected != _selected) {
-      setState(() => _selected = nextSelected);
-    }
-  }
-
-  void _requestCursorNearEmbed() {
-    final off = widget.offset;
-    if (off == null) return;
-
-    widget.controller.updateSelection(
-      TextSelection.collapsed(offset: off + 1),
-      quill.ChangeSource.local,
-    );
+  void _selectImage() {
+    if (_selected) return;
+    setState(() => _selected = true);
   }
 
   @override
@@ -2841,48 +2877,19 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: _requestCursorNearEmbed,
-            onPanDown: (_) {},
-            onPanStart: (_) {},
-            onPanUpdate: (_) {},
-            onPanEnd: (_) {},
-
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: (_) {},
-              onPointerMove: (_) {
-                final off = widget.offset;
-                if (off == null) return;
-                widget.controller.updateSelection(
-                  TextSelection.collapsed(offset: off + 1),
-                  quill.ChangeSource.local,
-                );
-              },
-
-              onPointerUp: (_) {},
-              onPointerSignal: (_) {},
-
-              child: AbsorbPointer(absorbing: true, child: widget.child),
-            ),
+            onTap: _selectImage,
+            child: AbsorbPointer(absorbing: true, child: widget.child),
           ),
-
           if (_selected)
             Positioned(
               bottom: 6,
               left: 0,
               right: 0,
               child: Center(
-                child: Container(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 6),
-                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2894,6 +2901,7 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
                             _SafeImageEmbedBuilder._minWidth,
                             widget.maxWidth,
                           );
+
                           setState(() => _w = newW);
                           widget.onResize(newW);
                         },
@@ -2906,6 +2914,7 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
                             _SafeImageEmbedBuilder._minWidth,
                             widget.maxWidth,
                           );
+
                           setState(() => _w = newW);
                           widget.onResize(newW);
                         },

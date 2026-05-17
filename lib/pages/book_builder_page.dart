@@ -15,12 +15,17 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
+import 'package:ebook_tutorial_app/quill/custom_leading.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:share_plus/share_plus.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:ebook_tutorial_app/widgets/mini_flat_toolbar.dart';
 import 'package:ebook_tutorial_app/utils/platform_accessibility.dart';
 import 'package:ebook_tutorial_app/pages/chapter/chapter_write_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,6 +49,91 @@ enum ChapterSort { oldestFirst, newestFirst }
 const double kCoverBaseRadius = 13.0;
 const double kCoverBaseWidth = 150.0;
 
+const String kBgAlphaKey = 'bgAlpha';
+
+List<Map<String, dynamic>> _mergeBgAlphaIntoBackgroundForSplitEditor(
+  List<Map<String, dynamic>> delta,
+) {
+  return delta
+      .map((op) {
+        final m = Map<String, dynamic>.from(op);
+        final attrsRaw = m['attributes'];
+
+        if (attrsRaw is! Map) return m;
+
+        final attrs = Map<String, dynamic>.from(attrsRaw);
+
+        final bg = attrs['background'];
+        final dynA = attrs[kBgAlphaKey];
+
+        if (bg is int) {
+          final hex =
+              (bg & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
+
+          attrs['background'] = '#$hex';
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        if (bg is String && bg.startsWith('#') && bg.length == 9) {
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        if (bg is String &&
+            bg.startsWith('#') &&
+            bg.length == 7 &&
+            dynA != null) {
+          int a = 255;
+          if (dynA is int) a = dynA;
+          if (dynA is num) a = dynA.toInt();
+
+          final aa = (a & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
+          final rrggbb = bg.substring(1).toUpperCase();
+
+          attrs['background'] = '#$aa$rrggbb';
+          attrs.remove(kBgAlphaKey);
+          m['attributes'] = attrs;
+          return m;
+        }
+
+        return m;
+      })
+      .toList(growable: true);
+}
+
+List<Map<String, dynamic>> _splitEditorBackgroundToBgAlphaForSplitEditor(
+  List<Map<String, dynamic>> delta,
+) {
+  return delta
+      .map((op) {
+        final m = Map<String, dynamic>.from(op);
+        final attrsRaw = m['attributes'];
+
+        if (attrsRaw is! Map) return m;
+
+        final attrs = Map<String, dynamic>.from(attrsRaw);
+
+        final bg = attrs['background'];
+
+        if (bg is String && bg.startsWith('#') && bg.length == 9) {
+          final aaHex = bg.substring(1, 3);
+          final rrggbb = bg.substring(3);
+          final a = int.tryParse(aaHex, radix: 16) ?? 255;
+
+          attrs['background'] = '#$rrggbb';
+          attrs[kBgAlphaKey] = a;
+
+          m['attributes'] = attrs;
+        }
+
+        return m;
+      })
+      .toList(growable: true);
+}
+
 final Color kDialogBarrierColor = const Color(
   0xFF0F2238,
 ).withValues(alpha: 0.13);
@@ -63,6 +153,202 @@ String? resolveFontFamily(String key) {
     case 'system':
     default:
       return 'Inter';
+  }
+}
+
+Color _splitBackgroundColorFromSettings(WritingSettings s) {
+  switch (s.themeId) {
+    case 'dark':
+      return const Color.fromARGB(255, 0, 0, 0);
+    case 'darkGreen':
+      return const Color.fromARGB(255, 10, 30, 26);
+    case 'space':
+      return const Color(0xFF05081A);
+    case 'lightSky':
+      return const Color.fromARGB(255, 238, 248, 255);
+    default:
+      return Colors.white;
+  }
+}
+
+Color _splitTextColorFromSettings(WritingSettings s) {
+  switch (s.themeId) {
+    case 'dark':
+    case 'darkGreen':
+      return Colors.white.withValues(alpha: 0.92);
+    case 'space':
+      return Colors.white.withValues(alpha: 0.96);
+    case 'lightSky':
+      return const Color(0xFF1E293B);
+    default:
+      return Colors.black87;
+  }
+}
+
+quill.DefaultTextBlockStyle _splitHeaderBlockStyle({
+  required quill.DefaultTextBlockStyle base,
+  required WritingSettings settings,
+  required String? fontFamily,
+  required double fontSize,
+  required FontWeight fontWeight,
+  required double vTop,
+  required double vBottom,
+  required double hMargin,
+  required double leftIndent,
+}) {
+  final textColor = _splitTextColorFromSettings(settings);
+
+  return quill.DefaultTextBlockStyle(
+    base.style.copyWith(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: settings.lineHeight,
+      letterSpacing: settings.letterSpacing,
+      fontFamily: fontFamily,
+      color: textColor,
+      decorationStyle: TextDecorationStyle.solid,
+      decorationColor: textColor,
+    ),
+    quill.HorizontalSpacing(hMargin + leftIndent, hMargin),
+    quill.VerticalSpacing(vTop, vBottom),
+    base.lineSpacing,
+    base.decoration,
+  );
+}
+
+quill.DefaultStyles _buildSplitEditorStyles(
+  BuildContext context,
+  WritingSettings settings,
+) {
+  final baseStyles = quill.DefaultStyles.getInstance(context);
+  final paragraph = baseStyles.paragraph!;
+  final baseLists = baseStyles.lists!;
+  final fontFamily = resolveFontFamily(settings.fontFamily);
+  final textColor = _splitTextColorFromSettings(settings);
+
+  final customParagraph = quill.DefaultTextBlockStyle(
+    paragraph.style.copyWith(
+      fontSize: 15.0,
+      height: settings.lineHeight,
+      letterSpacing: settings.letterSpacing,
+      fontFamily: fontFamily,
+      fontWeight: FontWeight.w400,
+      color: textColor,
+      decorationStyle: TextDecorationStyle.solid,
+      decorationColor: textColor,
+    ),
+    paragraph.horizontalSpacing,
+    paragraph.verticalSpacing,
+    paragraph.lineSpacing,
+    paragraph.decoration,
+  );
+
+  final customLists = baseLists.copyWith(
+    style: baseLists.style.copyWith(
+      fontSize: 15.0,
+      height: settings.lineHeight,
+      letterSpacing: settings.letterSpacing,
+      fontFamily: fontFamily,
+      fontWeight: FontWeight.w400,
+      color: textColor,
+      decorationStyle: TextDecorationStyle.solid,
+      decorationColor: textColor,
+    ),
+  );
+
+  final customH1 = _splitHeaderBlockStyle(
+    base: baseStyles.h1!,
+    settings: settings,
+    fontFamily: fontFamily,
+    fontSize: 30,
+    fontWeight: FontWeight.w800,
+    vTop: 30,
+    vBottom: 14,
+    hMargin: 0,
+    leftIndent: 0,
+  );
+
+  final customH2 = _splitHeaderBlockStyle(
+    base: baseStyles.h2!,
+    settings: settings,
+    fontFamily: fontFamily,
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+    vTop: 18,
+    vBottom: 10,
+    hMargin: 0,
+    leftIndent: 6,
+  );
+
+  final customH3 = _splitHeaderBlockStyle(
+    base: baseStyles.h3!,
+    settings: settings,
+    fontFamily: fontFamily,
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+    vTop: 12,
+    vBottom: 8,
+    hMargin: 0,
+    leftIndent: 10,
+  );
+
+  return baseStyles.merge(
+    quill.DefaultStyles(
+      paragraph: customParagraph,
+      lists: customLists,
+      h1: customH1,
+      h2: customH2,
+      h3: customH3,
+    ),
+  );
+}
+
+class _SplitThemeBackground extends StatelessWidget {
+  const _SplitThemeBackground({required this.settings, required this.child});
+
+  final WritingSettings settings;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (settings.themeId == 'space') {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.fromARGB(255, 6, 10, 38),
+              Color.fromARGB(255, 20, 27, 69),
+              Color.fromARGB(246, 33, 23, 38),
+            ],
+          ),
+        ),
+        child: child,
+      );
+    }
+
+    if (settings.themeId == 'lightSky') {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.fromARGB(255, 238, 248, 255),
+              Color(0xFFBBDEFB),
+              Color.fromARGB(255, 241, 249, 255),
+            ],
+          ),
+        ),
+        child: child,
+      );
+    }
+
+    return ColoredBox(
+      color: _splitBackgroundColorFromSettings(settings),
+      child: child,
+    );
   }
 }
 
@@ -283,6 +569,61 @@ class _DocxParagraph {
   }
 }
 
+class _BookPreviewImageData {
+  const _BookPreviewImageData({required this.src, this.width});
+
+  final String src;
+  final double? width;
+}
+
+_BookPreviewImageData? _bookPreviewImageDataFromDeltaValue(dynamic raw) {
+  if (raw == null) return null;
+
+  if (raw is String) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    if (value.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        return _bookPreviewImageDataFromDeltaValue(decoded);
+      } catch (_) {}
+    }
+
+    return _BookPreviewImageData(src: value);
+  }
+
+  if (raw is Map) {
+    final m = Map<String, dynamic>.from(raw);
+
+    final source = m['source'];
+    double? width;
+
+    final w = m['w'];
+    if (w is num) {
+      width = w.toDouble();
+    }
+
+    if (source is String && source.trim().isNotEmpty) {
+      return _BookPreviewImageData(src: source.trim(), width: width);
+    }
+
+    if (m.containsKey('image')) {
+      return _bookPreviewImageDataFromDeltaValue(m['image']);
+    }
+
+    if (m['type'] == 'image' && m.containsKey('data')) {
+      return _bookPreviewImageDataFromDeltaValue(m['data']);
+    }
+
+    if (m.containsKey('data')) {
+      return _bookPreviewImageDataFromDeltaValue(m['data']);
+    }
+  }
+
+  return null;
+}
+
 class _BookBuilderPageState extends State<BookBuilderPage>
     with SingleTickerProviderStateMixin {
   final GoogleDriveBackupService _googleDriveBackupService =
@@ -407,6 +748,117 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _imageCache.clear();
   }
 
+  Future<void> _openSplitChapterPicker(ChapterItem base) async {
+    final others = _chapters.where((c) => c.index != base.index).toList();
+
+    if (others.isEmpty) {
+      AppToast.show(context, '같이 편집할 다른 회차가 없습니다');
+      return;
+    }
+
+    final picked = await showCupertinoModalPopup<ChapterItem>(
+      context: context,
+      builder: (ctx) {
+        return CupertinoActionSheet(
+          title: Text(
+            '${base.title}와 같이 편집할 회차 선택',
+            style: const TextStyle(
+              color: Color.fromARGB(255, 26, 64, 97),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          actions:
+              others.map((chapter) {
+                return CupertinoActionSheetAction(
+                  onPressed: () => Navigator.pop(ctx, chapter),
+                  child: Text(
+                    chapter.title,
+                    style: const TextStyle(
+                      color: Color.fromARGB(255, 26, 64, 97),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                );
+              }).toList(),
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              '취소',
+              style: TextStyle(
+                color: Color.fromARGB(255, 26, 64, 97),
+                fontWeight: FontWeight.w300,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (picked == null) return;
+
+    await _openSplitChapterEditor(base, picked);
+  }
+
+  Future<void> _openSplitChapterEditor(
+    ChapterItem top,
+    ChapterItem bottom,
+  ) async {
+    final settingsController = context.read<WritingSettingsController>();
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => ChangeNotifierProvider.value(
+              value: settingsController,
+              child: SplitChapterEditPage(
+                topChapter: top,
+                bottomChapter: bottom,
+                enableGlass: _glass,
+              ),
+            ),
+      ),
+    );
+
+    if (result == null) return;
+
+    final topResult = Map<String, dynamic>.from(result['top'] as Map);
+    final bottomResult = Map<String, dynamic>.from(result['bottom'] as Map);
+
+    setState(() {
+      _applySplitChapterResult(top.index, topResult);
+      _applySplitChapterResult(bottom.index, bottomResult);
+      _applyChapterSort();
+    });
+
+    await _persistChapters();
+
+    await _clearChapterEditorDraft(top.index);
+    await _clearChapterEditorDraft(bottom.index);
+
+    if (!mounted) return;
+    AppToast.show(context, '분할 편집 저장 완료');
+  }
+
+  void _applySplitChapterResult(int chapterIndex, Map<String, dynamic> result) {
+    final idx = _chapters.indexWhere((c) => c.index == chapterIndex);
+    if (idx < 0) return;
+
+    final newTitle = result['title'] as String?;
+    final newDelta = (result['delta'] as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList(growable: true);
+
+    _chapters[idx] = _chapters[idx].copyWith(
+      title: newTitle?.trim().isNotEmpty == true ? newTitle!.trim() : null,
+      delta: newDelta,
+      sizeBytes: utf8.encode(jsonEncode(newDelta)).length,
+      charCount: _countCharsFromDelta(newDelta, includeNewline: false),
+      updatedAt: DateTime.now(),
+    );
+  }
+
   void _resetPreviewCaches({bool notify = true}) {
     _paginateDebounce?.cancel();
     _paginateEpoch++;
@@ -458,7 +910,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       final vm = _effectiveVerticalMarginPx(s);
       final contentW = _pageWidthPx - hm * 2;
       final contentH = _pageHeightPx - vm * 2;
-      final maxImageH = contentH * 0.65;
+      final maxImageH = contentH * 0.92;
 
       await _primeImageSizesFromChunks(chunks: chunks, epoch: epoch);
 
@@ -527,24 +979,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   }
 
   String? _imageSourceFromDeltaValue(dynamic raw) {
-    if (raw is! String) return null;
-
-    final value = raw.trim();
-    if (value.isEmpty) return null;
-
-    if (value.startsWith('{')) {
-      try {
-        final decoded = jsonDecode(value);
-        if (decoded is Map) {
-          final src = decoded['source'];
-          if (src is String && src.trim().isNotEmpty) {
-            return src.trim();
-          }
-        }
-      } catch (_) {}
-    }
-
-    return value;
+    return _bookPreviewImageDataFromDeltaValue(raw)?.src;
   }
 
   Future<File?> _resolveBookImageFile(String src) async {
@@ -574,9 +1009,20 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             final insert = Map<String, dynamic>.from(insertRaw);
 
             if (insert.containsKey('image')) {
-              final src = _imageSourceFromDeltaValue(insert['image']);
-              if (src != null && src.isNotEmpty) {
-                insert['image'] = src;
+              final imageData = _bookPreviewImageDataFromDeltaValue(
+                insert['image'],
+              );
+
+              if (imageData != null && imageData.src.isNotEmpty) {
+                if (imageData.width != null) {
+                  insert['image'] = jsonEncode({
+                    'source': imageData.src,
+                    'w': imageData.width,
+                  });
+                } else {
+                  insert['image'] = imageData.src;
+                }
+
                 m['insert'] = insert;
               }
             }
@@ -906,7 +1352,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         canvas: canvas,
         origin: origin,
         loadImage: _loadImage,
-        maxImageHeight: (_pageHeightPx - vm * 2) * 0.65,
+        maxImageHeight: (_pageHeightPx - vm * 2) * 0.92,
         renderScale: renderScale,
       );
     }
@@ -1035,6 +1481,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   @override
   void dispose() {
+    AppToast.hide();
+
     _paginateDebounce?.cancel();
     _disposeImages();
     _hidePdfSubmenu();
@@ -2448,8 +2896,24 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _persistChapters();
   }
 
+  String _chapterEditorStableKey(int chapterIndex) {
+    return 'doc_${widget.documentId ?? 'local'}_chapter_$chapterIndex';
+  }
+
+  Future<void> _clearChapterEditorDraft(int chapterIndex) async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseKey = _chapterEditorStableKey(chapterIndex);
+
+    await prefs.remove('chapter_write_draft_title_$baseKey');
+    await prefs.remove('chapter_write_draft_delta_$baseKey');
+
+    // 선택/스크롤 위치까지 초기화하고 싶으면 같이 삭제
+    await prefs.remove('chapter_write_selection_$baseKey');
+    await prefs.remove('chapter_write_scroll_$baseKey');
+  }
+
   Future<void> _openChapterEditor(ChapterItem c, {int? initialOpenPage}) async {
-    final stableKey = 'doc_${widget.documentId ?? 'local'}_chapter_${c.index}';
+    final stableKey = _chapterEditorStableKey(c.index);
     final settingsController = context.read<WritingSettingsController>();
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -2816,6 +3280,16 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                         Navigator.pop(context);
                         _enterReorderMode();
                         AppToast.show(context, '이동 모드입니다. 드래그하여 순서를 바꾸세요');
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    GlassActionButton(
+                      theme: theme,
+                      icon: Icons.splitscreen,
+                      label: '분할 편집',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openSplitChapterPicker(c);
                       },
                     ),
                     const SizedBox(height: 8),
@@ -5860,6 +6334,991 @@ $coverRel
 }
 
 const double kCoverRadius = 13;
+
+class SplitChapterEditPage extends StatefulWidget {
+  final ChapterItem topChapter;
+  final ChapterItem bottomChapter;
+  final bool enableGlass;
+
+  const SplitChapterEditPage({
+    super.key,
+    required this.topChapter,
+    required this.bottomChapter,
+    required this.enableGlass,
+  });
+
+  @override
+  State<SplitChapterEditPage> createState() => _SplitChapterEditPageState();
+}
+
+class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
+  final _topKey = GlobalKey<_SplitChapterPaneState>();
+  final _bottomKey = GlobalKey<_SplitChapterPaneState>();
+
+  Future<void> _save() async {
+    final topState = _topKey.currentState;
+    final bottomState = _bottomKey.currentState;
+
+    if (topState == null || bottomState == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final top = await topState.buildResult();
+    final bottom = await bottomState.buildResult();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pop({'top': top, 'bottom': bottom});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<WritingSettingsController>().settings;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _save();
+      },
+      child: Scaffold(
+        backgroundColor: _splitBackgroundColorFromSettings(settings),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              size: 18,
+              color: Colors.black87,
+            ),
+            onPressed: _save,
+          ),
+          title: const Text(
+            '분할 편집',
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 19,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: _save,
+              icon: const Icon(Icons.check, color: Colors.black87),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: _SplitChapterPane(
+                  key: _topKey,
+                  chapter: widget.topChapter,
+                  enableGlass: widget.enableGlass,
+                  label: '위쪽',
+                ),
+              ),
+              Container(height: 1, color: const Color(0xFFE3ECF5)),
+              Expanded(
+                child: _SplitChapterPane(
+                  key: _bottomKey,
+                  chapter: widget.bottomChapter,
+                  enableGlass: widget.enableGlass,
+                  label: '아래쪽',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+bool _isRemoteSplitImageSource(String src) {
+  final s = src.toLowerCase();
+  return s.startsWith('http://') ||
+      s.startsWith('https://') ||
+      s.startsWith('data:');
+}
+
+Map<String, dynamic>? _splitImageDataToMap(dynamic data) {
+  if (data == null) return null;
+
+  if (data is quill.CustomBlockEmbed) {
+    return _splitImageDataToMap(data.data);
+  }
+
+  if (data is String) {
+    final trimmed = data.trim();
+
+    if (trimmed.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        return _splitImageDataToMap(decoded);
+      } catch (_) {}
+    }
+
+    return <String, dynamic>{'source': data};
+  }
+
+  if (data is Map) {
+    final m = Map<String, dynamic>.from(data);
+
+    // 이미 원하는 형태: {'source': ..., 'w': ...}
+    if (m.containsKey('source') || m.containsKey('w')) {
+      return m;
+    }
+
+    // custom: {'image': ...}
+    if (m.containsKey('image')) {
+      return _splitImageDataToMap(m['image']);
+    }
+
+    // custom: {'type': 'image', 'data': '{...}'}
+    if (m['type'] == 'image' && m.containsKey('data')) {
+      return _splitImageDataToMap(m['data']);
+    }
+
+    // 일부 버전에서 {'data': ...}만 오는 경우
+    if (m.containsKey('data')) {
+      return _splitImageDataToMap(m['data']);
+    }
+
+    return m;
+  }
+
+  return null;
+}
+
+String _splitPortableImageSource(String absolutePath, Directory appDir) {
+  final abs = p.normalize(absolutePath);
+  final root = p.normalize(appDir.path);
+
+  if (abs == root || abs.startsWith('$root${Platform.pathSeparator}')) {
+    return p.relative(abs, from: root);
+  }
+
+  return absolutePath;
+}
+
+void _writeSplitImageSourceToInsert({
+  required Map<String, dynamic> insert,
+  required Map<String, dynamic> imageMap,
+  required String source,
+}) {
+  imageMap['source'] = source;
+
+  // 편집 중 custom embed를 저장 시 일반 image embed로 정리
+  insert.remove('custom');
+
+  if (imageMap.containsKey('w')) {
+    insert['image'] = jsonEncode(imageMap);
+  } else {
+    insert['image'] = source;
+  }
+}
+
+dynamic _splitImageDataFromInsert(Map<String, dynamic> insert) {
+  if (insert.containsKey('image')) {
+    return insert['image'];
+  }
+
+  final custom = insert['custom'];
+
+  if (custom == null) return null;
+
+  if (custom is quill.CustomBlockEmbed) {
+    if (custom.type == 'image') {
+      return custom.data;
+    }
+    return null;
+  }
+
+  if (custom is Map) {
+    if (custom.containsKey('image')) {
+      return custom['image'];
+    }
+
+    if (custom['type'] == 'image' && custom.containsKey('data')) {
+      return custom['data'];
+    }
+
+    if (custom.containsKey('data')) {
+      return custom['data'];
+    }
+  }
+
+  if (custom is String) {
+    return custom;
+  }
+
+  return null;
+}
+
+Future<List<Map<String, dynamic>>> _persistSplitLocalImagesInDelta(
+  List<Map<String, dynamic>> delta, {
+  required ChapterItem chapter,
+}) async {
+  final appDir = await getApplicationDocumentsDirectory();
+
+  final safeKey = 'split_${chapter.index}_${chapter.title}'.replaceAll(
+    RegExp(r'[^a-zA-Z0-9_-]+'),
+    '_',
+  );
+
+  final imageDir = Directory(p.join(appDir.path, 'chapter_images', safeKey));
+
+  if (!await imageDir.exists()) {
+    await imageDir.create(recursive: true);
+  }
+
+  final normalizedAppDir = p.normalize(appDir.path);
+  final result = <Map<String, dynamic>>[];
+
+  for (final op in delta) {
+    final m = Map<String, dynamic>.from(op);
+    final insertRaw = m['insert'];
+
+    if (insertRaw is Map) {
+      final insert = Map<String, dynamic>.from(insertRaw);
+
+      final imageData = _splitImageDataFromInsert(insert);
+
+      if (imageData != null) {
+        final imageMap = _splitImageDataToMap(imageData);
+        final sourceRaw = imageMap?['source'];
+
+        if (imageMap != null &&
+            sourceRaw is String &&
+            sourceRaw.trim().isNotEmpty &&
+            !_isRemoteSplitImageSource(sourceRaw)) {
+          final source = sourceRaw.trim();
+          final normalizedSource = p.normalize(source);
+
+          final isAlreadyPortable =
+              !p.isAbsolute(source) && !source.startsWith('/');
+
+          if (isAlreadyPortable) {
+            _writeSplitImageSourceToInsert(
+              insert: insert,
+              imageMap: imageMap,
+              source: source,
+            );
+            m['insert'] = insert;
+            result.add(m);
+            continue;
+          }
+
+          final isInsideDocuments =
+              normalizedSource == normalizedAppDir ||
+              normalizedSource.startsWith(
+                '$normalizedAppDir${Platform.pathSeparator}',
+              );
+
+          if (isInsideDocuments) {
+            final portable = _splitPortableImageSource(source, appDir);
+
+            _writeSplitImageSourceToInsert(
+              insert: insert,
+              imageMap: imageMap,
+              source: portable,
+            );
+
+            m['insert'] = insert;
+            result.add(m);
+            continue;
+          }
+
+          final sourceFile = File(source);
+
+          if (await sourceFile.exists()) {
+            final ext =
+                p.extension(source).isNotEmpty ? p.extension(source) : '.jpg';
+
+            final baseName = p
+                .basenameWithoutExtension(source)
+                .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+            final fileName =
+                '${DateTime.now().microsecondsSinceEpoch}_$baseName$ext';
+
+            final savedPath = p.join(imageDir.path, fileName);
+            await sourceFile.copy(savedPath);
+
+            final portable = _splitPortableImageSource(savedPath, appDir);
+
+            _writeSplitImageSourceToInsert(
+              insert: insert,
+              imageMap: imageMap,
+              source: portable,
+            );
+
+            m['insert'] = insert;
+          }
+        }
+      }
+    }
+
+    result.add(m);
+  }
+
+  return result;
+}
+
+class _SplitChapterPane extends StatefulWidget {
+  final ChapterItem chapter;
+  final bool enableGlass;
+  final String label;
+
+  const _SplitChapterPane({
+    super.key,
+    required this.chapter,
+    required this.enableGlass,
+    required this.label,
+  });
+
+  @override
+  State<_SplitChapterPane> createState() => _SplitChapterPaneState();
+}
+
+class _SplitSafeImageEmbedBuilder extends quill.EmbedBuilder {
+  @override
+  String get key => 'image';
+
+  static const double _minWidth = 90.0;
+
+  static final Map<String, Future<File?>> _fileFutureCache = {};
+  static final Map<String, File?> _fileCache = {};
+
+  Future<File?> _resolveEditorImageFile(String src) async {
+    final raw = src.trim();
+    if (raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct;
+
+    final appDir = await getApplicationDocumentsDirectory();
+
+    final fromDocuments = File(p.join(appDir.path, raw));
+    if (await fromDocuments.exists()) return fromDocuments;
+
+    return null;
+  }
+
+  Future<File?> _resolveEditorImageFileCached(String src) {
+    final key = src.trim();
+
+    if (_fileCache.containsKey(key)) {
+      return Future<File?>.value(_fileCache[key]);
+    }
+
+    return _fileFutureCache.putIfAbsent(key, () async {
+      final file = await _resolveEditorImageFile(key);
+      _fileCache[key] = file;
+      return file;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context, quill.EmbedContext embedContext) {
+    final dynamic data = embedContext.node.value.data;
+
+    String? source;
+    double? savedW;
+
+    if (data is String) {
+      final s = data.trimLeft();
+
+      if (s.startsWith('{')) {
+        try {
+          final m = jsonDecode(s) as Map<String, dynamic>;
+
+          final src = m['source'];
+          if (src is String) source = src;
+
+          final w = m['w'];
+          if (w is num) savedW = w.toDouble();
+        } catch (_) {
+          source = data;
+        }
+      } else {
+        source = data;
+      }
+    } else if (data is Map) {
+      final s = data['source'];
+      if (s is String) source = s;
+
+      final w = data['w'];
+      if (w is num) savedW = w.toDouble();
+    }
+
+    if (source == null || source.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final String src = source;
+
+    Widget image;
+
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      image = RepaintBoundary(
+        child: Image.network(
+          src,
+          key: ValueKey(src),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          errorBuilder:
+              (_, __, ___) =>
+                  const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+        ),
+      );
+    } else {
+      image = _SplitStableEditorImage(
+        src: src,
+        resolveFile: _resolveEditorImageFileCached,
+      );
+    }
+
+    final int? offset = _tryGetEmbedOffset(embedContext);
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final double maxW = (c.maxWidth.isFinite ? c.maxWidth : 600.0) * 0.98;
+        final double initialW = (savedW ?? 260.0).clamp(_minWidth, maxW);
+
+        return Center(
+          child: _SplitResizableImageBox(
+            controller: embedContext.controller,
+            offset: offset,
+            width: initialW,
+            maxWidth: maxW,
+            child: image,
+            onResize: (newW) {
+              if (offset == null) return;
+
+              final Map<String, dynamic> newData = <String, dynamic>{
+                'source': src,
+                'w': newW,
+              };
+
+              _replaceEmbedData(
+                controller: embedContext.controller,
+                offset: offset,
+                data: newData,
+              );
+            },
+            onDelete: () {
+              final off = offset;
+              if (off == null) return;
+
+              _deleteEmbedAt(controller: embedContext.controller, offset: off);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  int? _tryGetEmbedOffset(quill.EmbedContext ctx) {
+    try {
+      return ctx.node.offset;
+    } catch (_) {}
+
+    try {
+      final dynamic d = ctx;
+
+      final o1 = d.offset;
+      if (o1 is int) return o1;
+
+      final o2 = d.nodeOffset;
+      if (o2 is int) return o2;
+
+      final o3 = d.offsetInParent;
+      if (o3 is int) return o3;
+    } catch (_) {}
+
+    return null;
+  }
+
+  void _deleteEmbedAt({
+    required quill.QuillController controller,
+    required int offset,
+  }) {
+    controller.replaceText(offset, 1, '', null);
+  }
+
+  void _replaceEmbedData({
+    required quill.QuillController controller,
+    required int offset,
+    required Map<String, dynamic> data,
+  }) {
+    final payload = jsonEncode(data);
+
+    final embed = quill.BlockEmbed.custom(
+      quill.CustomBlockEmbed('image', payload),
+    );
+
+    controller.replaceText(offset, 1, embed, null);
+  }
+}
+
+class _SplitStableEditorImage extends StatefulWidget {
+  const _SplitStableEditorImage({required this.src, required this.resolveFile});
+
+  final String src;
+  final Future<File?> Function(String src) resolveFile;
+
+  @override
+  State<_SplitStableEditorImage> createState() =>
+      _SplitStableEditorImageState();
+}
+
+class _SplitStableEditorImageState extends State<_SplitStableEditorImage>
+    with AutomaticKeepAliveClientMixin {
+  File? _file;
+  bool _loaded = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SplitStableEditorImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.src != widget.src) {
+      _file = null;
+      _loaded = false;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final file = await widget.resolveFile(widget.src);
+
+    if (!mounted) return;
+
+    setState(() {
+      _file = file;
+      _loaded = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    if (!_loaded) {
+      return const SizedBox(
+        height: 120,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
+        ),
+      );
+    }
+
+    final file = _file;
+
+    if (file == null) {
+      return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+    }
+
+    return RepaintBoundary(
+      child: Image.file(
+        file,
+        key: ValueKey(file.path),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) {
+          return const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+        },
+      ),
+    );
+  }
+}
+
+class _SplitResizableImageBox extends StatefulWidget {
+  const _SplitResizableImageBox({
+    required this.controller,
+    required this.offset,
+    required this.width,
+    required this.maxWidth,
+    required this.child,
+    required this.onResize,
+    required this.onDelete,
+  });
+
+  final quill.QuillController controller;
+  final int? offset;
+  final double width;
+  final double maxWidth;
+  final Widget child;
+  final ValueChanged<double> onResize;
+  final VoidCallback onDelete;
+
+  @override
+  State<_SplitResizableImageBox> createState() =>
+      _SplitResizableImageBoxState();
+}
+
+class _SplitResizableImageBoxState extends State<_SplitResizableImageBox> {
+  late double _w;
+  bool _selected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _w = widget.width;
+  }
+
+  @override
+  void didUpdateWidget(covariant _SplitResizableImageBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if ((oldWidget.width - widget.width).abs() > 0.5) {
+      _w = widget.width;
+    }
+  }
+
+  void _selectImage() {
+    if (_selected) return;
+    setState(() => _selected = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = _w.clamp(_SplitSafeImageEmbedBuilder._minWidth, widget.maxWidth);
+
+    return RepaintBoundary(
+      child: SizedBox(
+        width: w,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _selectImage,
+              child: AbsorbPointer(absorbing: true, child: widget.child),
+            ),
+
+            if (_selected)
+              Positioned(
+                bottom: 6,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _SplitResizeButton(
+                          icon: Icons.remove,
+                          onTap: () {
+                            final newW = (_w - 24).clamp(
+                              _SplitSafeImageEmbedBuilder._minWidth,
+                              widget.maxWidth,
+                            );
+
+                            setState(() => _w = newW);
+                            widget.onResize(newW);
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _SplitResizeButton(
+                          icon: Icons.add,
+                          onTap: () {
+                            final newW = (_w + 24).clamp(
+                              _SplitSafeImageEmbedBuilder._minWidth,
+                              widget.maxWidth,
+                            );
+
+                            setState(() => _w = newW);
+                            widget.onResize(newW);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SplitResizeButton extends StatelessWidget {
+  const _SplitResizeButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Icon(icon, size: 18, color: Colors.black87),
+    );
+  }
+}
+
+class _SplitHrSolidEmbedBuilder extends quill.EmbedBuilder {
+  @override
+  String get key => 'hr_solid';
+
+  @override
+  Widget build(BuildContext context, quill.EmbedContext embedContext) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Divider(
+        thickness: 0.5,
+        height: 17,
+        color: Color.fromARGB(255, 129, 147, 182),
+      ),
+    );
+  }
+}
+
+class _SplitHrEmbedBuilder extends quill.EmbedBuilder {
+  @override
+  String get key => 'hr';
+
+  @override
+  Widget build(BuildContext context, quill.EmbedContext embedContext) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: SizedBox(
+        height: 18,
+        width: double.infinity,
+        child: CustomPaint(
+          painter: _SplitDashedLinePainter(
+            thickness: 0.5,
+            dashWidth: 5,
+            dashSpace: 5,
+            color: Color.fromARGB(255, 129, 147, 182),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplitDashedLinePainter extends CustomPainter {
+  final double thickness;
+  final double dashWidth;
+  final double dashSpace;
+  final Color color;
+
+  const _SplitDashedLinePainter({
+    required this.thickness,
+    required this.dashWidth,
+    required this.dashSpace,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..strokeWidth = thickness
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.square;
+
+    const y = 8.0;
+
+    double x = 0;
+    while (x < size.width) {
+      final x2 = math.min(x + dashWidth, size.width);
+      canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
+      x += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SplitDashedLinePainter oldDelegate) {
+    return oldDelegate.thickness != thickness ||
+        oldDelegate.dashWidth != dashWidth ||
+        oldDelegate.dashSpace != dashSpace ||
+        oldDelegate.color != color;
+  }
+}
+
+class _SplitChapterPaneState extends State<_SplitChapterPane> {
+  late final TextEditingController _titleCtrl;
+  late final quill.QuillController _controller;
+  final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollCtrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _titleCtrl = TextEditingController(text: widget.chapter.title);
+
+    _controller = quill.QuillController(
+      document: quill.Document.fromJson(
+        _mergeBgAlphaIntoBackgroundForSplitEditor(widget.chapter.delta),
+      ),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _controller.dispose();
+    _focusNode.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>> buildResult() async {
+    final raw = _controller.document.toDelta().toJson();
+
+    final delta = raw
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList(growable: true);
+
+    final normalized = _splitEditorBackgroundToBgAlphaForSplitEditor(delta);
+    final persisted = await _persistSplitLocalImagesInDelta(
+      normalized,
+      chapter: widget.chapter,
+    );
+
+    return {'title': _titleCtrl.text.trim(), 'delta': persisted};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<WritingSettingsController>().settings;
+    final glassTheme = GlassTheme.fromFlags(
+      reduceTransparency: !widget.enableGlass,
+    );
+
+    final textColor = _splitTextColorFromSettings(settings);
+    final fontFamily = resolveFontFamily(settings.fontFamily);
+    final customStyles = _buildSplitEditorStyles(context, settings);
+
+    final defaultEmbeds = FlutterQuillEmbeds.editorBuilders();
+    final safeEmbeds = defaultEmbeds.where((b) => b.key != 'image').toList();
+
+    return Column(
+      children: [
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Text(
+                widget.label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color.fromARGB(221, 83, 129, 159),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _titleCtrl,
+                  maxLines: 1,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                    hintText: '회차 제목 입력',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          color: Colors.white,
+          child: MiniFlatToolbar(
+            controller: _controller,
+            theme: glassTheme,
+            onLayoutChanged: () => setState(() {}),
+            onMicTap: () {},
+            isListening: false,
+          ),
+        ),
+        Expanded(
+          child: _SplitThemeBackground(
+            settings: settings,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                settings.horizontalMargin,
+                18,
+                settings.horizontalMargin,
+                18,
+              ),
+              child: DefaultTextStyle.merge(
+                style: TextStyle(
+                  fontSize: 15.0,
+                  height: settings.lineHeight,
+                  letterSpacing: settings.letterSpacing,
+                  fontFamily: fontFamily,
+                  color: textColor,
+                ),
+                child: quill.QuillEditor(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  scrollController: _scrollCtrl,
+                  config: quill.QuillEditorConfig(
+                    scrollable: true,
+                    padding: EdgeInsets.zero,
+                    expands: true,
+                    customLeadingBlockBuilder: buildCustomLeadingWithColor(
+                      settings.themeId == 'default' ? null : textColor,
+                    ),
+                    embedBuilders: [
+                      _SplitSafeImageEmbedBuilder(),
+                      _SplitHrSolidEmbedBuilder(),
+                      _SplitHrEmbedBuilder(),
+                      ...safeEmbeds,
+                    ],
+                    customStyles: customStyles,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _A4PortraitCoverCard extends StatelessWidget {
   final String? coverPath;

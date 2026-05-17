@@ -2,6 +2,7 @@
 
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 const String kBgAlphaKey = 'bgAlpha';
@@ -193,11 +194,16 @@ class CanvasDocEngine {
         inOrderedList = false;
         orderedCounter = 0;
 
-        double reservedH = math.min(settings.contentHeight * 0.45, 320.0);
+        final double imageW =
+            (b.width ?? settings.contentWidth)
+                .clamp(90.0, settings.contentWidth)
+                .toDouble();
+
+        double reservedH = math.min(settings.contentHeight * 0.75, 520.0);
 
         final sz = settings.imageSizes[b.src];
         if (sz != null && sz.width > 0 && sz.height > 0) {
-          final scale = settings.contentWidth / sz.width;
+          final scale = imageW / sz.width;
           double drawH = sz.height * scale;
           if (drawH > settings.maxImageHeight) drawH = settings.maxImageHeight;
           reservedH = drawH;
@@ -209,7 +215,8 @@ class CanvasDocEngine {
           CanvasImageDrawCommand(
             y: y,
             src: b.src,
-            width: settings.contentWidth,
+            width: imageW,
+            boxWidth: settings.contentWidth,
           ),
         );
 
@@ -878,10 +885,17 @@ class CanvasImageDrawCommand extends CanvasDrawCommand {
     required this.y,
     required this.src,
     required this.width,
+    required this.boxWidth,
   });
+
   final double y;
   final String src;
+
+  /// 실제 이미지 렌더 폭
   final double width;
+
+  /// 가운데 정렬 기준 폭
+  final double boxWidth;
 
   @override
   Future<void> paint({
@@ -908,7 +922,7 @@ class CanvasImageDrawCommand extends CanvasDrawCommand {
       drawW = drawW * s;
     }
 
-    final double dx = origin.dx + (width - drawW) / 2;
+    final double dx = origin.dx + (boxWidth - drawW) / 2;
     final double dy = origin.dy + y;
 
     final Rect dst = Rect.fromLTWH(dx, dy, drawW, drawH);
@@ -917,6 +931,61 @@ class CanvasImageDrawCommand extends CanvasDrawCommand {
     final paint = Paint()..filterQuality = FilterQuality.high;
     canvas.drawImageRect(img, srcRect, dst, paint);
   }
+}
+
+class _CanvasImageData {
+  const _CanvasImageData({required this.src, this.width});
+
+  final String src;
+  final double? width;
+}
+
+_CanvasImageData? _canvasImageDataFromDeltaValue(dynamic raw) {
+  if (raw == null) return null;
+
+  if (raw is String) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    if (value.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        return _canvasImageDataFromDeltaValue(decoded);
+      } catch (_) {}
+    }
+
+    return _CanvasImageData(src: value);
+  }
+
+  if (raw is Map) {
+    final m = Map<String, dynamic>.from(raw);
+
+    final source = m['source'];
+    double? width;
+
+    final w = m['w'];
+    if (w is num) {
+      width = w.toDouble();
+    }
+
+    if (source is String && source.trim().isNotEmpty) {
+      return _CanvasImageData(src: source.trim(), width: width);
+    }
+
+    if (m.containsKey('image')) {
+      return _canvasImageDataFromDeltaValue(m['image']);
+    }
+
+    if (m['type'] == 'image' && m.containsKey('data')) {
+      return _canvasImageDataFromDeltaValue(m['data']);
+    }
+
+    if (m.containsKey('data')) {
+      return _canvasImageDataFromDeltaValue(m['data']);
+    }
+  }
+
+  return null;
 }
 
 /// =======================================================
@@ -968,11 +1037,13 @@ class _DeltaParser {
         }
 
         if (insert.containsKey('image')) {
-          final src = insert['image'];
-          if (src is String && src.isNotEmpty) {
+          final imageData = _canvasImageDataFromDeltaValue(insert['image']);
+
+          if (imageData != null && imageData.src.isNotEmpty) {
             if (currentRuns.isNotEmpty) flushLine(const {});
-            lines.add(_Line.image(src));
+            lines.add(_Line.image(imageData.src, imageWidth: imageData.width));
           }
+
           continue;
         }
 
@@ -1028,7 +1099,7 @@ class _DeltaParser {
 
       if (l.kind == _LineKind.image) {
         current = null;
-        blocks.add(_ImageBlock(l.imageSource!));
+        blocks.add(_ImageBlock(l.imageSource!, width: l.imageWidth));
         continue;
       }
 
@@ -1079,16 +1150,18 @@ class _Line {
   final BlockStyle style;
 
   final String? imageSource;
+  final double? imageWidth;
   final bool? hrSolid;
   final String? chapterTitle;
 
   _Line({required this.runs, required this.style})
     : kind = _LineKind.text,
       imageSource = null,
+      imageWidth = null,
       hrSolid = null,
       chapterTitle = null;
 
-  _Line.image(this.imageSource)
+  _Line.image(this.imageSource, {this.imageWidth})
     : kind = _LineKind.image,
       runs = const [],
       style = const BlockStyle(),
@@ -1100,6 +1173,7 @@ class _Line {
       runs = const [],
       style = const BlockStyle(),
       imageSource = null,
+      imageWidth = null,
       hrSolid = solid,
       chapterTitle = null;
 
@@ -1108,6 +1182,7 @@ class _Line {
       runs = const [],
       style = const BlockStyle(),
       imageSource = null,
+      imageWidth = null,
       hrSolid = null,
       chapterTitle = null;
 
@@ -1115,6 +1190,7 @@ class _Line {
     : kind = _LineKind.chapterTitle,
       runs = const [],
       style = const BlockStyle(),
+      imageWidth = null,
       imageSource = null,
       hrSolid = null;
 }
@@ -1296,8 +1372,10 @@ class _ParagraphBlock extends _Block {
 }
 
 class _ImageBlock extends _Block {
+  _ImageBlock(this.src, {this.width});
+
   final String src;
-  _ImageBlock(this.src);
+  final double? width;
 }
 
 class _HrBlock extends _Block {

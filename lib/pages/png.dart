@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-
+import 'dart:convert';
 import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -743,7 +743,7 @@ class PngPage extends StatefulWidget {
     this.defaultTextColor = const Color(0xFF111111),
 
     this.renderScale = 2.8,
-    this.maxImageHeightRatio = 0.65,
+    this.maxImageHeightRatio = 0.92,
   });
 
   final String title;
@@ -1275,17 +1275,35 @@ class _PngPageState extends State<PngPage> {
   late final ByteLruCache<String, Uint8List> _fileBytesCache =
       ByteLruCache<String, Uint8List>(maxBytes: _fileBytesCacheBudgetBytes);
 
+  Future<File?> _resolvePngImageFile(String source) async {
+    final raw = source.trim();
+    if (raw.isEmpty) return null;
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct;
+
+    final appDir = await getApplicationDocumentsDirectory();
+    final fromDocuments = File(p.join(appDir.path, raw));
+    if (await fromDocuments.exists()) return fromDocuments;
+
+    return null;
+  }
+
   Future<Uint8List?> _readFileBytesCached(String path) async {
-    final cached = _fileBytesCache.get(path);
+    final resolved = await _resolvePngImageFile(path);
+    if (resolved == null) return null;
+
+    final cacheKey = resolved.path;
+
+    final cached = _fileBytesCache.get(cacheKey);
     if (cached != null) return cached;
 
-    final f = File(path);
-    if (!await f.exists()) return null;
+    if (!await resolved.exists()) return null;
 
-    final bytes = await f.readAsBytes();
+    final bytes = await resolved.readAsBytes();
     if (bytes.isEmpty) return null;
 
-    _fileBytesCache.put(path, bytes, bytesWeight: bytes.length);
+    _fileBytesCache.put(cacheKey, bytes, bytesWeight: bytes.length);
     return bytes;
   }
 
@@ -2267,6 +2285,61 @@ class _PngPageState extends State<PngPage> {
   }
 }
 
+class _PngImageData {
+  const _PngImageData({required this.src, this.width});
+
+  final String src;
+  final double? width;
+}
+
+_PngImageData? _pngImageDataFromDeltaValue(dynamic raw) {
+  if (raw == null) return null;
+
+  if (raw is String) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+
+    if (value.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        return _pngImageDataFromDeltaValue(decoded);
+      } catch (_) {}
+    }
+
+    return _PngImageData(src: value);
+  }
+
+  if (raw is Map) {
+    final m = Map<String, dynamic>.from(raw);
+
+    final source = m['source'];
+    double? width;
+
+    final w = m['w'];
+    if (w is num) {
+      width = w.toDouble();
+    }
+
+    if (source is String && source.trim().isNotEmpty) {
+      return _PngImageData(src: source.trim(), width: width);
+    }
+
+    if (m.containsKey('image')) {
+      return _pngImageDataFromDeltaValue(m['image']);
+    }
+
+    if (m['type'] == 'image' && m.containsKey('data')) {
+      return _pngImageDataFromDeltaValue(m['data']);
+    }
+
+    if (m.containsKey('data')) {
+      return _pngImageDataFromDeltaValue(m['data']);
+    }
+  }
+
+  return null;
+}
+
 class _DeltaParser {
   List<_Block> parse(List<Map<String, dynamic>> deltaJson) {
     final lines = <_Line>[];
@@ -2300,10 +2373,11 @@ class _DeltaParser {
         }
       } else if (insert is Map) {
         if (insert.containsKey('image')) {
-          final src = insert['image'];
-          if (src is String && src.isNotEmpty) {
+          final imageData = _pngImageDataFromDeltaValue(insert['image']);
+
+          if (imageData != null && imageData.src.isNotEmpty) {
             if (currentRuns.isNotEmpty) flushLine(const {});
-            lines.add(_Line.image(src));
+            lines.add(_Line.image(imageData.src, imageWidth: imageData.width));
           }
         } else if (insert.containsKey('hr_solid')) {
           if (currentRuns.isNotEmpty) flushLine(const {});
@@ -2327,7 +2401,7 @@ class _DeltaParser {
     for (final l in lines) {
       if (l.kind == _LineKind.image) {
         current = null;
-        blocks.add(_ImageBlock(l.imageSource!));
+        blocks.add(_ImageBlock(l.imageSource!, width: l.imageWidth));
         continue;
       }
 
@@ -2374,14 +2448,16 @@ class _Line {
   final _BlockStyle style;
 
   final String? imageSource;
+  final double? imageWidth;
   final bool? hrSolid;
 
   _Line({required this.runs, required this.style})
     : kind = _LineKind.text,
       imageSource = null,
+      imageWidth = null,
       hrSolid = null;
 
-  _Line.image(this.imageSource)
+  _Line.image(this.imageSource, {this.imageWidth})
     : kind = _LineKind.image,
       runs = const [],
       style = const _BlockStyle(),
@@ -2392,6 +2468,7 @@ class _Line {
       runs = const [],
       style = const _BlockStyle(),
       imageSource = null,
+      imageWidth = null,
       hrSolid = solid;
 }
 
@@ -2583,8 +2660,10 @@ class _ParagraphBlock extends _Block {
 }
 
 class _ImageBlock extends _Block {
+  _ImageBlock(this.src, {this.width});
+
   final String src;
-  _ImageBlock(this.src);
+  final double? width;
 }
 
 class _HrBlock extends _Block {
@@ -2921,11 +3000,14 @@ class _CanvasLayoutEngine {
         inOrderedList = false;
         orderedCounter = 0;
 
+        final double imageW =
+            (b.width ?? contentWidth).clamp(90.0, contentWidth).toDouble();
+
         double reservedH = math.min(contentHeight * 0.45, 320.0);
 
         final sz = imageSizes[b.src];
         if (sz != null && sz.width > 0 && sz.height > 0) {
-          final scale = contentWidth / sz.width;
+          final scale = imageW / sz.width;
           double drawH = sz.height * scale;
           if (drawH > maxImageHeight) drawH = maxImageHeight;
           reservedH = drawH;
@@ -2934,7 +3016,12 @@ class _CanvasLayoutEngine {
         if (y + reservedH > contentHeight && y > 0) newPage();
 
         current.commands.add(
-          _ImageDrawCommand(y: y, src: b.src, width: contentWidth),
+          _ImageDrawCommand(
+            y: y,
+            src: b.src,
+            width: imageW,
+            boxWidth: contentWidth,
+          ),
         );
 
         y += reservedH + 10;
@@ -3371,10 +3458,21 @@ class _HrDrawCommand extends _DrawCommand {
 }
 
 class _ImageDrawCommand extends _DrawCommand {
-  _ImageDrawCommand({required this.y, required this.src, required this.width});
+  _ImageDrawCommand({
+    required this.y,
+    required this.src,
+    required this.width,
+    required this.boxWidth,
+  });
+
   final double y;
   final String src;
+
+  // 실제 이미지 렌더 폭
   final double width;
+
+  // 가운데 정렬 기준 폭
+  final double boxWidth;
 
   @override
   Future<void> paint({
@@ -3400,7 +3498,7 @@ class _ImageDrawCommand extends _DrawCommand {
       drawW = drawW * s;
     }
 
-    final double dx = origin.dx + (width - drawW) / 2;
+    final double dx = origin.dx + (boxWidth - drawW) / 2;
     final double dy = origin.dy + y;
 
     final Rect dst = Rect.fromLTWH(dx, dy, drawW, drawH);
