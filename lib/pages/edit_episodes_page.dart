@@ -12,6 +12,9 @@ import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/pages/book_builder_page.dart';
 
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+
 class EditEpisodesPage extends StatefulWidget {
   const EditEpisodesPage({
     super.key,
@@ -114,6 +117,32 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
     );
   }
 
+  Future<String?> _resolveLocalCoverPath(
+    String? rawPath,
+    Directory appDir,
+  ) async {
+    final raw = rawPath?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    if (raw.startsWith('file://')) {
+      final uri = Uri.tryParse(raw);
+      if (uri != null && uri.isScheme('file')) {
+        final filePath = uri.toFilePath();
+        if (await File(filePath).exists()) return filePath;
+      }
+    }
+
+    final direct = File(raw);
+    if (await direct.exists()) return direct.path;
+
+    if (!p.isAbsolute(raw)) {
+      final fromDocuments = File(p.join(appDir.path, raw));
+      if (await fromDocuments.exists()) return fromDocuments.path;
+    }
+
+    return null;
+  }
+
   Widget _groupedListView() {
     final grouped = _groupItemsByBook();
     final bookIds =
@@ -198,6 +227,7 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
 
   Future<List<GenreEpisodeItem>> _loadMergedChapters() async {
     final prefs = await SharedPreferences.getInstance();
+    final appDir = await getApplicationDocumentsDirectory();
     final merged = <GenreEpisodeItem>[];
 
     for (final b in widget.genreBooks) {
@@ -205,7 +235,14 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
       if (bookId.isEmpty) continue;
       final bookTitle = (b['title'] as String?) ?? '(제목 없음)';
 
-      final bookCoverPath = prefs.getString('book_cover_$bookId')?.trim();
+      final bookCoverRaw =
+          (prefs.getString('book_cover_$bookId') ??
+                  b['coverPath'] as String? ??
+                  b['cover'] as String? ??
+                  b['imagePath'] as String?)
+              ?.trim();
+
+      final bookCoverPath = await _resolveLocalCoverPath(bookCoverRaw, appDir);
       final raw = prefs.getString('book_chapters_$bookId');
       if (raw == null || raw.isEmpty) continue;
 
@@ -215,8 +252,14 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
       for (final e in decoded) {
         if (e is! Map) continue;
         final m = Map<String, dynamic>.from(e);
-        final coverPath =
-            ((m['cover'] as String?) ?? (m['coverPath'] as String?))?.trim();
+        final coverRaw =
+            ((m['cover'] as String?) ??
+                    (m['coverPath'] as String?) ??
+                    (m['imagePath'] as String?) ??
+                    (m['coverImagePath'] as String?))
+                ?.trim();
+
+        final coverPath = await _resolveLocalCoverPath(coverRaw, appDir);
 
         final chapterTitle = (m['title'] as String?) ?? '';
         final chapterIndex = (m['index'] as num?)?.toInt() ?? 0;

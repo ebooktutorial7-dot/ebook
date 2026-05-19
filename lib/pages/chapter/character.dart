@@ -602,6 +602,12 @@ class _FrostedKeywordBoxState extends State<_FrostedKeywordBox> {
               InkWell(
                 onTap: () => _removeKeyword(k),
                 borderRadius: BorderRadius.circular(12),
+                splashFactory: NoSplash.splashFactory,
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                focusColor: Colors.transparent,
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
                 child: const Padding(
                   padding: EdgeInsets.all(2),
                   child: Icon(Icons.close, size: 16, color: Colors.black54),
@@ -982,251 +988,283 @@ class _WorldPageState extends State<WorldPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Character',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check),
-            onPressed: () {
-              final result = _finalizeForPop(_buildCharacterFromControllers());
-              Navigator.of(context).pop(result);
-            },
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            overlayColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
+            shadowColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
+            surfaceTintColor: WidgetStatePropertyAll<Color?>(
+              Colors.transparent,
+            ),
+            elevation: WidgetStatePropertyAll<double>(0),
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _SectionTitle(title: '캐릭터'),
-              const SizedBox(height: 8),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Character',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.check),
+              onPressed: () {
+                final result = _finalizeForPop(
+                  _buildCharacterFromControllers(),
+                );
+                Navigator.of(context).pop(result);
+              },
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SectionTitle(title: '캐릭터'),
+                const SizedBox(height: 8),
 
-              FrostedContainer(
-                enableGlass: true,
-                borderRadius: 10,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                backgroundColor: Colors.white.withValues(alpha: 0.96),
-                showBorder: false,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 160,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _CoverThumb(
-                            coverPath: _coverPath,
-                            onTap: _pickCoverImage,
-                            onLongPressPreview: () {},
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '탭 : 추가/변경',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: const Color.fromARGB(221, 83, 129, 159),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _InlineLabeledField(
-                            label: 'Name',
-                            controller: _nameCtrl,
-                            hint: '예) 무무',
-                            onChanged: _syncState,
-                          ),
-                          const SizedBox(height: 10),
-                          _InlineLabeledField(
-                            label: 'Birthday',
-                            controller: _birthdayCtrl,
-                            hint: '예) 2005-01-01',
-                            onChanged: _syncState,
-                          ),
-                          const SizedBox(height: 10),
-                          _InlineLabeledField(
-                            label: 'Height',
-                            controller: _heightCtrl,
-                            hint: '예) 159cm',
-                            onChanged: _syncState,
-                          ),
-                          const SizedBox(height: 10),
-                          _InlineLabeledField(
-                            label: 'Blood type',
-                            controller: _bloodTypeCtrl,
-                            hint: '예) O+',
-                            onChanged: _syncState,
-                          ),
-                          const SizedBox(height: 10),
-                          _MiniLabeledField(
-                            label: 'Profile',
-                            controller: _specialNoteCtrl,
-                            hint: '예) 낮에는 잠이 많음',
-                            maxLines: null,
-                            onChanged: _syncState,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              const _SectionTitle(title: 'color'),
-              const SizedBox(height: 8),
-              FrostedContainer(
-                enableGlass: true,
-                borderRadius: 10,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                backgroundColor: Colors.white.withValues(alpha: 0.96),
-                showBorder: false,
-                child: InkWell(
-                  onTap: _pickCharacterColor,
-                  borderRadius: BorderRadius.circular(10),
+                FrostedContainer(
+                  enableGlass: true,
+                  borderRadius: 10,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  backgroundColor: Colors.white.withValues(alpha: 0.96),
+                  showBorder: false,
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(width: 50, child: _colorLine(_charColor)),
-                      const SizedBox(width: 12),
-                      const Icon(
-                        Icons.chevron_right,
-                        size: 20,
-                        color: Color.fromARGB(221, 83, 129, 159),
+                      SizedBox(
+                        width: 160,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _CoverThumb(
+                              coverPath: _coverPath,
+                              onTap: _pickCoverImage,
+                              onLongPressPreview: () {},
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '탭 : 추가/변경',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: const Color.fromARGB(221, 83, 129, 159),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _InlineLabeledField(
+                              label: 'Name',
+                              controller: _nameCtrl,
+                              hint: '예) 무무',
+                              onChanged: _syncState,
+                            ),
+                            const SizedBox(height: 10),
+                            _InlineLabeledField(
+                              label: 'Birthday',
+                              controller: _birthdayCtrl,
+                              hint: '예) 2005-01-01',
+                              onChanged: _syncState,
+                            ),
+                            const SizedBox(height: 10),
+                            _InlineLabeledField(
+                              label: 'Height',
+                              controller: _heightCtrl,
+                              hint: '예) 159cm',
+                              onChanged: _syncState,
+                            ),
+                            const SizedBox(height: 10),
+                            _InlineLabeledField(
+                              label: 'Blood type',
+                              controller: _bloodTypeCtrl,
+                              hint: '예) O+',
+                              onChanged: _syncState,
+                            ),
+                            const SizedBox(height: 10),
+                            _MiniLabeledField(
+                              label: 'Profile',
+                              controller: _specialNoteCtrl,
+                              hint: '예) 낮에는 잠이 많음',
+                              maxLines: null,
+                              onChanged: _syncState,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-              const _SectionTitle(title: '성격'),
-              const SizedBox(height: 8),
-              _FrostedKeywordBox(
-                enableGlass: true,
-                title: '성격 키워드',
-                hintText: '키워드 입력 후 Enter',
-                mode: KeywordInputMode.hashtag,
-                initialKeywords:
+                const _SectionTitle(title: 'color'),
+                const SizedBox(height: 8),
+                FrostedContainer(
+                  enableGlass: true,
+                  borderRadius: 10,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  backgroundColor: Colors.white.withValues(alpha: 0.96),
+                  showBorder: false,
+                  child: InkWell(
+                    onTap: _pickCharacterColor,
+                    borderRadius: BorderRadius.circular(10),
+                    splashFactory: NoSplash.splashFactory,
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    focusColor: Colors.transparent,
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
+                    child: Row(
+                      children: [
+                        SizedBox(width: 50, child: _colorLine(_charColor)),
+                        const SizedBox(width: 12),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: Color.fromARGB(221, 83, 129, 159),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const _SectionTitle(title: '성격'),
+                const SizedBox(height: 8),
+                _FrostedKeywordBox(
+                  enableGlass: true,
+                  title: '성격 키워드',
+                  hintText: '키워드 입력 후 Enter',
+                  mode: KeywordInputMode.hashtag,
+                  initialKeywords:
+                      _personalityCtrls
+                          .map((c) => c.text)
+                          .where((e) => e.trim().isNotEmpty)
+                          .toList(),
+                  onChanged: (list) {
+                    for (final c in _personalityCtrls) {
+                      c.dispose();
+                    }
                     _personalityCtrls
-                        .map((c) => c.text)
-                        .where((e) => e.trim().isNotEmpty)
-                        .toList(),
-                onChanged: (list) {
-                  for (final c in _personalityCtrls) {
-                    c.dispose();
-                  }
-                  _personalityCtrls
-                    ..clear()
-                    ..addAll(list.map((e) => TextEditingController(text: e)));
-                  _syncState();
-                },
-              ),
+                      ..clear()
+                      ..addAll(list.map((e) => TextEditingController(text: e)));
+                    _syncState();
+                  },
+                ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              const _SectionTitle(title: '좋아/싫어'),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _FrostedKeywordBox(
-                      enableGlass: true,
-                      title: '좋아하는 것',
-                      hintText: '입력 후 Enter',
-                      initialKeywords:
+                const _SectionTitle(title: '좋아/싫어'),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _FrostedKeywordBox(
+                        enableGlass: true,
+                        title: '좋아하는 것',
+                        hintText: '입력 후 Enter',
+                        initialKeywords:
+                            _likeCtrls
+                                .map((c) => c.text.trim())
+                                .where((t) => t.isNotEmpty)
+                                .toList(),
+                        onChanged: (list) {
+                          for (final c in _likeCtrls) {
+                            c.dispose();
+                          }
                           _likeCtrls
-                              .map((c) => c.text.trim())
-                              .where((t) => t.isNotEmpty)
-                              .toList(),
-                      onChanged: (list) {
-                        for (final c in _likeCtrls) {
-                          c.dispose();
-                        }
-                        _likeCtrls
-                          ..clear()
-                          ..addAll(
-                            list.map((e) => TextEditingController(text: e)),
-                          );
-                        _syncState();
-                      },
+                            ..clear()
+                            ..addAll(
+                              list.map((e) => TextEditingController(text: e)),
+                            );
+                          _syncState();
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _FrostedKeywordBox(
-                      enableGlass: true,
-                      title: '싫어하는 것',
-                      hintText: '입력 후 Enter',
-                      initialKeywords:
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _FrostedKeywordBox(
+                        enableGlass: true,
+                        title: '싫어하는 것',
+                        hintText: '입력 후 Enter',
+                        initialKeywords:
+                            _dislikeCtrls
+                                .map((c) => c.text.trim())
+                                .where((t) => t.isNotEmpty)
+                                .toList(),
+                        onChanged: (list) {
+                          for (final c in _dislikeCtrls) {
+                            c.dispose();
+                          }
                           _dislikeCtrls
-                              .map((c) => c.text.trim())
-                              .where((t) => t.isNotEmpty)
-                              .toList(),
-                      onChanged: (list) {
-                        for (final c in _dislikeCtrls) {
-                          c.dispose();
-                        }
-                        _dislikeCtrls
-                          ..clear()
-                          ..addAll(
-                            list.map((e) => TextEditingController(text: e)),
-                          );
-                        _syncState();
-                      },
+                            ..clear()
+                            ..addAll(
+                              list.map((e) => TextEditingController(text: e)),
+                            );
+                          _syncState();
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              const _SectionTitle(title: '신체 / 외형'),
-              const SizedBox(height: 8),
-              _FrostedKeywordBox(
-                enableGlass: true,
-                title: '신체 / 외형 메모',
-                helper: '예) 인간형일 때 투명하게 빛나는 귀와 꼬리',
-                hintText: '메모 입력 후 Enter',
-                mode: KeywordInputMode.phrase,
-                initialKeywords:
+                const _SectionTitle(title: '신체 / 외형'),
+                const SizedBox(height: 8),
+                _FrostedKeywordBox(
+                  enableGlass: true,
+                  title: '신체 / 외형 메모',
+                  helper: '예) 인간형일 때 투명하게 빛나는 귀와 꼬리',
+                  hintText: '메모 입력 후 Enter',
+                  mode: KeywordInputMode.phrase,
+                  initialKeywords:
+                      _physicalNoteCtrls
+                          .map((c) => c.text.trim())
+                          .where((t) => t.isNotEmpty)
+                          .toList(),
+                  onChanged: (list) {
+                    for (final c in _physicalNoteCtrls) {
+                      c.dispose();
+                    }
                     _physicalNoteCtrls
-                        .map((c) => c.text.trim())
-                        .where((t) => t.isNotEmpty)
-                        .toList(),
-                onChanged: (list) {
-                  for (final c in _physicalNoteCtrls) {
-                    c.dispose();
-                  }
-                  _physicalNoteCtrls
-                    ..clear()
-                    ..addAll(list.map((e) => TextEditingController(text: e)));
-                  _syncState();
-                },
-              ),
-            ],
+                      ..clear()
+                      ..addAll(list.map((e) => TextEditingController(text: e)));
+                    _syncState();
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

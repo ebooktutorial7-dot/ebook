@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:ebook_tutorial_app/pages/chapter/world_seat.dart';
 import 'package:path/path.dart' as p;
 import 'package:ebook_tutorial_app/widgets/pdf/pdf_chapter_picker_dialog.dart';
 import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart' show buildBookPdf;
@@ -312,36 +313,53 @@ class _SplitThemeBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (settings.themeId == 'space') {
-      return DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color.fromARGB(255, 6, 10, 38),
-              Color.fromARGB(255, 20, 27, 69),
-              Color.fromARGB(246, 33, 23, 38),
-            ],
+      return Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromARGB(255, 6, 10, 38),
+                    Color.fromARGB(255, 20, 27, 69),
+                    Color.fromARGB(246, 33, 23, 38),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: child,
+          const Positioned.fill(child: _AnimatedStarField(starCount: 260)),
+          const Positioned.fill(
+            child: IgnorePointer(child: _ShootingStarLayer()),
+          ),
+          Positioned.fill(child: child),
+        ],
       );
     }
 
     if (settings.themeId == 'lightSky') {
-      return DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color.fromARGB(255, 238, 248, 255),
-              Color(0xFFBBDEFB),
-              Color.fromARGB(255, 241, 249, 255),
-            ],
+      return Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromARGB(255, 238, 248, 255),
+                    Color(0xFFBBDEFB),
+                    Color.fromARGB(255, 241, 249, 255),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: child,
+          const Positioned.fill(child: CustomPaint(painter: _SunRayPainter())),
+          Positioned.fill(child: child),
+        ],
       );
     }
 
@@ -816,6 +834,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                 topChapter: top,
                 bottomChapter: bottom,
                 enableGlass: _glass,
+                documentId: widget.documentId ?? 'local',
               ),
             ),
       ),
@@ -5398,7 +5417,10 @@ $coverRel
                   ),
                 IconButton(
                   onPressed: _reorderMode ? _exitReorderMode : _addChapter,
-
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  focusColor: Colors.transparent,
                   icon: Icon(
                     _reorderMode ? Icons.check : Icons.add,
                     size: 22,
@@ -5504,7 +5526,10 @@ $coverRel
                 IconButton(
                   onPressed: () => _openMemoEditor(),
                   icon: const Icon(Icons.add, size: 22, color: Colors.black87),
-                  tooltip: '새 메모',
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  focusColor: Colors.transparent,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
                     minWidth: 32,
@@ -5523,7 +5548,7 @@ $coverRel
                     children: [
                       SizedBox(height: 12),
                       Text(
-                        '이 책과 관련된 메모를 추가해 보세요.',
+                        '+ 이 책과 관련된 메모를 추가해 보세요.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color.fromARGB(221, 83, 129, 159),
@@ -5680,6 +5705,10 @@ $coverRel
                           ),
                         ),
                         IconButton(
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
+                          focusColor: Colors.transparent,
                           icon: const Icon(Icons.add, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
@@ -6128,42 +6157,53 @@ $coverRel
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Theme(
-                        data: Theme.of(context).copyWith(
-                          highlightColor: Colors.transparent,
-                          splashColor: Colors.transparent,
-                          hoverColor: Colors.transparent,
-                          focusColor: Colors.transparent,
-                          splashFactory: NoSplash.splashFactory,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.share_outlined,
-                                size: 21,
-                                color: Color.fromARGB(255, 107, 148, 181),
-                              ),
-                              onPressed: () {
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Semantics(
+                            button: true,
+                            label: '공유',
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
                                 _showPdfSharePopup(context);
                               },
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 31,
-                                minHeight: 31,
+                              child: const SizedBox(
+                                width: 31,
+                                height: 31,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.share_outlined,
+                                    size: 21,
+                                    color: Color.fromARGB(255, 107, 148, 181),
+                                  ),
+                                ),
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.check,
-                                size: 27,
-                                color: Color.fromARGB(255, 107, 148, 181),
+                          ),
+
+                          const SizedBox(width: 6), // 공유 아이콘을 왼쪽으로 밀어주는 간격
+
+                          Semantics(
+                            button: true,
+                            label: '저장',
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _save,
+                              child: const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 27,
+                                    color: Color.fromARGB(255, 107, 148, 181),
+                                  ),
+                                ),
                               ),
-                              onPressed: _save,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -6339,12 +6379,14 @@ class SplitChapterEditPage extends StatefulWidget {
   final ChapterItem topChapter;
   final ChapterItem bottomChapter;
   final bool enableGlass;
+  final String documentId;
 
   const SplitChapterEditPage({
     super.key,
     required this.topChapter,
     required this.bottomChapter,
     required this.enableGlass,
+    required this.documentId,
   });
 
   @override
@@ -6354,6 +6396,14 @@ class SplitChapterEditPage extends StatefulWidget {
 class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
   final _topKey = GlobalKey<_SplitChapterPaneState>();
   final _bottomKey = GlobalKey<_SplitChapterPaneState>();
+
+  Future<void> _openWorldSeat() async {
+    await Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => WorldSeatPage(documentId: widget.documentId),
+      ),
+    );
+  }
 
   Future<void> _save() async {
     final topState = _topKey.currentState;
@@ -6387,32 +6437,47 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
-              size: 18,
-              color: Colors.black87,
+          leading: Semantics(
+            button: true,
+            label: '뒤로가기',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _save,
+              child: const SizedBox(
+                width: 56,
+                height: kToolbarHeight,
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
             ),
-            onPressed: _save,
           ),
           title: const Text(
             '분할 편집',
             style: TextStyle(
               color: Colors.black87,
-              fontSize: 19,
+              fontSize: 17,
               fontWeight: FontWeight.w500,
             ),
           ),
           actions: [
             IconButton(
-              onPressed: _save,
-              icon: const Icon(Icons.check, color: Colors.black87),
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              onPressed: _save,
+              icon: const Icon(Icons.check, color: Colors.black87),
             ),
           ],
         ),
         body: SafeArea(
+          top: false,
+          bottom: false,
           child: Column(
             children: [
               Expanded(
@@ -6421,6 +6486,7 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   chapter: widget.topChapter,
                   enableGlass: widget.enableGlass,
                   label: '위쪽',
+                  onOpenWorldSeat: _openWorldSeat,
                 ),
               ),
               Container(height: 1, color: const Color(0xFFE3ECF5)),
@@ -6430,6 +6496,7 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   chapter: widget.bottomChapter,
                   enableGlass: widget.enableGlass,
                   label: '아래쪽',
+                  onOpenWorldSeat: _openWorldSeat,
                 ),
               ),
             ],
@@ -6675,12 +6742,14 @@ class _SplitChapterPane extends StatefulWidget {
   final ChapterItem chapter;
   final bool enableGlass;
   final String label;
+  final VoidCallback onOpenWorldSeat;
 
   const _SplitChapterPane({
     super.key,
     required this.chapter,
     required this.enableGlass,
     required this.label,
+    required this.onOpenWorldSeat,
   });
 
   @override
@@ -7167,6 +7236,69 @@ class _SplitDashedLinePainter extends CustomPainter {
   }
 }
 
+class _SplitSwipeToWorld extends StatefulWidget {
+  const _SplitSwipeToWorld({
+    required this.scrollCtrl,
+    required this.controller,
+    required this.onTrigger,
+  });
+
+  final ScrollController scrollCtrl;
+  final quill.QuillController controller;
+  final VoidCallback onTrigger;
+
+  @override
+  State<_SplitSwipeToWorld> createState() => _SplitSwipeToWorldState();
+}
+
+class _SplitSwipeToWorldState extends State<_SplitSwipeToWorld> {
+  Offset? _start;
+  bool _triggered = false;
+
+  static const double _minDx = 40;
+  static const double _minRatio = 1.3;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (d) {
+        _start = d.globalPosition;
+        _triggered = false;
+      },
+      onPanUpdate: (d) {
+        if (_triggered) return;
+        if (_start == null) return;
+
+        if (widget.scrollCtrl.hasClients &&
+            widget.scrollCtrl.position.isScrollingNotifier.value) {
+          return;
+        }
+
+        if (!widget.controller.selection.isCollapsed) return;
+
+        final now = d.globalPosition;
+        final dx = now.dx - _start!.dx;
+        final dy = now.dy - _start!.dy;
+
+        // 단일 편집의 조건과 동일하게 사용
+        if (dx < -_minDx && dx.abs() > dy.abs() * _minRatio) {
+          _triggered = true;
+          widget.onTrigger();
+        }
+      },
+      onPanEnd: (_) {
+        _start = null;
+        _triggered = false;
+      },
+      onPanCancel: () {
+        _start = null;
+        _triggered = false;
+      },
+    );
+  }
+}
+
 class _SplitChapterPaneState extends State<_SplitChapterPane> {
   late final TextEditingController _titleCtrl;
   late final quill.QuillController _controller;
@@ -7229,7 +7361,7 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
     return Column(
       children: [
         Container(
-          height: 44,
+          height: 39,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           color: Colors.white,
           child: Row(
@@ -7274,45 +7406,62 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
           ),
         ),
         Expanded(
-          child: _SplitThemeBackground(
-            settings: settings,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                settings.horizontalMargin,
-                18,
-                settings.horizontalMargin,
-                18,
-              ),
-              child: DefaultTextStyle.merge(
-                style: TextStyle(
-                  fontSize: 15.0,
-                  height: settings.lineHeight,
-                  letterSpacing: settings.letterSpacing,
-                  fontFamily: fontFamily,
-                  color: textColor,
-                ),
-                child: quill.QuillEditor(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  scrollController: _scrollCtrl,
-                  config: quill.QuillEditorConfig(
-                    scrollable: true,
-                    padding: EdgeInsets.zero,
-                    expands: true,
-                    customLeadingBlockBuilder: buildCustomLeadingWithColor(
-                      settings.themeId == 'default' ? null : textColor,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: _SplitThemeBackground(
+                  settings: settings,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      settings.horizontalMargin,
+                      0,
+                      settings.horizontalMargin,
+                      0,
                     ),
-                    embedBuilders: [
-                      _SplitSafeImageEmbedBuilder(),
-                      _SplitHrSolidEmbedBuilder(),
-                      _SplitHrEmbedBuilder(),
-                      ...safeEmbeds,
-                    ],
-                    customStyles: customStyles,
+                    child: DefaultTextStyle.merge(
+                      style: TextStyle(
+                        fontSize: 15.0,
+                        height: settings.lineHeight,
+                        letterSpacing: settings.letterSpacing,
+                        fontFamily: fontFamily,
+                        color: textColor,
+                      ),
+                      child: quill.QuillEditor(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        scrollController: _scrollCtrl,
+                        config: quill.QuillEditorConfig(
+                          scrollable: true,
+                          padding: EdgeInsets.zero,
+                          expands: true,
+                          customLeadingBlockBuilder:
+                              buildCustomLeadingWithColor(
+                                settings.themeId == 'default'
+                                    ? null
+                                    : textColor,
+                              ),
+                          embedBuilders: [
+                            _SplitSafeImageEmbedBuilder(),
+                            _SplitHrSolidEmbedBuilder(),
+                            _SplitHrEmbedBuilder(),
+                            ...safeEmbeds,
+                          ],
+                          customStyles: customStyles,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+
+              Positioned.fill(
+                child: _SplitSwipeToWorld(
+                  scrollCtrl: _scrollCtrl,
+                  controller: _controller,
+                  onTrigger: widget.onOpenWorldSeat,
+                ),
+              ),
+            ],
           ),
         ),
       ],

@@ -167,92 +167,108 @@ class _WorldSeatPageState extends State<WorldSeatPage>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leadingWidth: 0,
-        title: const Text(
-          'World Seat',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check),
-            onPressed: () => nav.maybePop(),
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            splashColor: Colors.transparent,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            overlayColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
           ),
-          const SizedBox(width: 8),
-        ],
-        elevation: 0,
-        scrolledUnderElevation: 0,
+        ),
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            SizedBox(
-              height: 40,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TabBar(
-                  controller: controller,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  padding: EdgeInsets.zero,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  indicator: const BoxDecoration(),
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  splashFactory: NoSplash.splashFactory,
-                  dividerColor: Colors.transparent,
-                  labelStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leadingWidth: 0,
+          title: const Text(
+            'World Seat',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.check),
+              onPressed: () => nav.maybePop(),
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              splashColor: Colors.transparent,
+            ),
+            const SizedBox(width: 8),
+          ],
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 40,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TabBar(
+                    controller: controller,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    padding: EdgeInsets.zero,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    indicator: const BoxDecoration(),
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
+                    splashFactory: NoSplash.splashFactory,
+                    dividerColor: Colors.transparent,
+                    labelStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w300,
+                    ),
+                    labelColor: theme.colorScheme.onSurface,
+                    unselectedLabelColor: const Color.fromARGB(
+                      255,
+                      170,
+                      193,
+                      216,
+                    ),
+                    tabs: WorldSeatPage._tabs,
                   ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w300,
-                  ),
-                  labelColor: theme.colorScheme.onSurface,
-                  unselectedLabelColor: const Color.fromARGB(
-                    255,
-                    170,
-                    193,
-                    216,
-                  ),
-                  tabs: WorldSeatPage._tabs,
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: TabBarView(
-                controller: controller,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  CharacterSeatTab(documentId: widget.documentId),
-                  GlossarySeatTab(documentId: widget.documentId),
-                  FreeMemoSeatTab(documentId: widget.documentId),
-                  FutureBuilder(
-                    future: WorldSeatIsar.instance,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      return FactionPage(
-                        isar: snapshot.data!,
-                        documentId: widget.documentId,
-                      );
-                    },
-                  ),
-                  TimelineSeatTab(documentId: widget.documentId),
-                ],
+              const SizedBox(height: 6),
+              Expanded(
+                child: TabBarView(
+                  controller: controller,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    CharacterSeatTab(documentId: widget.documentId),
+                    GlossarySeatTab(documentId: widget.documentId),
+                    FreeMemoSeatTab(documentId: widget.documentId),
+                    FutureBuilder(
+                      future: WorldSeatIsar.instance,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        return FactionPage(
+                          isar: snapshot.data!,
+                          documentId: widget.documentId,
+                        );
+                      },
+                    ),
+                    TimelineSeatTab(documentId: widget.documentId),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -727,64 +743,78 @@ class _GlossaryEditorPageState extends State<_GlossaryEditorPage> {
   Widget build(BuildContext context) {
     final isNew = widget.initial == null;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isNew ? '용어 추가' : '용어 편집',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: _save,
-            icon: const Icon(Icons.check),
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            overlayColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            children: [
-              TextField(
-                controller: _termCtrl,
-                decoration: const InputDecoration(
-                  hintText: '단어',
-                  hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 200, 227, 255),
-                    fontSize: 15,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            isNew ? '용어 추가' : '용어 편집',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              onPressed: _save,
+              icon: const Icon(Icons.check),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _termCtrl,
+                  decoration: const InputDecoration(
+                    hintText: '단어',
+                    hintStyle: TextStyle(
+                      color: Color.fromARGB(255, 200, 227, 255),
+                      fontSize: 15,
+                    ),
+                    border: InputBorder.none,
                   ),
-                  border: InputBorder.none,
                 ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: TextField(
-                    controller: _descCtrl,
-                    maxLines: null,
-                    expands: true,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(
-                      hintText: '설명',
-                      hintStyle: TextStyle(
-                        color: Color.fromARGB(255, 157, 206, 255),
-                        fontSize: 14,
+                const SizedBox(height: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: TextField(
+                      controller: _descCtrl,
+                      maxLines: null,
+                      expands: true,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        hintText: '설명',
+                        hintStyle: TextStyle(
+                          color: Color.fromARGB(255, 157, 206, 255),
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1316,39 +1346,53 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.initialText.trim().isEmpty ? '새 메모' : '메모 편집',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: _save,
-            icon: const Icon(Icons.check),
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            overlayColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: TextField(
-            controller: _ctrl,
-            maxLines: null,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            decoration: const InputDecoration(
-              hintText: '메모를 입력하세요',
-              hintStyle: TextStyle(
-                color: Color.fromARGB(255, 178, 203, 230),
-                fontSize: 14,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            widget.initialText.trim().isEmpty ? '새 메모' : '메모 편집',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              onPressed: _save,
+              icon: const Icon(Icons.check),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: TextField(
+              controller: _ctrl,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText: '메모를 입력하세요',
+                hintStyle: TextStyle(
+                  color: Color.fromARGB(255, 178, 203, 230),
+                  fontSize: 14,
+                ),
+                border: InputBorder.none,
               ),
-              border: InputBorder.none,
             ),
           ),
         ),
@@ -1618,7 +1662,7 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
 
       if (!mounted) return;
       setState(() {
-        _characters = list;
+        _characters = List<Character>.of(list, growable: true);
         _loading = false;
       });
     } catch (_) {
@@ -1686,21 +1730,24 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     await _store.deleteByUid(c.id);
 
     if (!mounted) return;
+
+    final nextCharacters = _characters
+        .where((x) => x.id != c.id)
+        .toList(growable: true);
+
     setState(() {
-      _characters.removeWhere((x) => x.id == c.id);
+      _characters = nextCharacters;
     });
 
     unawaited(
       _store.persistOrderByKind(
         kind: c.kind,
-        uidsInOrder:
-            _characters
-                .where((x) => x.kind == c.kind)
-                .map((x) => x.id)
-                .toList(),
+        uidsInOrder: nextCharacters
+            .where((x) => x.kind == c.kind)
+            .map((x) => x.id)
+            .toList(growable: false),
       ),
     );
-
     _restoreTried = false;
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _attemptRestoreScroll(),
@@ -2081,6 +2128,14 @@ class _SupportingCharacterGrid extends StatelessWidget {
                       child: InkWell(
                         onTap: () => onDelete(c),
                         borderRadius: BorderRadius.circular(999),
+                        splashFactory: NoSplash.splashFactory,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        overlayColor: WidgetStateProperty.all(
+                          Colors.transparent,
+                        ),
                         child: const Padding(
                           padding: EdgeInsets.all(4),
                           child: Icon(
@@ -2314,6 +2369,14 @@ class _CharacterSheetCard extends StatelessWidget {
                       child: InkWell(
                         onTap: onDelete,
                         borderRadius: BorderRadius.circular(999),
+                        splashFactory: NoSplash.splashFactory,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        overlayColor: WidgetStateProperty.all(
+                          Colors.transparent,
+                        ),
                         child: const Padding(
                           padding: EdgeInsets.all(4),
                           child: Icon(

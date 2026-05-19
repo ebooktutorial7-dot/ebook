@@ -920,22 +920,31 @@ class _ChapterWritePageState extends State<ChapterWritePage>
             secondary: primaryColor,
           ),
 
+          splashFactory: NoSplash.splashFactory,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+
           tooltipTheme: const TooltipThemeData(
             preferBelow: true,
-            verticalOffset: 12,
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            margin: EdgeInsets.symmetric(horizontal: 12),
+            verticalOffset: 20,
+            padding: EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+            margin: EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: Color.fromARGB(213, 158, 217, 246),
+              color: Color(0xEEFFFFFF),
               borderRadius: BorderRadius.all(Radius.circular(999)),
+              border: Border.fromBorderSide(
+                BorderSide(color: Color(0xFFE6ECF3), width: 1),
+              ),
             ),
             textStyle: TextStyle(
-              color: Colors.white,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1.15,
+              color: Color(0xFF1F3A56),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 1.1,
             ),
-            waitDuration: Duration(milliseconds: 350),
+            waitDuration: Duration(milliseconds: 450),
             showDuration: Duration(milliseconds: 1200),
           ),
         ),
@@ -1891,10 +1900,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 45 : 0) +
+                                        (_chromeVisible ? 37 : 0) +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 64 : 0) +
+                                        (_chromeVisible ? 0 : 0) +
                                             _a4VerticalMargin,
                                       ),
                                       child: DefaultTextStyle.merge(
@@ -1997,10 +2006,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 45 : 0) +
+                                        (_chromeVisible ? 37 : 0) +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 64 : 0) +
+                                        (_chromeVisible ? 0 : 0) +
                                             _a4VerticalMargin,
                                       ),
                                       child: DefaultTextStyle.merge(
@@ -2080,10 +2089,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                 child: Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     settings.horizontalMargin,
-                                    (_chromeVisible ? 45 : 0) +
+                                    (_chromeVisible ? 37 : 0) +
                                         _a4VerticalMargin,
                                     settings.horizontalMargin,
-                                    (_chromeVisible ? 64 : 0) +
+                                    (_chromeVisible ? 0 : 0) +
                                         _a4VerticalMargin,
                                   ),
                                   child: DefaultTextStyle.merge(
@@ -2341,7 +2350,7 @@ class _PageJumpBarState extends State<_PageJumpBar> {
     const Color denom = Color(0xFFB0B0B0);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       decoration: BoxDecoration(color: widget.backgroundColor),
       child: SafeArea(
         top: false,
@@ -2349,7 +2358,7 @@ class _PageJumpBarState extends State<_PageJumpBar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: 30,
+              height: 27,
               child: LayoutBuilder(
                 builder: (context, row) {
                   final double sliderWidth = (row.maxWidth * 0.85) - 36.0;
@@ -2435,7 +2444,7 @@ class _PageJumpBarState extends State<_PageJumpBar> {
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87.withValues(alpha: 0.55),
-                height: 1.2,
+                height: 0.5,
               ),
             ),
           ],

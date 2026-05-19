@@ -1898,7 +1898,6 @@ class _PngPageState extends State<PngPage> {
               name: p.basename(file.path),
             ),
           ],
-          text: widget.title,
           sharePositionOrigin: shareOrigin,
         );
 
@@ -1953,11 +1952,7 @@ class _PngPageState extends State<PngPage> {
         return;
       }
 
-      await _shareXFiles(
-        files: files,
-        text: widget.title,
-        sharePositionOrigin: shareOrigin,
-      );
+      await _shareXFiles(files: files, sharePositionOrigin: shareOrigin);
 
       if (!mounted) return;
       AppToast.show(context, formatLabel);

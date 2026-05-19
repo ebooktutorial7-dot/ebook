@@ -168,10 +168,37 @@ class MiniFlatToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData noSplash = Theme.of(context).copyWith(
+      splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
       focusColor: Colors.transparent,
+      iconButtonTheme: const IconButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: WidgetStatePropertyAll<Color?>(Colors.transparent),
+        ),
+      ),
+      tooltipTheme: const TooltipThemeData(
+        preferBelow: true,
+        verticalOffset: 20,
+        padding: EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Color(0xEEFFFFFF),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
+          border: Border.fromBorderSide(
+            BorderSide(color: Color(0xFFE6ECF3), width: 1),
+          ),
+        ),
+        textStyle: TextStyle(
+          color: Color(0xFF1F3A56),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          height: 1.1,
+        ),
+        waitDuration: Duration(milliseconds: 450),
+        showDuration: Duration(milliseconds: 1200),
+      ),
       colorScheme: Theme.of(
         context,
       ).colorScheme.copyWith(primary: Colors.black),
@@ -192,7 +219,6 @@ class MiniFlatToolbar extends StatelessWidget {
             scheduleLayoutRefresh(onLayoutChanged);
           }
         },
-
         icon: IconTheme.merge(
           data: IconThemeData(size: 18, color: color),
           child: icon,
@@ -201,6 +227,8 @@ class MiniFlatToolbar extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         tooltip: tooltip,
       );
     }
