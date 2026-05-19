@@ -6397,6 +6397,10 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
   final _topKey = GlobalKey<_SplitChapterPaneState>();
   final _bottomKey = GlobalKey<_SplitChapterPaneState>();
 
+  String _chapterEditorStableKey(int chapterIndex) {
+    return 'doc_${widget.documentId}_chapter_$chapterIndex';
+  }
+
   Future<void> _openWorldSeat() async {
     await Navigator.of(context).push(
       CupertinoPageRoute(
@@ -6487,6 +6491,9 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   enableGlass: widget.enableGlass,
                   label: '위쪽',
                   onOpenWorldSeat: _openWorldSeat,
+                  persistentKey: _chapterEditorStableKey(
+                    widget.topChapter.index,
+                  ),
                 ),
               ),
               Container(height: 1, color: const Color(0xFFE3ECF5)),
@@ -6497,6 +6504,9 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   enableGlass: widget.enableGlass,
                   label: '아래쪽',
                   onOpenWorldSeat: _openWorldSeat,
+                  persistentKey: _chapterEditorStableKey(
+                    widget.bottomChapter.index,
+                  ),
                 ),
               ),
             ],
@@ -6743,6 +6753,7 @@ class _SplitChapterPane extends StatefulWidget {
   final bool enableGlass;
   final String label;
   final VoidCallback onOpenWorldSeat;
+  final String persistentKey;
 
   const _SplitChapterPane({
     super.key,
@@ -6750,6 +6761,7 @@ class _SplitChapterPane extends StatefulWidget {
     required this.enableGlass,
     required this.label,
     required this.onOpenWorldSeat,
+    required this.persistentKey,
   });
 
   @override
@@ -7299,11 +7311,315 @@ class _SplitSwipeToWorldState extends State<_SplitSwipeToWorld> {
   }
 }
 
+class _KeywordInputLine extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final List<String> keywords;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<String> onKeywordTap;
+
+  const _KeywordInputLine({
+    required this.controller,
+    required this.focusNode,
+    required this.keywords,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onKeywordTap,
+  });
+
+  @override
+  State<_KeywordInputLine> createState() => _KeywordInputLineState();
+}
+
+class _KeywordInputLineState extends State<_KeywordInputLine> {
+  bool _inputVisible = false;
+
+  void _toggleInput() {
+    final next = !_inputVisible;
+
+    setState(() {
+      _inputVisible = next;
+    });
+
+    if (next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.focusNode.requestFocus();
+      });
+    } else {
+      widget.focusNode.unfocus();
+    }
+  }
+
+  void _submitKeyword() {
+    widget.onAdd();
+
+    setState(() {
+      _inputVisible = false;
+    });
+
+    widget.focusNode.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            top: BorderSide(
+              color: Color.fromARGB(255, 148, 217, 255),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _toggleInput,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 22,
+                height: 32,
+                child: Center(
+                  child: Icon(
+                    Icons.add,
+                    size: 20,
+                    color:
+                        _inputVisible
+                            ? const Color.fromARGB(212, 0, 136, 255)
+                            : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+
+            if (_inputVisible) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 150,
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: widget.focusNode,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitKeyword(),
+                  maxLines: 1,
+                  textAlignVertical: TextAlignVertical.center,
+                  decoration: InputDecoration(
+                    hintText: '키워드 입력',
+                    hintStyle: const TextStyle(
+                      color: Color.fromARGB(221, 90, 114, 141),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: const Color(0xFFF6F8FB),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  style: const TextStyle(
+                    color: Color.fromARGB(221, 90, 114, 141),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(width: 6),
+
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    for (final keyword in widget.keywords) ...[
+                      _KeywordChip(
+                        label: keyword,
+                        onTap: () => widget.onKeywordTap(keyword),
+                        onRemove: () => widget.onRemove(keyword),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KeywordChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _KeywordChip({
+    required this.label,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.only(left: 10, right: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: const Color.fromARGB(255, 148, 217, 255),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onRemove,
+              behavior: HitTestBehavior.opaque,
+              child: const Icon(Icons.close, size: 14, color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SplitChapterPaneState extends State<_SplitChapterPane> {
   late final TextEditingController _titleCtrl;
   late final quill.QuillController _controller;
+
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollCtrl = ScrollController();
+
+  final TextEditingController _keywordCtrl = TextEditingController();
+  final FocusNode _keywordFocusNode = FocusNode();
+
+  bool _keywordLineVisible = false;
+  final List<String> _keywords = <String>[];
+
+  String get _prefsKeyKeywords =>
+      'chapter_write_keywords_${widget.persistentKey}';
+
+  void _toggleKeywordLine() {
+    final next = !_keywordLineVisible;
+
+    setState(() {
+      _keywordLineVisible = next;
+    });
+
+    if (next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _keywordFocusNode.requestFocus();
+      });
+    } else {
+      _keywordFocusNode.unfocus();
+    }
+  }
+
+  void _addKeyword() {
+    final keyword = _keywordCtrl.text.trim();
+    if (keyword.isEmpty) return;
+
+    final exists = _keywords.any(
+      (e) => e.trim().toLowerCase() == keyword.toLowerCase(),
+    );
+
+    if (exists) {
+      _keywordCtrl.clear();
+      AppToast.show(context, '이미 등록된 키워드입니다.');
+      return;
+    }
+
+    setState(() {
+      _keywords.add(keyword);
+      _keywordCtrl.clear();
+    });
+
+    unawaited(_persistKeywords());
+  }
+
+  void _removeKeyword(String keyword) {
+    setState(() {
+      _keywords.remove(keyword);
+    });
+
+    unawaited(_persistKeywords());
+  }
+
+  Future<void> _persistKeywords() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKeyKeywords, _keywords);
+  }
+
+  Future<void> _restoreKeywords() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_prefsKeyKeywords);
+
+    if (saved == null) return;
+    if (!mounted) return;
+
+    setState(() {
+      _keywords
+        ..clear()
+        ..addAll(saved.where((e) => e.trim().isNotEmpty));
+    });
+  }
+
+  void _insertKeywordAtCursor(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    final selection = _controller.selection;
+    final base = selection.baseOffset < 0 ? 0 : selection.baseOffset;
+    final extent = selection.extentOffset < 0 ? base : selection.extentOffset;
+
+    final start = math.min(base, extent);
+    final length = (extent - base).abs();
+
+    final insertText = selection.isCollapsed ? '$trimmed ' : trimmed;
+
+    _controller.replaceText(
+      start,
+      length,
+      insertText,
+      TextSelection.collapsed(offset: start + insertText.length),
+    );
+
+    _focusNode.requestFocus();
+  }
 
   @override
   void initState() {
@@ -7317,6 +7633,7 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
       ),
       selection: const TextSelection.collapsed(offset: 0),
     );
+    unawaited(_restoreKeywords());
   }
 
   @override
@@ -7325,6 +7642,8 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
     _controller.dispose();
     _focusNode.dispose();
     _scrollCtrl.dispose();
+    _keywordCtrl.dispose();
+    _keywordFocusNode.dispose();
     super.dispose();
   }
 
@@ -7341,7 +7660,13 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
       chapter: widget.chapter,
     );
 
-    return {'title': _titleCtrl.text.trim(), 'delta': persisted};
+    await _persistKeywords();
+
+    return {
+      'title': _titleCtrl.text.trim(),
+      'delta': persisted,
+      'keywords': List<String>.from(_keywords),
+    };
   }
 
   @override
@@ -7401,10 +7726,21 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
             controller: _controller,
             theme: glassTheme,
             onLayoutChanged: () => setState(() {}),
+            onKeywordTap: _toggleKeywordLine,
+            keywordActive: _keywordLineVisible,
             onMicTap: () {},
             isListening: false,
           ),
         ),
+        if (_keywordLineVisible)
+          _KeywordInputLine(
+            controller: _keywordCtrl,
+            focusNode: _keywordFocusNode,
+            keywords: _keywords,
+            onAdd: _addKeyword,
+            onRemove: _removeKeyword,
+            onKeywordTap: _insertKeywordAtCursor,
+          ),
         Expanded(
           child: Stack(
             children: [

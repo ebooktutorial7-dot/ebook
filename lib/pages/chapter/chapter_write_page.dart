@@ -155,6 +155,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   final _titleCtrl = TextEditingController();
   final _focusNode = FocusNode();
   final _scrollCtrl = ScrollController();
+  final _keywordCtrl = TextEditingController();
+  final _keywordFocusNode = FocusNode();
+
+  bool _keywordLineVisible = false;
+  final List<String> _keywords = <String>[];
 
   final stt.SpeechToText _speech = stt.SpeechToText();
 
@@ -185,6 +190,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   String? _lastDraftFingerprint;
 
   String get _baseKey => widget.persistentKey ?? 'chapter_${widget.documentId}';
+  String get _prefsKeyKeywords => 'chapter_write_keywords_$_baseKey';
   String get _prefsKeyScroll => 'chapter_write_scroll_$_baseKey';
   String get _prefsKeySelection => 'chapter_write_selection_$_baseKey';
   String get _prefsKeyFocus => 'chapter_write_focus_$_baseKey';
@@ -815,6 +821,72 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     AppToast.show(context, message);
   }
 
+  void _toggleKeywordLine() {
+    final next = !_keywordLineVisible;
+
+    setState(() {
+      _keywordLineVisible = next;
+    });
+
+    if (next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _keywordFocusNode.requestFocus();
+      });
+    } else {
+      _keywordFocusNode.unfocus();
+    }
+  }
+
+  void _addKeyword() {
+    final keyword = _keywordCtrl.text.trim();
+    if (keyword.isEmpty) return;
+
+    final exists = _keywords.any(
+      (e) => e.trim().toLowerCase() == keyword.toLowerCase(),
+    );
+
+    if (exists) {
+      _keywordCtrl.clear();
+      _showAppToast('이미 등록된 키워드입니다.');
+      return;
+    }
+
+    setState(() {
+      _keywords.add(keyword);
+      _keywordCtrl.clear();
+    });
+
+    unawaited(_persistKeywords());
+  }
+
+  void _removeKeyword(String keyword) {
+    setState(() {
+      _keywords.remove(keyword);
+    });
+
+    unawaited(_persistKeywords());
+  }
+
+  Future<void> _persistKeywords() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKeyKeywords, _keywords);
+  }
+
+  Future<void> _restoreKeywords() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_prefsKeyKeywords);
+
+    if (saved == null) return;
+    if (!mounted) return;
+
+    setState(() {
+      _keywords
+        ..clear()
+        ..addAll(saved.where((e) => e.trim().isNotEmpty));
+    });
+  }
+
   void _showErrorToast(String message) {
     _showAppToast(message);
   }
@@ -860,6 +932,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _scrollCtrl.addListener(_handleScroll);
     _focusNode.addListener(_onFocusChanged);
 
+    unawaited(_restoreKeywords());
     unawaited(_restoreDraftAndPosition());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1064,6 +1137,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     _titleCtrl.dispose();
     _focusNode.dispose();
     _scrollCtrl.dispose();
+    _keywordCtrl.dispose();
+    _keywordFocusNode.dispose();
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -1151,7 +1226,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     await _saveCalendarWritingLog();
     await _clearDraft();
 
-    final result = {'title': _titleCtrl.text.trim(), 'delta': normalized};
+    await _persistKeywords();
+
+    final result = {
+      'title': _titleCtrl.text.trim(),
+      'delta': normalized,
+      'keywords': List<String>.from(_keywords),
+    };
 
     if (!mounted) return;
     AppToast.hide();
@@ -1718,6 +1799,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
           final bool isKeyboardUp =
               MediaQuery.of(context).viewInsets.bottom > 0;
 
+          const double keywordLineHeight = 44.0;
+
+          final double editorTopChromeInset =
+              _chromeVisible
+                  ? 37.0 + (_keywordLineVisible ? keywordLineHeight : 0.0)
+                  : 0.0;
+
           return PopScope(
             canPop: false,
             onPopInvokedWithResult: (didPop, result) {
@@ -1900,7 +1988,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 37 : 0) +
+                                        editorTopChromeInset +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
                                         (_chromeVisible ? 0 : 0) +
@@ -2006,7 +2094,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                     child: Padding(
                                       padding: EdgeInsets.fromLTRB(
                                         settings.horizontalMargin,
-                                        (_chromeVisible ? 37 : 0) +
+                                        editorTopChromeInset +
                                             _a4VerticalMargin,
                                         settings.horizontalMargin,
                                         (_chromeVisible ? 0 : 0) +
@@ -2089,8 +2177,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                 child: Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     settings.horizontalMargin,
-                                    (_chromeVisible ? 37 : 0) +
-                                        _a4VerticalMargin,
+                                    editorTopChromeInset + _a4VerticalMargin,
                                     settings.horizontalMargin,
                                     (_chromeVisible ? 0 : 0) +
                                         _a4VerticalMargin,
@@ -2184,12 +2271,27 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                               });
                               _recomputePaginationFromStoredHeight();
                             },
+                            onKeywordTap: _toggleKeywordLine,
+                            keywordActive: _keywordLineVisible,
                             onMicTap: _toggleSpeechInput,
                             isListening: _isListening,
                           ),
                         ),
                       ),
-
+                    if (_chromeVisible && _keywordLineVisible)
+                      Positioned(
+                        top: 52,
+                        left: 0,
+                        right: 0,
+                        child: _KeywordInputLine(
+                          controller: _keywordCtrl,
+                          focusNode: _keywordFocusNode,
+                          keywords: _keywords,
+                          onAdd: _addKeyword,
+                          onRemove: _removeKeyword,
+                          onKeywordTap: _insertTextAtCursor,
+                        ),
+                      ),
                     if (_chromeVisible)
                       Positioned(
                         left: 0,
@@ -2240,6 +2342,211 @@ class _ChapterWritePageState extends State<ChapterWritePage>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _KeywordInputLine extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final List<String> keywords;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<String> onKeywordTap;
+
+  const _KeywordInputLine({
+    required this.controller,
+    required this.focusNode,
+    required this.keywords,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onKeywordTap,
+  });
+
+  @override
+  State<_KeywordInputLine> createState() => _KeywordInputLineState();
+}
+
+class _KeywordInputLineState extends State<_KeywordInputLine> {
+  bool _inputVisible = false;
+
+  void _toggleInput() {
+    final next = !_inputVisible;
+
+    setState(() {
+      _inputVisible = next;
+    });
+
+    if (next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.focusNode.requestFocus();
+      });
+    } else {
+      widget.focusNode.unfocus();
+    }
+  }
+
+  void _submitKeyword() {
+    widget.onAdd();
+
+    setState(() {
+      _inputVisible = false;
+    });
+
+    widget.focusNode.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            top: BorderSide(
+              color: Color.fromARGB(255, 148, 217, 255),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _toggleInput,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 22,
+                height: 32,
+                child: Center(
+                  child: Icon(
+                    Icons.add,
+                    size: 20,
+                    color:
+                        _inputVisible
+                            ? const Color.fromARGB(212, 0, 136, 255)
+                            : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+
+            if (_inputVisible) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 150,
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: widget.focusNode,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitKeyword(),
+                  maxLines: 1,
+                  textAlignVertical: TextAlignVertical.center,
+                  decoration: InputDecoration(
+                    hintText: '키워드 입력',
+                    hintStyle: const TextStyle(
+                      color: Color.fromARGB(221, 90, 114, 141),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: const Color(0xFFF6F8FB),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  style: const TextStyle(
+                    color: Color.fromARGB(221, 90, 114, 141),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(width: 6),
+
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    for (final keyword in widget.keywords) ...[
+                      _KeywordChip(
+                        label: keyword,
+                        onTap: () => widget.onKeywordTap(keyword),
+                        onRemove: () => widget.onRemove(keyword),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KeywordChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _KeywordChip({
+    required this.label,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.only(left: 10, right: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: const Color.fromARGB(255, 148, 217, 255),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onRemove,
+              behavior: HitTestBehavior.opaque,
+              child: const Icon(Icons.close, size: 14, color: Colors.black54),
+            ),
+          ],
+        ),
       ),
     );
   }

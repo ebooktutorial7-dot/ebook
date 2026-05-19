@@ -154,6 +154,8 @@ class MiniFlatToolbar extends StatelessWidget {
   final GlassTheme theme;
   final VoidCallback? onLayoutChanged;
   final VoidCallback? onMicTap;
+  final VoidCallback? onKeywordTap;
+  final bool keywordActive;
   final bool isListening;
 
   const MiniFlatToolbar({
@@ -162,6 +164,8 @@ class MiniFlatToolbar extends StatelessWidget {
     required this.theme,
     this.onLayoutChanged,
     this.onMicTap,
+    this.onKeywordTap,
+    this.keywordActive = false,
     this.isListening = false,
   });
 
@@ -242,6 +246,32 @@ class MiniFlatToolbar extends StatelessWidget {
           physics: const BouncingScrollPhysics(),
           child: Row(
             children: [
+              if (onKeywordTap != null) ...[
+                IconButton(
+                  tooltip: keywordActive ? '키워드 숨기기' : '키워드 열기',
+                  onPressed: onKeywordTap,
+                  icon: Icon(
+                    keywordActive ? Icons.label : Icons.label_outline,
+                    size: 18,
+                    weight: 100,
+                    color:
+                        keywordActive
+                            ? const ui.Color.fromARGB(210, 148, 205, 255)
+                            : Colors.black87,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                ),
+                const SizedBox(width: 7),
+              ],
               if (onMicTap != null) ...[
                 IconButton(
                   tooltip: isListening ? '음성 입력 중지' : '음성 입력',
@@ -263,7 +293,6 @@ class MiniFlatToolbar extends StatelessWidget {
                   highlightColor: Colors.transparent,
                 ),
                 const SizedBox(width: 7),
-
                 IconButton(
                   tooltip: '실행 취소',
                   onPressed:
