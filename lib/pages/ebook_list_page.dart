@@ -449,6 +449,10 @@ class _EbookListPageState extends State<EbookListPage>
 
   static const String _mainSquareTitlePrefsKey = 'main_square_card_title';
   static const String _mainSquareSubtitlePrefsKey = 'main_square_card_subtitle';
+  static const String _mainSquareTitleFontSizePrefsKey =
+      'main_square_card_title_font_size';
+  static const String _mainSquareSubtitleFontSizePrefsKey =
+      'main_square_card_subtitle_font_size';
   static const String _mainSquareStylePrefsKey = 'main_square_card_style';
   static const String _mainSquareCardRatioPrefsKey = 'main_square_card_ratio';
   static const String _mainSquareIconPrefsKey = 'main_square_card_icon';
@@ -458,8 +462,6 @@ class _EbookListPageState extends State<EbookListPage>
       'main_square_card_icon_size';
   static const String _mainSquareIconThinnessPrefsKey =
       'main_square_card_icon_thinness';
-  static const String _mainSquareIconColorPrefsKey =
-      'main_square_card_icon_color';
   static const String _mainSquareTextColorPrefsKey =
       'main_square_card_text_color';
   static const String _mainSquareBorderPrefsKey = 'main_square_card_border';
@@ -484,13 +486,14 @@ class _EbookListPageState extends State<EbookListPage>
 
   String _mainSquareTitle = '새 작품 만들기';
   String _mainSquareSubtitle = '';
+  double _mainSquareTitleFontSize = 16;
+  double _mainSquareSubtitleFontSize = 12;
   String _mainSquareStyleId = 'white';
   String _mainSquareCardRatioId = 'square';
   String _mainSquareIconId = 'add';
   bool _mainSquareShowIcon = true;
   double _mainSquareIconSize = 36;
   double _mainSquareIconThinness = 50;
-  String _mainSquareIconColorId = 'style';
   String _mainSquareTextColorId = 'style';
   String _mainSquareBorderId = 'thin';
   String _mainSquareBackgroundImagePath = '';
@@ -548,115 +551,68 @@ class _EbookListPageState extends State<EbookListPage>
     ),
     _MainSquareStyleOption(
       id: 'sky',
-      label: '하늘 그라데이션',
+      label: '맑은 하늘',
       backgroundColor: Color(0xFFEAF7FF),
-      gradientColors: [Color(0xFFF8FDFF), Color(0xFFDFF3FF)],
-      borderColor: Color(0xFFA9D8F5),
-      iconColor: Color(0xFF4E94C5),
+      gradientColors: [Color(0xFFFFFFFF), Color(0xFFEAF7FF), Color(0xFFDFF3FF)],
+      borderColor: Color(0xFFB9DDF4),
+      iconColor: Color(0xFF5A9FD0),
       titleColor: Color(0xFF18334A),
       subtitleColor: Color(0xFF5F8CA8),
     ),
     _MainSquareStyleOption(
       id: 'pink',
-      label: '벚꽃 그라데이션',
-      backgroundColor: Color(0xFFFFF0F6),
-      gradientColors: [Color(0xFFFFFAFC), Color(0xFFFFE3EF)],
-      borderColor: Color(0xFFFFB8D1),
-      iconColor: Color(0xFFD95F8D),
+      label: '소프트 핑크',
+      backgroundColor: Color(0xFFFFF4FA),
+      gradientColors: [Color(0xFFFFFFFF), Color(0xFFFFF1F8), Color(0xFFFFE2EF)],
+      borderColor: Color(0xFFFFC4DA),
+      iconColor: Color(0xFFE579A3),
       titleColor: Color(0xFF4A1D2E),
-      subtitleColor: Color(0xFFB35B7A),
+      subtitleColor: Color(0xFFB96B8B),
     ),
     _MainSquareStyleOption(
       id: 'lavender',
-      label: '라벤더 그라데이션',
-      backgroundColor: Color(0xFFF4F0FF),
-      gradientColors: [Color(0xFFFBF9FF), Color(0xFFEAE2FF)],
-      borderColor: Color(0xFFCDBEFF),
-      iconColor: Color(0xFF7B67C8),
+      label: '라이트 라벤더',
+      backgroundColor: Color(0xFFF6F2FF),
+      gradientColors: [Color(0xFFFFFFFF), Color(0xFFF5F0FF), Color(0xFFECE4FF)],
+      borderColor: Color(0xFFD4C6FF),
+      iconColor: Color(0xFF8A75D6),
       titleColor: Color(0xFF2D254A),
-      subtitleColor: Color(0xFF7669A8),
+      subtitleColor: Color(0xFF7D70AC),
     ),
     _MainSquareStyleOption(
       id: 'cream',
-      label: '크림 그라데이션',
-      backgroundColor: Color(0xFFFFF8E8),
-      gradientColors: [Color(0xFFFFFCF2), Color(0xFFFFEFC5)],
-      borderColor: Color(0xFFEED79C),
-      iconColor: Color(0xFFB48A35),
+      label: '바닐라 크림',
+      backgroundColor: Color(0xFFFFFAEC),
+      gradientColors: [Color(0xFFFFFFFF), Color(0xFFFFF8E8), Color(0xFFFFEFCB)],
+      borderColor: Color(0xFFEFDCA8),
+      iconColor: Color(0xFFB99244),
       titleColor: Color(0xFF3F321A),
       subtitleColor: Color(0xFF967A42),
     ),
     _MainSquareStyleOption(
       id: 'mint',
-      label: '민트 그라데이션',
-      backgroundColor: Color(0xFFEFFFF8),
-      gradientColors: [Color(0xFFF8FFFC), Color(0xFFDDF8EE)],
-      borderColor: Color(0xFFA9E6D0),
-      iconColor: Color(0xFF3B9D7A),
+      label: '클리어 민트',
+      backgroundColor: Color(0xFFF0FFF9),
+      gradientColors: [Color(0xFFFFFFFF), Color(0xFFEFFFF8), Color(0xFFDDF8EE)],
+      borderColor: Color(0xFFAEE8D4),
+      iconColor: Color(0xFF4BAA86),
       titleColor: Color(0xFF17392F),
       subtitleColor: Color(0xFF5B987F),
     ),
     _MainSquareStyleOption(
       id: 'aurora_gradient',
-      label: '오로라',
-      backgroundColor: Color(0xFFF3FAFF),
-      gradientColors: [Color(0xFFEAF7FF), Color(0xFFF2E9FF), Color(0xFFEFFFF8)],
-      borderColor: Color(0xFFBED6F6),
-      iconColor: Color(0xFF5D86C8),
+      label: '밝은 오로라',
+      backgroundColor: Color(0xFFF6FBFF),
+      gradientColors: [
+        Color(0xFFFFFFFF),
+        Color(0xFFEAF7FF),
+        Color(0xFFF4ECFF),
+        Color(0xFFEFFFF8),
+      ],
+      borderColor: Color(0xFFCFE0FA),
+      iconColor: Color(0xFF6D8ED8),
       titleColor: Color(0xFF263653),
       subtitleColor: Color(0xFF6F7FA4),
-    ),
-    _MainSquareStyleOption(
-      id: 'glass_sky',
-      label: '유리 하늘',
-      backgroundColor: Color.fromARGB(116, 245, 252, 255),
-      gradientColors: [
-        Color.fromARGB(170, 255, 255, 255),
-        Color.fromARGB(105, 199, 234, 255),
-      ],
-      borderColor: Color.fromARGB(170, 153, 205, 240),
-      iconColor: Color(0xFF4E94C5),
-      titleColor: Color(0xFF18334A),
-      subtitleColor: Color(0xFF5F8CA8),
-      glassEffect: true,
-    ),
-    _MainSquareStyleOption(
-      id: 'glass_pink',
-      label: '유리 핑크',
-      backgroundColor: Color.fromARGB(116, 255, 248, 251),
-      gradientColors: [
-        Color.fromARGB(175, 255, 255, 255),
-        Color.fromARGB(100, 255, 207, 226),
-      ],
-      borderColor: Color.fromARGB(165, 255, 184, 209),
-      iconColor: Color(0xFFD95F8D),
-      titleColor: Color(0xFF4A1D2E),
-      subtitleColor: Color(0xFFB35B7A),
-      glassEffect: true,
-    ),
-    _MainSquareStyleOption(
-      id: 'translucent_white',
-      label: '반투명 화이트',
-      backgroundColor: Color.fromARGB(150, 255, 255, 255),
-      borderColor: Color.fromARGB(155, 170, 214, 244),
-      iconColor: Color.fromARGB(221, 83, 129, 159),
-      titleColor: Color.fromARGB(221, 12, 24, 46),
-      subtitleColor: Color.fromARGB(221, 83, 129, 159),
-      translucentEffect: true,
-    ),
-    _MainSquareStyleOption(
-      id: 'translucent_blue',
-      label: '반투명 블루',
-      backgroundColor: Color.fromARGB(120, 226, 245, 255),
-      gradientColors: [
-        Color.fromARGB(145, 255, 255, 255),
-        Color.fromARGB(95, 181, 226, 255),
-      ],
-      borderColor: Color.fromARGB(150, 137, 199, 238),
-      iconColor: Color(0xFF4E94C5),
-      titleColor: Color(0xFF18334A),
-      subtitleColor: Color(0xFF5F8CA8),
-      translucentEffect: true,
     ),
   ];
 
@@ -677,45 +633,8 @@ class _EbookListPageState extends State<EbookListPage>
     ),
   ];
 
-  static const List<_MainSquareIconColorOption> _mainSquareIconColors = [
-    _MainSquareIconColorOption(id: 'style', label: '기본'),
-    _MainSquareIconColorOption(
-      id: 'blue',
-      label: '블루',
-      color: Color.fromARGB(221, 83, 129, 159),
-    ),
-    _MainSquareIconColorOption(id: 'black', label: '블랙', color: Colors.black87),
-    _MainSquareIconColorOption(id: 'white', label: '화이트', color: Colors.white),
-    _MainSquareIconColorOption(
-      id: 'pink',
-      label: '핑크',
-      color: Color(0xFFD95F8D),
-    ),
-    _MainSquareIconColorOption(
-      id: 'lavender',
-      label: '라벤더',
-      color: Color(0xFF7B67C8),
-    ),
-    _MainSquareIconColorOption(
-      id: 'mint',
-      label: '민트',
-      color: Color(0xFF3B9D7A),
-    ),
-    _MainSquareIconColorOption(
-      id: 'gold',
-      label: '골드',
-      color: Color(0xFFB48A35),
-    ),
-  ];
-
   static const List<_MainSquareTextColorOption> _mainSquareTextColors = [
     _MainSquareTextColorOption(id: 'style', label: '기본'),
-    _MainSquareTextColorOption(
-      id: 'navy',
-      label: '네이비',
-      titleColor: Color(0xFF102235),
-      subtitleColor: Color(0xFF335E7E),
-    ),
     _MainSquareTextColorOption(
       id: 'black',
       label: '블랙',
@@ -737,26 +656,26 @@ class _EbookListPageState extends State<EbookListPage>
     _MainSquareTextColorOption(
       id: 'pink',
       label: '핑크',
-      titleColor: Color(0xFFD95F8D),
-      subtitleColor: Color(0xFFB35B7A),
+      titleColor: Color.fromARGB(255, 255, 157, 194),
+      subtitleColor: Color.fromARGB(255, 255, 153, 189),
     ),
     _MainSquareTextColorOption(
       id: 'lavender',
       label: '라벤더',
-      titleColor: Color(0xFF7B67C8),
-      subtitleColor: Color(0xFF7669A8),
+      titleColor: Color.fromARGB(255, 206, 171, 255),
+      subtitleColor: Color.fromARGB(255, 157, 136, 239),
     ),
     _MainSquareTextColorOption(
       id: 'mint',
       label: '민트',
-      titleColor: Color(0xFF3B9D7A),
-      subtitleColor: Color(0xFF5B987F),
+      titleColor: Color.fromARGB(255, 164, 255, 246),
+      subtitleColor: Color.fromARGB(255, 147, 255, 244),
     ),
     _MainSquareTextColorOption(
       id: 'gold',
       label: '골드',
-      titleColor: Color(0xFFB48A35),
-      subtitleColor: Color(0xFF967A42),
+      titleColor: Color.fromARGB(255, 227, 190, 117),
+      subtitleColor: Color.fromARGB(255, 195, 166, 110),
     ),
   ];
 
@@ -873,12 +792,6 @@ class _EbookListPageState extends State<EbookListPage>
     (e) => e.id == _mainSquareIconId,
     orElse: () => _mainSquareIcons.first,
   );
-
-  _MainSquareIconColorOption get _mainSquareIconColor =>
-      _mainSquareIconColors.firstWhere(
-        (e) => e.id == _mainSquareIconColorId,
-        orElse: () => _mainSquareIconColors.first,
-      );
 
   _MainSquareTextColorOption get _mainSquareTextColor =>
       _mainSquareTextColors.firstWhere(
@@ -1362,6 +1275,8 @@ class _EbookListPageState extends State<EbookListPage>
                                 showIcon: _mainSquareShowIcon,
                                 iconSize: _mainSquareIconSize,
                                 iconThinness: _mainSquareIconThinness,
+                                titleFontSize: _mainSquareTitleFontSize,
+                                subtitleFontSize: _mainSquareSubtitleFontSize,
                                 backgroundColor:
                                     _mainSquareStyle.backgroundColor,
                                 backgroundGradient: _mainSquareStyle.gradient,
@@ -1388,9 +1303,8 @@ class _EbookListPageState extends State<EbookListPage>
                                 ),
                                 borderWidth: _mainSquareBorder.borderWidth,
                                 borderStyle: _mainSquareBorder.cardBorderStyle,
-                                iconColor: _mainSquareIconColor.resolveColor(
-                                  _mainSquareStyle,
-                                ),
+                                iconColor: _mainSquareTextColor
+                                    .resolveTitleColor(_mainSquareStyle),
                                 titleColor: _mainSquareTextColor
                                     .resolveTitleColor(_mainSquareStyle),
                                 subtitleColor: _mainSquareTextColor
@@ -1653,13 +1567,18 @@ class _EbookListPageState extends State<EbookListPage>
 
     final savedTitle = prefs.getString(_mainSquareTitlePrefsKey)?.trim();
     final savedSubtitle = prefs.getString(_mainSquareSubtitlePrefsKey)?.trim();
+    final savedTitleFontSize = prefs.getDouble(
+      _mainSquareTitleFontSizePrefsKey,
+    );
+    final savedSubtitleFontSize = prefs.getDouble(
+      _mainSquareSubtitleFontSizePrefsKey,
+    );
     final savedStyle = prefs.getString(_mainSquareStylePrefsKey);
     final savedCardRatio = prefs.getString(_mainSquareCardRatioPrefsKey);
     final savedIcon = prefs.getString(_mainSquareIconPrefsKey);
     final savedShowIcon = prefs.getBool(_mainSquareShowIconPrefsKey);
     final savedIconSize = prefs.getDouble(_mainSquareIconSizePrefsKey);
     final savedIconThinness = prefs.getDouble(_mainSquareIconThinnessPrefsKey);
-    final savedIconColor = prefs.getString(_mainSquareIconColorPrefsKey);
     final savedTextColor = prefs.getString(_mainSquareTextColorPrefsKey);
     final savedBorder = prefs.getString(_mainSquareBorderPrefsKey);
     final savedBackgroundImage =
@@ -1704,6 +1623,16 @@ class _EbookListPageState extends State<EbookListPage>
 
       _mainSquareSubtitle = savedSubtitle ?? _mainSquareSubtitle;
 
+      if (savedTitleFontSize != null) {
+        _mainSquareTitleFontSize =
+            savedTitleFontSize.clamp(10.0, 28.0).toDouble();
+      }
+
+      if (savedSubtitleFontSize != null) {
+        _mainSquareSubtitleFontSize =
+            savedSubtitleFontSize.clamp(8.0, 22.0).toDouble();
+      }
+
       if (_mainSquareStyles.any((e) => e.id == savedStyle)) {
         _mainSquareStyleId = savedStyle!;
       }
@@ -1725,10 +1654,6 @@ class _EbookListPageState extends State<EbookListPage>
       if (savedIconThinness != null) {
         _mainSquareIconThinness =
             savedIconThinness.clamp(0.0, 100.0).toDouble();
-      }
-
-      if (_mainSquareIconColors.any((e) => e.id == savedIconColor)) {
-        _mainSquareIconColorId = savedIconColor!;
       }
 
       if (_mainSquareTextColors.any((e) => e.id == savedTextColor)) {
@@ -1788,6 +1713,14 @@ class _EbookListPageState extends State<EbookListPage>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_mainSquareTitlePrefsKey, title);
     await prefs.setString(_mainSquareSubtitlePrefsKey, subtitle);
+    await prefs.setDouble(
+      _mainSquareTitleFontSizePrefsKey,
+      settings.titleFontSize.clamp(10.0, 28.0).toDouble(),
+    );
+    await prefs.setDouble(
+      _mainSquareSubtitleFontSizePrefsKey,
+      settings.subtitleFontSize.clamp(8.0, 22.0).toDouble(),
+    );
     await prefs.setString(_mainSquareStylePrefsKey, settings.styleId);
     await prefs.setString(_mainSquareCardRatioPrefsKey, settings.cardRatioId);
     await prefs.setString(_mainSquareIconPrefsKey, settings.iconId);
@@ -1800,7 +1733,6 @@ class _EbookListPageState extends State<EbookListPage>
       _mainSquareIconThinnessPrefsKey,
       settings.iconThinness.clamp(0.0, 100.0).toDouble(),
     );
-    await prefs.setString(_mainSquareIconColorPrefsKey, settings.iconColorId);
     await prefs.setString(_mainSquareTextColorPrefsKey, settings.textColorId);
     await prefs.setString(_mainSquareBorderPrefsKey, settings.borderId);
     await prefs.setString(
@@ -1845,6 +1777,10 @@ class _EbookListPageState extends State<EbookListPage>
     setState(() {
       _mainSquareTitle = title;
       _mainSquareSubtitle = subtitle;
+      _mainSquareTitleFontSize =
+          settings.titleFontSize.clamp(10.0, 28.0).toDouble();
+      _mainSquareSubtitleFontSize =
+          settings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
       _mainSquareStyleId = settings.styleId;
       _mainSquareCardRatioId = settings.cardRatioId;
       _mainSquareIconId = settings.iconId;
@@ -1852,7 +1788,6 @@ class _EbookListPageState extends State<EbookListPage>
       _mainSquareIconSize = settings.iconSize.clamp(20.0, 72.0).toDouble();
       _mainSquareIconThinness =
           settings.iconThinness.clamp(0.0, 100.0).toDouble();
-      _mainSquareIconColorId = settings.iconColorId;
       _mainSquareTextColorId = settings.textColorId;
       _mainSquareBorderId = settings.borderId;
       _mainSquareBackgroundImagePath = resolvedBackgroundImage;
@@ -1879,25 +1814,26 @@ class _EbookListPageState extends State<EbookListPage>
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
       builder: (_) {
         return _MainSquareCustomizeSheet(
           styles: _mainSquareStyles,
           cardRatios: _mainSquareCardRatios,
           icons: _mainSquareIcons,
-          iconColors: _mainSquareIconColors,
           textColors: _mainSquareTextColors,
           borders: _mainSquareBorders,
           contentPositions: _mainSquareContentPositions,
           initialSettings: _MainSquareCardSettings(
             title: _mainSquareTitle,
             subtitle: _mainSquareSubtitle,
+            titleFontSize: _mainSquareTitleFontSize,
+            subtitleFontSize: _mainSquareSubtitleFontSize,
             styleId: _mainSquareStyleId,
             cardRatioId: _mainSquareCardRatioId,
             iconId: _mainSquareIconId,
             showIcon: _mainSquareShowIcon,
             iconSize: _mainSquareIconSize,
             iconThinness: _mainSquareIconThinness,
-            iconColorId: _mainSquareIconColorId,
             textColorId: _mainSquareTextColorId,
             borderId: _mainSquareBorderId,
             backgroundImagePath: _mainSquareBackgroundImagePath,
@@ -2304,13 +2240,14 @@ class _CalendarOnlyPreviewData {
 class _MainSquareCardSettings {
   final String title;
   final String subtitle;
+  final double titleFontSize;
+  final double subtitleFontSize;
   final String styleId;
   final String cardRatioId;
   final String iconId;
   final bool showIcon;
   final double iconSize;
   final double iconThinness;
-  final String iconColorId;
   final String textColorId;
   final String borderId;
   final String backgroundImagePath;
@@ -2326,13 +2263,14 @@ class _MainSquareCardSettings {
   const _MainSquareCardSettings({
     required this.title,
     required this.subtitle,
+    required this.titleFontSize,
+    required this.subtitleFontSize,
     required this.styleId,
     required this.cardRatioId,
     required this.iconId,
     required this.showIcon,
     required this.iconSize,
     required this.iconThinness,
-    required this.iconColorId,
     required this.textColorId,
     required this.borderId,
     required this.backgroundImagePath,
@@ -2349,13 +2287,14 @@ class _MainSquareCardSettings {
   _MainSquareCardSettings copyWith({
     String? title,
     String? subtitle,
+    double? titleFontSize,
+    double? subtitleFontSize,
     String? styleId,
     String? cardRatioId,
     String? iconId,
     bool? showIcon,
     double? iconSize,
     double? iconThinness,
-    String? iconColorId,
     String? textColorId,
     String? borderId,
     String? backgroundImagePath,
@@ -2371,13 +2310,14 @@ class _MainSquareCardSettings {
     return _MainSquareCardSettings(
       title: title ?? this.title,
       subtitle: subtitle ?? this.subtitle,
+      titleFontSize: titleFontSize ?? this.titleFontSize,
+      subtitleFontSize: subtitleFontSize ?? this.subtitleFontSize,
       styleId: styleId ?? this.styleId,
       cardRatioId: cardRatioId ?? this.cardRatioId,
       iconId: iconId ?? this.iconId,
       showIcon: showIcon ?? this.showIcon,
       iconSize: iconSize ?? this.iconSize,
       iconThinness: iconThinness ?? this.iconThinness,
-      iconColorId: iconColorId ?? this.iconColorId,
       textColorId: textColorId ?? this.textColorId,
       borderId: borderId ?? this.borderId,
       backgroundImagePath: backgroundImagePath ?? this.backgroundImagePath,
@@ -2400,13 +2340,14 @@ class _MainSquareCardSettings {
     return {
       'title': title,
       'subtitle': subtitle,
+      'titleFontSize': titleFontSize,
+      'subtitleFontSize': subtitleFontSize,
       'styleId': styleId,
       'cardRatioId': cardRatioId,
       'iconId': iconId,
       'showIcon': showIcon,
       'iconSize': iconSize,
       'iconThinness': iconThinness,
-      'iconColorId': iconColorId,
       'textColorId': textColorId,
       'borderId': borderId,
       'backgroundImagePath': backgroundImagePath,
@@ -2425,6 +2366,14 @@ class _MainSquareCardSettings {
     return _MainSquareCardSettings(
       title: (map['title'] as String?) ?? '새 작품 만들기',
       subtitle: (map['subtitle'] as String?) ?? '',
+      titleFontSize:
+          ((map['titleFontSize'] as num?)?.toDouble() ?? 16)
+              .clamp(10.0, 28.0)
+              .toDouble(),
+      subtitleFontSize:
+          ((map['subtitleFontSize'] as num?)?.toDouble() ?? 12)
+              .clamp(8.0, 22.0)
+              .toDouble(),
       styleId: (map['styleId'] as String?) ?? 'white',
       cardRatioId: (map['cardRatioId'] as String?) ?? 'square',
       iconId: (map['iconId'] as String?) ?? 'add',
@@ -2437,7 +2386,6 @@ class _MainSquareCardSettings {
           ((map['iconThinness'] as num?)?.toDouble() ?? 50)
               .clamp(0.0, 100.0)
               .toDouble(),
-      iconColorId: (map['iconColorId'] as String?) ?? 'style',
       textColorId: (map['textColorId'] as String?) ?? 'style',
       borderId: (map['borderId'] as String?) ?? 'thin',
       backgroundImagePath: (map['backgroundImagePath'] as String?) ?? '',
@@ -2515,8 +2463,6 @@ class _MainSquareStyleOption {
   final String label;
   final Color backgroundColor;
   final List<Color>? gradientColors;
-  final bool glassEffect;
-  final bool translucentEffect;
   final Color borderColor;
   final Color iconColor;
   final Color titleColor;
@@ -2527,13 +2473,14 @@ class _MainSquareStyleOption {
     required this.label,
     required this.backgroundColor,
     this.gradientColors,
-    this.glassEffect = false,
-    this.translucentEffect = false,
     required this.borderColor,
     required this.iconColor,
     required this.titleColor,
     required this.subtitleColor,
   });
+
+  bool get glassEffect => false;
+  bool get translucentEffect => false;
 
   LinearGradient? get gradient {
     final colors = gradientColors;
@@ -2557,22 +2504,6 @@ class _MainSquareIconOption {
     required this.label,
     required this.icon,
   });
-}
-
-class _MainSquareIconColorOption {
-  final String id;
-  final String label;
-  final Color? color;
-
-  const _MainSquareIconColorOption({
-    required this.id,
-    required this.label,
-    this.color,
-  });
-
-  Color resolveColor(_MainSquareStyleOption style) {
-    return color ?? style.iconColor;
-  }
 }
 
 class _MainSquareTextColorOption {
@@ -2636,7 +2567,6 @@ class _MainSquareCustomizeSheet extends StatefulWidget {
     required this.styles,
     required this.cardRatios,
     required this.icons,
-    required this.iconColors,
     required this.textColors,
     required this.borders,
     required this.contentPositions,
@@ -2647,7 +2577,6 @@ class _MainSquareCustomizeSheet extends StatefulWidget {
   final List<_MainSquareStyleOption> styles;
   final List<_MainSquareCardRatioOption> cardRatios;
   final List<_MainSquareIconOption> icons;
-  final List<_MainSquareIconColorOption> iconColors;
   final List<_MainSquareTextColorOption> textColors;
   final List<_MainSquareBorderOption> borders;
   final List<_MainSquareContentPositionOption> contentPositions;
@@ -2662,13 +2591,16 @@ class _MainSquareCustomizeSheet extends StatefulWidget {
 class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _subtitleController;
+
+  late double _titleFontSize;
+  late double _subtitleFontSize;
+
   late String _styleId;
   late String _cardRatioId;
   late String _iconId;
   late bool _showIcon;
   late double _iconSize;
   late double _iconThinness;
-  late String _iconColorId;
   late String _textColorId;
   late String _borderId;
   late String _backgroundImagePath;
@@ -2681,11 +2613,19 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
   late String _iconPositionId;
   late bool _useLightContentOnImage;
   late bool _threeDGlassMode;
+
   List<_MainSquareCardPreset> _savedPresets = const [];
   bool _saving = false;
 
   static const String _mainSquareSavedPresetsPrefsKey =
       'main_square_card_saved_presets';
+
+  static const Color _ink = Color(0xFF102235);
+  static const Color _subInk = Color(0xFF5F7D9B);
+  static const Color _muted = Color(0xFF8AA0B6);
+  static const Color _blue = Color(0xFF77BCEB);
+  static const Color _blueDark = Color(0xFF4E94C5);
+  static const Color _danger = Color(0xFFE15F7A);
 
   _MainSquareStyleOption get _selectedStyle => widget.styles.firstWhere(
     (e) => e.id == _styleId,
@@ -2702,12 +2642,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     (e) => e.id == _iconId,
     orElse: () => widget.icons.first,
   );
-
-  _MainSquareIconColorOption get _selectedIconColor =>
-      widget.iconColors.firstWhere(
-        (e) => e.id == _iconColorId,
-        orElse: () => widget.iconColors.first,
-      );
 
   _MainSquareTextColorOption get _selectedTextColor =>
       widget.textColors.firstWhere(
@@ -2740,12 +2674,19 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
   @override
   void initState() {
     super.initState();
+
     _titleController = TextEditingController(
       text: widget.initialSettings.title,
     );
     _subtitleController = TextEditingController(
       text: widget.initialSettings.subtitle,
     );
+
+    _titleFontSize =
+        widget.initialSettings.titleFontSize.clamp(10.0, 28.0).toDouble();
+    _subtitleFontSize =
+        widget.initialSettings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
+
     _styleId = widget.initialSettings.styleId;
     _cardRatioId = widget.initialSettings.cardRatioId;
     _iconId = widget.initialSettings.iconId;
@@ -2753,7 +2694,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     _iconSize = widget.initialSettings.iconSize.clamp(20.0, 72.0).toDouble();
     _iconThinness =
         widget.initialSettings.iconThinness.clamp(0.0, 100.0).toDouble();
-    _iconColorId = widget.initialSettings.iconColorId;
     _textColorId = widget.initialSettings.textColorId;
     _borderId = widget.initialSettings.borderId;
     _backgroundImagePath = widget.initialSettings.backgroundImagePath;
@@ -2775,6 +2715,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     _iconPositionId = widget.initialSettings.iconPositionId;
     _useLightContentOnImage = widget.initialSettings.useLightContentOnImage;
     _threeDGlassMode = widget.initialSettings.threeDGlassMode;
+
     _loadSavedPresets();
   }
 
@@ -2789,13 +2730,14 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     return _MainSquareCardSettings(
       title: _titleController.text,
       subtitle: _subtitleController.text,
+      titleFontSize: _titleFontSize,
+      subtitleFontSize: _subtitleFontSize,
       styleId: _styleId,
       cardRatioId: _cardRatioId,
       iconId: _iconId,
       showIcon: _showIcon,
       iconSize: _iconSize,
       iconThinness: _iconThinness,
-      iconColorId: _iconColorId,
       textColorId: _textColorId,
       borderId: _borderId,
       backgroundImagePath: _backgroundImagePath,
@@ -2820,13 +2762,14 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     setState(() {
       _titleController.text = settings.title;
       _subtitleController.text = settings.subtitle;
+      _titleFontSize = settings.titleFontSize.clamp(10.0, 28.0).toDouble();
+      _subtitleFontSize = settings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
       _styleId = settings.styleId;
       _cardRatioId = settings.cardRatioId;
       _iconId = settings.iconId;
       _showIcon = settings.showIcon;
       _iconSize = settings.iconSize.clamp(20.0, 72.0).toDouble();
       _iconThinness = settings.iconThinness.clamp(0.0, 100.0).toDouble();
-      _iconColorId = settings.iconColorId;
       _textColorId = settings.textColorId;
       _borderId = settings.borderId;
       _backgroundImagePath = resolvedBackgroundImage;
@@ -2860,6 +2803,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
         final preset = _MainSquareCardPreset.fromMap(
           Map<String, dynamic>.from(item),
         );
+
         final resolvedBackgroundImage =
             await _resolvePersistedMainSquareImagePath(
               preset.settings.backgroundImagePath,
@@ -2898,18 +2842,22 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('프리셋 이름'),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          title: const Text(
+            '프리셋 이름',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+            ),
+          ),
           content: TextFormField(
             initialValue: draftName,
             autofocus: true,
             maxLength: 16,
-            decoration: const InputDecoration(
-              hintText: '예: 사진 포스터',
-              counterText: '',
-            ),
-            onChanged: (value) {
-              draftName = value;
-            },
+            decoration: _inputDecoration(label: '이름', hint: '예: 사진 포스터'),
+            onChanged: (value) => draftName = value,
             onFieldSubmitted: (value) {
               Navigator.of(dialogContext).pop(value.trim());
             },
@@ -2919,7 +2867,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('취소'),
             ),
-            FilledButton(
+            TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(draftName.trim());
               },
@@ -2964,6 +2912,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     setState(() {
       _savedPresets = _savedPresets.where((e) => e.id != id).toList();
     });
+
     await _persistSavedPresets();
   }
 
@@ -2982,13 +2931,14 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     setState(() {
       _titleController.text = '새 작품 만들기';
       _subtitleController.text = '';
+      _titleFontSize = 16;
+      _subtitleFontSize = 12;
       _styleId = 'white';
       _cardRatioId = 'square';
       _iconId = 'add';
       _showIcon = true;
       _iconSize = 36;
       _iconThinness = 50;
-      _iconColorId = 'style';
       _textColorId = 'style';
       _borderId = 'thin';
       _backgroundImagePath = '';
@@ -3001,20 +2951,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       _useLightContentOnImage = false;
       _threeDGlassMode = false;
     });
-  }
-
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: Colors.black87,
-        ),
-      ),
-    );
   }
 
   Future<void> _pickBackgroundImage() async {
@@ -3032,6 +2968,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           p.extension(picked.path).isEmpty ? '.jpg' : p.extension(picked.path);
       final fileName =
           'main_square_background_${DateTime.now().millisecondsSinceEpoch}$ext';
+
       final savedFile = await File(
         picked.path,
       ).copy(p.join(appDocDir.path, fileName));
@@ -3060,54 +2997,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       _backgroundImageOffsetY = 0;
       _useLightContentOnImage = false;
     });
-  }
-
-  Widget _smallActionButton({
-    required String text,
-    required VoidCallback onTap,
-    bool destructive = false,
-  }) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor:
-            destructive ? const Color(0xFFE15F7A) : const Color(0xFF4E94C5),
-        side: BorderSide(
-          color:
-              destructive ? const Color(0xFFFFCDD8) : const Color(0xFFD7E6F4),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(text),
-    );
-  }
-
-  Widget _positionChoices({
-    required String selectedId,
-    required ValueChanged<String> onChanged,
-  }) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children:
-          widget.contentPositions.map((option) {
-            final selected = selectedId == option.id;
-
-            return ChoiceChip(
-              selected: selected,
-              label: Text(option.label),
-              selectedColor: const Color(0xFFEAF7FF),
-              backgroundColor: Colors.white,
-              side: BorderSide(
-                color:
-                    selected
-                        ? const Color(0xFF77BCEB)
-                        : const Color(0xFFD7E6F4),
-              ),
-              onSelected: (_) => onChanged(option.id),
-            );
-          }).toList(),
-    );
   }
 
   void _startBackgroundImageGesture() {
@@ -3155,6 +3044,337 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     });
   }
 
+  static InputDecoration _inputDecoration({
+    required String label,
+    required String hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      counterText: '',
+      filled: false,
+      isDense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 14),
+      labelStyle: const TextStyle(
+        color: _subInk,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w400,
+        height: 1.2,
+      ),
+      floatingLabelStyle: const TextStyle(
+        color: _blueDark,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+        height: 1.2,
+      ),
+      hintStyle: const TextStyle(
+        color: _muted,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w400,
+        height: 1.2,
+      ),
+      border: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Color(0xFFE6ECF3), width: 0.8),
+      ),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Color(0xFFE6ECF3), width: 0.8),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: _blue, width: 1.1),
+      ),
+    );
+  }
+
+  Widget _section({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    String? subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 34),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 19, color: _blueDark),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: _ink,
+                    height: 1.18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: _subInk,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          child,
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: _ink,
+          height: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _simpleButton({
+    required String text,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool destructive = false,
+  }) {
+    final color = destructive ? _danger : _blueDark;
+
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 17, color: color),
+      label: Text(
+        text,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: color,
+          height: 1.15,
+        ),
+      ),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: color,
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: Colors.transparent,
+      ),
+    );
+  }
+
+  Widget _choice({
+    required bool selected,
+    required Widget label,
+    required VoidCallback onTap,
+    Widget? leading,
+  }) {
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        minimumSize: const Size(0, 38),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: selected ? _blueDark : _subInk,
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: Colors.transparent,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null) ...[leading, const SizedBox(width: 8)],
+          DefaultTextStyle(
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected ? _blueDark : _subInk,
+              height: 1.15,
+            ),
+            child: label,
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.check, size: 15, color: _blueDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _colorDot(Color color, {bool white = false}) {
+    return Container(
+      width: 15,
+      height: 15,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: white ? const Color(0xFFB7C7D7) : color,
+          width: 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _wrap(List<Widget> children) {
+    return Wrap(spacing: 12, runSpacing: 12, children: children);
+  }
+
+  Widget _switchRow({
+    required String title,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    String? subtitle,
+    IconData? icon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 19, color: value ? _blueDark : _muted),
+            const SizedBox(width: 11),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                    color: _ink,
+                    height: 1.22,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w400,
+                      color: _subInk,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Switch.adaptive(
+            value: value,
+            activeThumbColor: _blue,
+            activeTrackColor: _blue.withValues(alpha: 0.28),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sliderRow({
+    required String title,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String label,
+    required ValueChanged<double> onChanged,
+  }) {
+    final Color active = Colors.black87.withValues(alpha: 0.70);
+    final Color inactive = Colors.black87.withValues(alpha: 0.16);
+    final Color thumb = Colors.black87.withValues(alpha: 0.70);
+    const Color valueTextColor = Color(0xFF9AA6B2);
+
+    final safeValue = value.clamp(min, max).toDouble();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: SizedBox(
+        height: 38,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 72,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.black87.withValues(alpha: 0.74),
+                  height: 1.2,
+                ),
+              ),
+            ),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 0.55,
+                  overlayShape: SliderComponentShape.noOverlay,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 4.5,
+                  ),
+                  inactiveTrackColor: inactive,
+                  activeTrackColor: active,
+                  thumbColor: thumb,
+                  valueIndicatorShape: SliderComponentShape.noOverlay,
+                  showValueIndicator: ShowValueIndicator.never,
+                ),
+                child: Slider(
+                  value: safeValue,
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 48,
+              child: Text(
+                label,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: valueTextColor,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _mainCardPreview() {
     final previewWidth = _previewWidthForRatio(_selectedCardRatio.aspectRatio);
     const previewHeight = 220.0;
@@ -3169,48 +3389,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             final previewSize = Size(
               constraints.maxWidth,
               constraints.maxHeight,
-            );
-
-            final previewCard = FittedBox(
-              fit: BoxFit.contain,
-              clipBehavior: Clip.hardEdge,
-              child: SizedBox(
-                width: 240 * _selectedCardRatio.aspectRatio,
-                height: 240,
-                child: AddSquareCard(
-                  onTap: () {},
-                  title: _titleController.text,
-                  subtitle: _subtitleController.text,
-                  icon: _selectedIcon.icon,
-                  showIcon: _showIcon,
-                  iconSize: _iconSize,
-                  iconThinness: _iconThinness,
-                  backgroundColor: _selectedStyle.backgroundColor,
-                  backgroundGradient: _selectedStyle.gradient,
-                  glassEffect: _selectedStyle.glassEffect,
-                  translucentEffect: _selectedStyle.translucentEffect,
-                  threeDGlassMode: _threeDGlassMode,
-                  backgroundImagePath: _backgroundImagePath,
-                  backgroundImageTransparency: _backgroundImageTransparency,
-                  backgroundImageScale: _backgroundImageScale,
-                  backgroundImageOffsetX: _backgroundImageOffsetX,
-                  backgroundImageOffsetY: _backgroundImageOffsetY,
-                  textPosition: _selectedTextPosition.position,
-                  iconPosition: _selectedIconPosition.position,
-                  useLightContentOnImage: _useLightContentOnImage,
-                  borderColor: _selectedBorder.resolveColor(_selectedStyle),
-                  borderWidth: _selectedBorder.borderWidth,
-                  borderStyle: _selectedBorder.cardBorderStyle,
-                  iconColor: _selectedIconColor.resolveColor(_selectedStyle),
-                  titleColor: _selectedTextColor.resolveTitleColor(
-                    _selectedStyle,
-                  ),
-                  subtitleColor: _selectedTextColor.resolveSubtitleColor(
-                    _selectedStyle,
-                  ),
-                  showCustomizeButton: false,
-                ),
-              ),
             );
 
             return MouseRegion(
@@ -3234,23 +3412,61 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                   fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: [
-                    previewCard,
+                    AddSquareCard(
+                      onTap: () {},
+                      title: _titleController.text,
+                      subtitle: _subtitleController.text,
+                      icon: _selectedIcon.icon,
+                      showIcon: _showIcon,
+                      iconSize: _iconSize,
+                      iconThinness: _iconThinness,
+                      titleFontSize: _titleFontSize,
+                      subtitleFontSize: _subtitleFontSize,
+                      contentScale:
+                          previewWidth /
+                          (MediaQuery.sizeOf(context).width - 32),
+                      backgroundColor: _selectedStyle.backgroundColor,
+                      backgroundGradient: _selectedStyle.gradient,
+                      glassEffect: _selectedStyle.glassEffect,
+                      translucentEffect: _selectedStyle.translucentEffect,
+                      threeDGlassMode: _threeDGlassMode,
+                      backgroundImagePath: _backgroundImagePath,
+                      backgroundImageTransparency: _backgroundImageTransparency,
+                      backgroundImageScale: _backgroundImageScale,
+                      backgroundImageOffsetX: _backgroundImageOffsetX,
+                      backgroundImageOffsetY: _backgroundImageOffsetY,
+                      textPosition: _selectedTextPosition.position,
+                      iconPosition: _selectedIconPosition.position,
+                      useLightContentOnImage: _useLightContentOnImage,
+                      borderColor: _selectedBorder.resolveColor(_selectedStyle),
+                      borderWidth: _selectedBorder.borderWidth,
+                      borderStyle: _selectedBorder.cardBorderStyle,
+                      iconColor: _selectedTextColor.resolveTitleColor(
+                        _selectedStyle,
+                      ),
+                      titleColor: _selectedTextColor.resolveTitleColor(
+                        _selectedStyle,
+                      ),
+                      subtitleColor: _selectedTextColor.resolveSubtitleColor(
+                        _selectedStyle,
+                      ),
+                      showCustomizeButton: false,
+                    ),
+
                     if (canDragImage)
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: -28,
+                        bottom: -26,
                         child: IgnorePointer(
                           child: Text(
-                            '위치 · 확대/축소 · 더블 탭 초기화',
+                            '드래그 이동 · 두 손가락 확대 · 더블 탭 초기화',
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 10,
-                              color: const Color(
-                                0xFF5F7D9B,
-                              ).withValues(alpha: 0.85),
+                              color: _subInk.withValues(alpha: 0.88),
                             ),
                           ),
                         ),
@@ -3265,688 +3481,696 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     );
   }
 
+  Widget _presetTooltipPill(_MainSquareCardPreset preset) {
+    const Color tooltipBg = Color(0xEEFFFFFF);
+    const Color tooltipBorder = Color(0xFFE6ECF3);
+    const Color tooltipInk = Color(0xFF1F3A56);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _applySettings(preset.settings),
+        borderRadius: BorderRadius.circular(999),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.only(left: 15, right: 8),
+          decoration: BoxDecoration(
+            color: tooltipBg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: tooltipBorder, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                preset.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: tooltipInk,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(width: 7),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _deletePreset(preset.id),
+                child: const Padding(
+                  padding: EdgeInsets.all(3),
+                  child: Icon(Icons.close, size: 14, color: tooltipInk),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _previewSection() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome_outlined,
+                size: 18,
+                color: _blueDark,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Preview',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
+                ),
+              ),
+              _simpleButton(text: '초기화', icon: Icons.refresh, onTap: _reset),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _mainCardPreview(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _effectSection() {
+    return _section(
+      title: '효과',
+      icon: Icons.blur_on_rounded,
+      child: _switchRow(
+        title: '글라스 모드',
+        subtitle: '부드러운 유리감과 렌즈 반사를 적용합니다.',
+        icon: Icons.water_drop_outlined,
+        value: _threeDGlassMode,
+        onChanged: (value) {
+          setState(() {
+            _threeDGlassMode = value;
+
+            if (value) {
+              _textColorId = 'white';
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _presetSection() {
+    return _section(
+      title: '프리셋',
+      icon: Icons.bookmark_border,
+      subtitle: '현재 조합을 저장해두고 나중에 다시 적용할 수 있습니다.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _simpleButton(
+            text: '현재 프리셋 저장',
+            icon: Icons.add_rounded,
+            onTap: _saveCurrentAsPreset,
+          ),
+          const SizedBox(height: 10),
+          if (_savedPresets.isEmpty)
+            const Text(
+              '저장된 프리셋이 없습니다.',
+              style: TextStyle(fontSize: 12, color: _muted),
+            )
+          else
+            Theme(
+              data: Theme.of(context).copyWith(
+                chipTheme: Theme.of(context).chipTheme.copyWith(
+                  backgroundColor: Colors.transparent,
+                  selectedColor: Colors.transparent,
+                  disabledColor: Colors.transparent,
+                  secondarySelectedColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  side: BorderSide.none,
+                  shape: const StadiumBorder(),
+                  elevation: 0,
+                  pressElevation: 0,
+                ),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _savedPresets.map(_presetTooltipPill).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _textSection() {
+    const fieldStyle = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w400,
+      color: _ink,
+      height: 1.25,
+    );
+
+    return _section(
+      title: '문구',
+      icon: Icons.text_fields_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _titleController,
+            maxLength: 23,
+            style: fieldStyle,
+            onChanged: (_) => setState(() {}),
+            decoration: _inputDecoration(label: '큰 문구', hint: '새 작품 만들기'),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _subtitleController,
+            maxLength: 40,
+            style: fieldStyle,
+            onChanged: (_) => setState(() {}),
+            decoration: _inputDecoration(label: '작은 문구', hint: '선택 사항'),
+          ),
+          const SizedBox(height: 22),
+          _sliderRow(
+            title: '큰 문구',
+            value: _titleFontSize,
+            min: 10,
+            max: 28,
+            divisions: 18,
+            label: '${_titleFontSize.round()}px',
+            onChanged: (value) {
+              setState(() {
+                _titleFontSize = value.clamp(10.0, 28.0).toDouble();
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          _sliderRow(
+            title: '작은 문구',
+            value: _subtitleFontSize,
+            min: 8,
+            max: 22,
+            divisions: 14,
+            label: '${_subtitleFontSize.round()}px',
+            onChanged: (value) {
+              setState(() {
+                _subtitleFontSize = value.clamp(8.0, 22.0).toDouble();
+              });
+            },
+          ),
+          const SizedBox(height: 22),
+          _miniLabel('텍스트 위치'),
+          _positionChoices(
+            selectedId: _textPositionId,
+            onChanged: (id) => setState(() => _textPositionId = id),
+          ),
+          const SizedBox(height: 22),
+          _miniLabel('문구 아이콘 색상'),
+          _wrap(
+            widget.textColors.map((option) {
+              final color = option.resolveTitleColor(_selectedStyle);
+              final selected = _textColorId == option.id;
+
+              return _choice(
+                selected: selected,
+                leading: _colorDot(color, white: option.id == 'white'),
+                label: Text(option.label),
+                onTap: () {
+                  setState(() {
+                    _textColorId = option.id;
+
+                    if (_threeDGlassMode && option.id != 'white') {
+                      _useLightContentOnImage = false;
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          if (_hasBackgroundImage && _useLightContentOnImage) ...[
+            const SizedBox(height: 14),
+            const Text(
+              '밝은 문구 모드가 켜져 있으면 사진 위에서는 흰색 문구가 우선 적용됩니다.',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w400,
+                color: _subInk,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _cardStyleSection() {
+    return _section(
+      title: '카드 스타일',
+      icon: Icons.dashboard_customize_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _miniLabel('카드 비율'),
+          _wrap(
+            widget.cardRatios.map((option) {
+              final selected = _cardRatioId == option.id;
+
+              return _choice(
+                selected: selected,
+                leading: Container(
+                  width: option.aspectRatio >= 1 ? 20 : 14,
+                  height: option.aspectRatio >= 1 ? 14 : 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: selected ? _blue : const Color(0xFFB7C7D7),
+                      width: selected ? 1.4 : 1,
+                    ),
+                  ),
+                ),
+                label: Text('${option.label} ${option.description}'),
+                onTap: () => setState(() => _cardRatioId = option.id),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+          _miniLabel('배경 스타일'),
+          _wrap(
+            widget.styles.map((style) {
+              final selected = _styleId == style.id;
+
+              return _choice(
+                selected: selected,
+                leading: Container(
+                  width: 15,
+                  height: 15,
+                  decoration: BoxDecoration(
+                    color:
+                        style.gradient == null ? style.backgroundColor : null,
+                    gradient: style.gradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: style.borderColor),
+                  ),
+                ),
+                label: Text(style.label),
+                onTap: () => setState(() => _styleId = style.id),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+          _miniLabel('테두리 스타일'),
+          _wrap(
+            widget.borders.map((option) {
+              final selected = _borderId == option.id;
+              final borderColor = option.resolveColor(_selectedStyle);
+
+              return _choice(
+                selected: selected,
+                leading: Container(
+                  width: 17,
+                  height: 17,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(5),
+                    border:
+                        option.cardBorderStyle == AddSquareCardBorderStyle.none
+                            ? null
+                            : Border.all(
+                              color: borderColor,
+                              width: option.borderWidth.clamp(1.0, 2.0),
+                            ),
+                  ),
+                  child:
+                      option.cardBorderStyle == AddSquareCardBorderStyle.dashed
+                          ? Center(
+                            child: Text(
+                              '··',
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 0.8,
+                                color: borderColor,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          )
+                          : null,
+                ),
+                label: Text(option.label),
+                onTap: () => setState(() => _borderId = option.id),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _positionChoices({
+    required String selectedId,
+    required ValueChanged<String> onChanged,
+  }) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: widget.contentPositions.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 7,
+        crossAxisSpacing: 7,
+        childAspectRatio: 2.7,
+      ),
+      itemBuilder: (context, index) {
+        final option = widget.contentPositions[index];
+        final selected = selectedId == option.id;
+
+        return Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            onTap: () => onChanged(option.id),
+            borderRadius: BorderRadius.circular(999),
+            splashFactory: NoSplash.splashFactory,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xEEFFFFFF) : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color:
+                      selected
+                          ? const Color(0xFFE6ECF3)
+                          : const Color(0xFFE9EEF4),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                selected ? '${option.label} ✓' : option.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                  color: selected ? const Color(0xFF1F3A56) : _subInk,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _backgroundImageSection() {
+    return _section(
+      title: '배경 이미지',
+      icon: Icons.image_outlined,
+      subtitle: '사진을 넣으면 미리보기 카드에서 직접 위치와 확대를 조절할 수 있습니다.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _simpleButton(
+                text: '사진 선택',
+                icon: Icons.photo_library_outlined,
+                onTap: _pickBackgroundImage,
+              ),
+              if (_hasBackgroundImage)
+                _simpleButton(
+                  text: '이미지 삭제',
+                  icon: Icons.delete_outline,
+                  onTap: _clearBackgroundImage,
+                  destructive: true,
+                ),
+              if (_hasBackgroundImage)
+                _simpleButton(
+                  text: '위치 초기화',
+                  icon: Icons.center_focus_strong,
+                  onTap: _resetBackgroundImagePosition,
+                ),
+            ],
+          ),
+          if (_hasBackgroundImage) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(
+                  Icons.insert_photo_outlined,
+                  size: 16,
+                  color: _blueDark,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    p.basename(_backgroundImagePath),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: _subInk),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _sliderRow(
+              title: '투명도',
+              value: _backgroundImageTransparency,
+              min: 0,
+              max: 1,
+              divisions: 10,
+              label: '${(_backgroundImageTransparency * 100).round()}%',
+              onChanged: (value) {
+                setState(() {
+                  _backgroundImageTransparency =
+                      value.clamp(0.0, 1.0).toDouble();
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _switchRow(
+              title: '어두운 사진용 흰 글자',
+              subtitle: '사진 배경 위에서 아이콘과 문구를 흰색으로 보여줍니다.',
+              icon: Icons.contrast,
+              value: _useLightContentOnImage,
+              onChanged: (value) {
+                setState(() => _useLightContentOnImage = value);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _iconSection() {
+    return _section(
+      title: '아이콘',
+      icon: Icons.add_circle_outline_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _switchRow(
+            title: '아이콘 보이기',
+            icon: Icons.visibility_outlined,
+            value: _showIcon,
+            onChanged: (value) => setState(() => _showIcon = value),
+          ),
+          if (_showIcon) ...[
+            const SizedBox(height: 16),
+            _miniLabel('아이콘 모양'),
+            _wrap(
+              widget.icons.map((option) {
+                final selected = _iconId == option.id;
+
+                return _choice(
+                  selected: selected,
+                  leading: Icon(
+                    option.icon,
+                    size: 17,
+                    color: selected ? _blueDark : _subInk,
+                  ),
+                  label: Text(option.label),
+                  onTap: () => setState(() => _iconId = option.id),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            _miniLabel('아이콘 위치'),
+            _positionChoices(
+              selectedId: _iconPositionId,
+              onChanged: (id) => setState(() => _iconPositionId = id),
+            ),
+            const SizedBox(height: 16),
+            _sliderRow(
+              title: '크기',
+              value: _iconSize,
+              min: 20,
+              max: 72,
+              divisions: 13,
+              label: '${_iconSize.round()}px',
+              onChanged: (value) {
+                setState(() {
+                  _iconSize = value.clamp(20.0, 72.0).toDouble();
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _sliderRow(
+              title: '얇기',
+              value: _iconThinness,
+              min: 0,
+              max: 100,
+              divisions: 10,
+              label: '${_iconThinness.round()}%',
+              onChanged: (value) {
+                setState(() {
+                  _iconThinness = value.clamp(0.0, 100.0).toDouble();
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sheetHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 10, 0),
+      child: Row(
+        children: [
+          const Spacer(),
+          IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.close, color: _subInk),
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomBar() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    const Color tooltipBg = Color(0xEEFFFFFF);
+    const Color tooltipBorder = Color(0xFFE6ECF3);
+    const Color tooltipInk = Color(0xFF1F3A56);
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + bottomPadding),
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _saving ? null : _save,
+            borderRadius: BorderRadius.circular(999),
+            splashFactory: NoSplash.splashFactory,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              decoration: BoxDecoration(
+                color: tooltipBg,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: tooltipBorder, width: 1),
+              ),
+              child: Center(
+                child:
+                    _saving
+                        ? const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.6,
+                            color: tooltipInk,
+                          ),
+                        )
+                        : const Text(
+                          '저장',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: tooltipInk,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w400,
+                            height: 1.15,
+                          ),
+                        ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final sheetHeight = screenHeight * 0.94;
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       padding: EdgeInsets.only(bottom: bottomInset),
-      child: SafeArea(
-        top: false,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: SingleChildScrollView(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: sheetHeight,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD9E4EF),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        '메인 카드 꾸미기',
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    TextButton(onPressed: _reset, child: const Text('초기화')),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _mainCardPreview(),
-                const SizedBox(height: 52),
-                _sectionTitle('효과'),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _threeDGlassMode,
-                  title: const Text(
-                    '글라스 모드',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: const Text(
-                    '투명한 유리, 배경 흐림, 렌즈 반사를 적용합니다.',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF6F879F)),
-                  ),
-                  activeThumbColor: const Color(0xFF77BCEB),
-                  activeTrackColor: const Color(
-                    0xFF77BCEB,
-                  ).withValues(alpha: 0.28),
-                  onChanged: (value) {
-                    setState(() {
-                      _threeDGlassMode = value;
-
-                      // 글라스 모드를 켤 때는 기본값을 화이트로 맞춥니다.
-                      // 이후 사용자가 문구/아이콘 색상을 다시 선택하면 그 색상이 적용됩니다.
-                      if (value) {
-                        _textColorId = 'white';
-                        _iconColorId = 'white';
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-                _sectionTitle('프리셋'),
-                Row(
-                  children: [
-                    _smallActionButton(
-                      text: '현재 프리셋 저장',
-                      onTap: _saveCurrentAsPreset,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        '저장한 조합은 칩을 눌러 다시 적용할 수 있습니다.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF6F879F),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (_savedPresets.isEmpty)
-                  const Text(
-                    '저장된 프리셋이 없습니다.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF8AA0B6)),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        _savedPresets.map((preset) {
-                          return InputChip(
-                            label: Text(preset.name),
-                            selectedColor: const Color(0xFFEAF7FF),
-                            backgroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0xFFD7E6F4)),
-                            onSelected: (_) {
-                              _applySettings(preset.settings);
-                            },
-                            onDeleted: () => _deletePreset(preset.id),
-                            deleteIcon: const Icon(Icons.close, size: 16),
-                          );
-                        }).toList(),
-                  ),
-                const SizedBox(height: 20),
-                _sectionTitle('카드 비율'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      widget.cardRatios.map((option) {
-                        final selected = _cardRatioId == option.id;
-
-                        return ChoiceChip(
-                          selected: selected,
-                          avatar: Container(
-                            width: option.aspectRatio >= 1 ? 20 : 14,
-                            height: option.aspectRatio >= 1 ? 14 : 20,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color:
-                                    selected
-                                        ? const Color(0xFF77BCEB)
-                                        : const Color(0xFFB7C7D7),
-                                width: selected ? 1.4 : 1,
-                              ),
-                            ),
-                          ),
-                          label: Text('${option.label} ${option.description}'),
-                          selectedColor: const Color(0xFFEAF7FF),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(
-                            color:
-                                selected
-                                    ? const Color(0xFF77BCEB)
-                                    : const Color(0xFFD7E6F4),
-                          ),
-                          onSelected: (_) {
-                            setState(() => _cardRatioId = option.id);
-                          },
-                        );
-                      }).toList(),
-                ),
-                const SizedBox(height: 20),
-                _sectionTitle('문구'),
-                TextField(
-                  controller: _titleController,
-                  maxLength: 23,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: '큰 문구',
-                    hintText: '새 작품 만들기',
-                    counterText: '',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FBFF),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD7E6F4)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD7E6F4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF77BCEB),
-                        width: 1.4,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _subtitleController,
-                  maxLength: 40,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: '작은 문구',
-                    hintText: '선택 사항',
-                    counterText: '',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FBFF),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD7E6F4)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFD7E6F4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF77BCEB),
-                        width: 1.4,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _sectionTitle('텍스트 위치'),
-                _positionChoices(
-                  selectedId: _textPositionId,
-                  onChanged: (id) => setState(() => _textPositionId = id),
-                ),
-                const SizedBox(height: 20),
-                _sectionTitle('문구 색상'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      widget.textColors.map((option) {
-                        final color = option.resolveTitleColor(_selectedStyle);
-                        final selected = _textColorId == option.id;
-
-                        return ChoiceChip(
-                          selected: selected,
-                          avatar: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color:
-                                    option.id == 'white'
-                                        ? const Color(0xFFB7C7D7)
-                                        : color,
-                              ),
-                            ),
-                          ),
-                          label: Text(option.label),
-                          selectedColor: const Color(0xFFEAF7FF),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(
-                            color:
-                                selected
-                                    ? const Color(0xFF77BCEB)
-                                    : const Color(0xFFD7E6F4),
-                          ),
-                          onSelected: (_) {
-                            setState(() {
-                              _textColorId = option.id;
-
-                              // 글라스 모드에서 다른 색상을 직접 고르면
-                              // 사진 위 밝은 문구 자동 흰색 우선 적용을 끕니다.
-                              if (_threeDGlassMode && option.id != 'white') {
-                                _useLightContentOnImage = false;
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                ),
-                if (_hasBackgroundImage && _useLightContentOnImage) ...[
-                  const SizedBox(height: 8),
-                  const Text(
-                    '밝은 문구 모드가 켜져 있으면 사진 위에서는 흰색 문구가 우선 적용됩니다.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF6F7F91),
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                _sectionTitle('배경 스타일'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      widget.styles.map((style) {
-                        return ChoiceChip(
-                          selected: _styleId == style.id,
-                          avatar: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color:
-                                  style.gradient == null
-                                      ? style.backgroundColor
-                                      : null,
-                              gradient: style.gradient,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: style.borderColor),
-                            ),
-                          ),
-                          label: Text(style.label),
-                          selectedColor: const Color(0xFFEAF7FF),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(
-                            color:
-                                _styleId == style.id
-                                    ? const Color(0xFF77BCEB)
-                                    : const Color(0xFFD7E6F4),
-                          ),
-                          onSelected: (_) {
-                            setState(() => _styleId = style.id);
-                          },
-                        );
-                      }).toList(),
-                ),
-                const SizedBox(height: 20),
-                _sectionTitle('배경 이미지'),
-                Row(
-                  children: [
-                    _smallActionButton(
-                      text: '사진 선택',
-                      onTap: _pickBackgroundImage,
-                    ),
-                    const SizedBox(width: 8),
-                    if (_hasBackgroundImage)
-                      _smallActionButton(
-                        text: '이미지 삭제',
-                        onTap: _clearBackgroundImage,
-                        destructive: true,
-                      ),
-                  ],
-                ),
-                if (_hasBackgroundImage) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    p.basename(_backgroundImagePath),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF5F7D9B),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
+                _sheetHeader(),
+                Expanded(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(18, 2, 18, 10),
                     children: [
-                      const SizedBox(
-                        width: 74,
-                        child: Text(
-                          '투명도',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF5F7D9B),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: _backgroundImageTransparency,
-                          min: 0,
-                          max: 1,
-                          divisions: 10,
-                          label:
-                              '${(_backgroundImageTransparency * 100).round()}%',
-                          onChanged:
-                              (value) => setState(
-                                () =>
-                                    _backgroundImageTransparency =
-                                        value.clamp(0.0, 1.0).toDouble(),
-                              ),
-                        ),
-                      ),
+                      _previewSection(),
+                      _effectSection(),
+                      _presetSection(),
+                      _textSection(),
+                      _cardStyleSection(),
+                      _backgroundImageSection(),
+                      _iconSection(),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FBFF),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFD7E6F4)),
-                    ),
-                    child: const Text(
-                      '큰 미리보기 카드에서 사진을 직접 드래그해 위치를 바꾸고, 두 손가락으로 확대/축소하세요. 사진 밖 흰 배경이 보이지 않도록 원본 사진 영역 안에서만 움직입니다. 더블 탭하면 위치와 확대가 초기화됩니다.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.35,
-                        color: Color(0xFF5F7D9B),
-                      ),
-                    ),
-                  ),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    value: _useLightContentOnImage,
-                    title: const Text(
-                      '어두운 사진용 흰 글자',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      '어두운 배경 이미지를 쓸 때 +와 문구를 흰색으로 바꿉니다.',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    onChanged:
-                        (value) =>
-                            setState(() => _useLightContentOnImage = value),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                _sectionTitle('테두리 스타일'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      widget.borders.map((option) {
-                        final borderColor = option.resolveColor(_selectedStyle);
-
-                        return ChoiceChip(
-                          selected: _borderId == option.id,
-                          avatar: Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(5),
-                              border:
-                                  option.cardBorderStyle ==
-                                          AddSquareCardBorderStyle.none
-                                      ? null
-                                      : Border.all(
-                                        color: borderColor,
-                                        width:
-                                            option.borderWidth
-                                                .clamp(1.0, 2.0)
-                                                .toDouble(),
-                                      ),
-                            ),
-                            child:
-                                option.cardBorderStyle ==
-                                        AddSquareCardBorderStyle.dashed
-                                    ? Center(
-                                      child: Text(
-                                        '··',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          height: 0.8,
-                                          color: borderColor,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    )
-                                    : null,
-                          ),
-                          label: Text(option.label),
-                          selectedColor: const Color(0xFFEAF7FF),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(
-                            color:
-                                _borderId == option.id
-                                    ? const Color(0xFF77BCEB)
-                                    : const Color(0xFFD7E6F4),
-                          ),
-                          onSelected: (_) {
-                            setState(() => _borderId = option.id);
-                          },
-                        );
-                      }).toList(),
                 ),
-                const SizedBox(height: 20),
-                _sectionTitle('아이콘'),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _showIcon,
-                  title: const Text(
-                    '아이콘 보이기',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  onChanged: (value) => setState(() => _showIcon = value),
-                ),
-                if (_showIcon) ...[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        widget.icons.map((option) {
-                          return ChoiceChip(
-                            selected: _iconId == option.id,
-                            avatar: Icon(option.icon, size: 18),
-                            label: Text(option.label),
-                            selectedColor: const Color(0xFFEAF7FF),
-                            backgroundColor: Colors.white,
-                            side: BorderSide(
-                              color:
-                                  _iconId == option.id
-                                      ? const Color(0xFF77BCEB)
-                                      : const Color(0xFFD7E6F4),
-                            ),
-                            onSelected: (_) {
-                              setState(() => _iconId = option.id);
-                            },
-                          );
-                        }).toList(),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '아이콘 위치',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _positionChoices(
-                    selectedId: _iconPositionId,
-                    onChanged: (id) => setState(() => _iconPositionId = id),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: 74,
-                        child: Text(
-                          '크기',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF5F7D9B),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: _iconSize.clamp(20.0, 72.0).toDouble(),
-                          min: 20,
-                          max: 72,
-                          divisions: 13,
-                          label: '${_iconSize.round()}px',
-                          onChanged:
-                              (value) => setState(
-                                () =>
-                                    _iconSize =
-                                        value.clamp(20.0, 72.0).toDouble(),
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: 74,
-                        child: Text(
-                          '얇기',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF5F7D9B),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: _iconThinness.clamp(0.0, 100.0).toDouble(),
-                          min: 0,
-                          max: 100,
-                          divisions: 10,
-                          label: '${_iconThinness.round()}%',
-                          onChanged:
-                              (value) => setState(
-                                () =>
-                                    _iconThinness =
-                                        value.clamp(0.0, 100.0).toDouble(),
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '아이콘 색상',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        widget.iconColors.map((option) {
-                          final color = option.resolveColor(_selectedStyle);
-
-                          return ChoiceChip(
-                            selected: _iconColorId == option.id,
-                            avatar: Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color:
-                                      option.id == 'white'
-                                          ? const Color(0xFFB7C7D7)
-                                          : color,
-                                ),
-                              ),
-                            ),
-                            label: Text(option.label),
-                            selectedColor: const Color(0xFFEAF7FF),
-                            backgroundColor: Colors.white,
-                            side: BorderSide(
-                              color:
-                                  _iconColorId == option.id
-                                      ? const Color(0xFF77BCEB)
-                                      : const Color(0xFFD7E6F4),
-                            ),
-                            onSelected: (_) {
-                              setState(() {
-                                _iconColorId = option.id;
-
-                                // 글라스 모드에서 다른 아이콘 색상을 직접 고르면
-                                // 사진 위 밝은 문구 자동 흰색 우선 적용을 끕니다.
-                                if (_threeDGlassMode && option.id != 'white') {
-                                  _useLightContentOnImage = false;
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF77BCEB),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child:
-                        _saving
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : const Text(
-                              '저장',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                  ),
-                ),
+                _bottomBar(),
               ],
             ),
           ),

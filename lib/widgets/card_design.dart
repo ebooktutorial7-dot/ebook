@@ -187,6 +187,9 @@ class AddSquareCard extends StatelessWidget {
     this.showIcon = true,
     this.iconSize = 36,
     this.iconThinness = 50,
+    this.titleFontSize = 16,
+    this.subtitleFontSize = 12,
+    this.contentScale = 1.0,
     this.backgroundColor = Colors.white,
     this.backgroundGradient,
     this.glassEffect = false,
@@ -217,6 +220,9 @@ class AddSquareCard extends StatelessWidget {
   final bool showIcon;
   final double iconSize;
   final double iconThinness;
+  final double titleFontSize;
+  final double subtitleFontSize;
+  final double contentScale;
   final Color backgroundColor;
   final Gradient? backgroundGradient;
   final bool glassEffect;
@@ -251,10 +257,16 @@ class AddSquareCard extends StatelessWidget {
     final cleanTitle = title.trim().isEmpty ? '새 작품 만들기' : title.trim();
     final cleanSubtitle = _cleanSubtitle;
     final canCustomize = showCustomizeButton && onCustomizeTap != null;
-    final safeIconSize = iconSize.clamp(20.0, 72.0).toDouble();
+    final safeContentScale = contentScale.clamp(0.55, 1.0).toDouble();
+    final safeIconSize =
+        (iconSize * safeContentScale).clamp(14.0, 72.0).toDouble();
     final safeIconThinness = iconThinness.clamp(0.0, 100.0).toDouble();
+    final safeTitleFontSize = titleFontSize.clamp(10.0, 28.0).toDouble();
+    final safeSubtitleFontSize = subtitleFontSize.clamp(8.0, 22.0).toDouble();
     final resolvedIconStrokeWidth =
-        (4.2 - (safeIconThinness * 0.03)).clamp(1.0, 4.2).toDouble();
+        ((4.2 - (safeIconThinness * 0.03)) * safeContentScale)
+            .clamp(0.55, 4.2)
+            .toDouble();
     final resolvedIconWeight =
         (700 - (safeIconThinness * 6)).clamp(100.0, 700.0).toDouble();
     final thinIconKind = _thinIconKindForIcon(icon);
@@ -273,8 +285,6 @@ class AddSquareCard extends StatelessWidget {
         imagePath == null || imagePath.isEmpty ? null : File(imagePath);
     final hasBackgroundImage = imageFile != null && imageFile.existsSync();
 
-    // 글라스 모드에서도 사용자가 고른 글자/아이콘 색상을 그대로 반영합니다.
-    // 단, 사진 위 '밝은 문구'가 켜져 있을 때만 흰색을 우선 적용합니다.
     final shouldUseLightContent = useLightContentOnImage && hasBackgroundImage;
 
     final resolvedIconColor =
@@ -373,7 +383,10 @@ class AddSquareCard extends StatelessWidget {
           child: Align(
             alignment: alignmentForPosition(position),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+              padding: EdgeInsets.symmetric(
+                horizontal: 22 * safeContentScale,
+                vertical: 20 * safeContentScale,
+              ),
               child: child,
             ),
           ),
@@ -419,7 +432,7 @@ class AddSquareCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: titleTextAlign,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: safeTitleFontSize * safeContentScale,
               fontWeight: FontWeight.w700,
               color: resolvedTitleColor,
               shadows:
@@ -435,14 +448,14 @@ class AddSquareCard extends StatelessWidget {
             ),
           ),
           if (cleanSubtitle != null) ...[
-            const SizedBox(height: 5),
+            SizedBox(height: 5 * safeContentScale),
             Text(
               cleanSubtitle,
               maxLines: 5,
               overflow: TextOverflow.ellipsis,
               textAlign: titleTextAlign,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: safeSubtitleFontSize * safeContentScale,
                 fontWeight: FontWeight.w400,
                 color: resolvedSubtitleColor,
                 height: 1.2,
@@ -474,7 +487,11 @@ class AddSquareCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: crossAxisForPosition(textPosition),
-            children: [iconWidget, const SizedBox(height: 6), titleBlock],
+            children: [
+              iconWidget,
+              SizedBox(height: 6 * safeContentScale),
+              titleBlock,
+            ],
           ),
         ),
       );
