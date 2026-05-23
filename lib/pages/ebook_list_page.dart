@@ -7,10 +7,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'calendar_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:image_picker/image_picker.dart';
 import 'package:ebook_tutorial_app/controllers/ebook_list_controller.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/services/ebook_service.dart';
@@ -453,6 +453,10 @@ class _EbookListPageState extends State<EbookListPage>
       'main_square_card_title_font_size';
   static const String _mainSquareSubtitleFontSizePrefsKey =
       'main_square_card_subtitle_font_size';
+  static const String _mainSquareTitleFontWeightPrefsKey =
+      'main_square_card_title_font_weight';
+  static const String _mainSquareSubtitleFontWeightPrefsKey =
+      'main_square_card_subtitle_font_weight';
   static const String _mainSquareStylePrefsKey = 'main_square_card_style';
   static const String _mainSquareCardRatioPrefsKey = 'main_square_card_ratio';
   static const String _mainSquareIconPrefsKey = 'main_square_card_icon';
@@ -488,6 +492,8 @@ class _EbookListPageState extends State<EbookListPage>
   String _mainSquareSubtitle = '';
   double _mainSquareTitleFontSize = 16;
   double _mainSquareSubtitleFontSize = 12;
+  double _mainSquareTitleFontWeight = 700;
+  double _mainSquareSubtitleFontWeight = 400;
   String _mainSquareStyleId = 'white';
   String _mainSquareCardRatioId = 'square';
   String _mainSquareIconId = 'add';
@@ -1277,6 +1283,9 @@ class _EbookListPageState extends State<EbookListPage>
                                 iconThinness: _mainSquareIconThinness,
                                 titleFontSize: _mainSquareTitleFontSize,
                                 subtitleFontSize: _mainSquareSubtitleFontSize,
+                                titleFontWeight: _mainSquareTitleFontWeight,
+                                subtitleFontWeight:
+                                    _mainSquareSubtitleFontWeight,
                                 backgroundColor:
                                     _mainSquareStyle.backgroundColor,
                                 backgroundGradient: _mainSquareStyle.gradient,
@@ -1562,6 +1571,20 @@ class _EbookListPageState extends State<EbookListPage>
     );
   }
 
+  double _readPrefsNumberAsDouble(
+    SharedPreferences prefs,
+    String key,
+    double fallback,
+  ) {
+    final value = prefs.get(key);
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return fallback;
+  }
+
   Future<void> _loadMainSquareCardSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -1573,6 +1596,24 @@ class _EbookListPageState extends State<EbookListPage>
     final savedSubtitleFontSize = prefs.getDouble(
       _mainSquareSubtitleFontSizePrefsKey,
     );
+    final savedTitleFontWeight = _readPrefsNumberAsDouble(
+      prefs,
+      _mainSquareTitleFontWeightPrefsKey,
+      700,
+    );
+
+    final savedSubtitleFontWeight = _readPrefsNumberAsDouble(
+      prefs,
+      _mainSquareSubtitleFontWeightPrefsKey,
+      400,
+    );
+
+    _mainSquareTitleFontWeight =
+        savedTitleFontWeight.clamp(100.0, 900.0).toDouble();
+
+    _mainSquareSubtitleFontWeight =
+        savedSubtitleFontWeight.clamp(100.0, 900.0).toDouble();
+
     final savedStyle = prefs.getString(_mainSquareStylePrefsKey);
     final savedCardRatio = prefs.getString(_mainSquareCardRatioPrefsKey);
     final savedIcon = prefs.getString(_mainSquareIconPrefsKey);
@@ -1721,6 +1762,14 @@ class _EbookListPageState extends State<EbookListPage>
       _mainSquareSubtitleFontSizePrefsKey,
       settings.subtitleFontSize.clamp(8.0, 22.0).toDouble(),
     );
+    await prefs.setDouble(
+      _mainSquareTitleFontWeightPrefsKey,
+      settings.titleFontWeight.clamp(100.0, 900.0).toDouble(),
+    );
+    await prefs.setDouble(
+      _mainSquareSubtitleFontWeightPrefsKey,
+      settings.subtitleFontWeight.clamp(100.0, 900.0).toDouble(),
+    );
     await prefs.setString(_mainSquareStylePrefsKey, settings.styleId);
     await prefs.setString(_mainSquareCardRatioPrefsKey, settings.cardRatioId);
     await prefs.setString(_mainSquareIconPrefsKey, settings.iconId);
@@ -1781,6 +1830,10 @@ class _EbookListPageState extends State<EbookListPage>
           settings.titleFontSize.clamp(10.0, 28.0).toDouble();
       _mainSquareSubtitleFontSize =
           settings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
+      _mainSquareTitleFontWeight =
+          settings.titleFontWeight.clamp(100.0, 900.0).toDouble();
+      _mainSquareSubtitleFontWeight =
+          settings.subtitleFontWeight.clamp(100.0, 900.0).toDouble();
       _mainSquareStyleId = settings.styleId;
       _mainSquareCardRatioId = settings.cardRatioId;
       _mainSquareIconId = settings.iconId;
@@ -1828,6 +1881,8 @@ class _EbookListPageState extends State<EbookListPage>
             subtitle: _mainSquareSubtitle,
             titleFontSize: _mainSquareTitleFontSize,
             subtitleFontSize: _mainSquareSubtitleFontSize,
+            titleFontWeight: _mainSquareTitleFontWeight,
+            subtitleFontWeight: _mainSquareSubtitleFontWeight,
             styleId: _mainSquareStyleId,
             cardRatioId: _mainSquareCardRatioId,
             iconId: _mainSquareIconId,
@@ -2242,6 +2297,8 @@ class _MainSquareCardSettings {
   final String subtitle;
   final double titleFontSize;
   final double subtitleFontSize;
+  final double titleFontWeight;
+  final double subtitleFontWeight;
   final String styleId;
   final String cardRatioId;
   final String iconId;
@@ -2265,6 +2322,8 @@ class _MainSquareCardSettings {
     required this.subtitle,
     required this.titleFontSize,
     required this.subtitleFontSize,
+    required this.titleFontWeight,
+    required this.subtitleFontWeight,
     required this.styleId,
     required this.cardRatioId,
     required this.iconId,
@@ -2289,6 +2348,8 @@ class _MainSquareCardSettings {
     String? subtitle,
     double? titleFontSize,
     double? subtitleFontSize,
+    double? titleFontWeight,
+    double? subtitleFontWeight,
     String? styleId,
     String? cardRatioId,
     String? iconId,
@@ -2312,6 +2373,8 @@ class _MainSquareCardSettings {
       subtitle: subtitle ?? this.subtitle,
       titleFontSize: titleFontSize ?? this.titleFontSize,
       subtitleFontSize: subtitleFontSize ?? this.subtitleFontSize,
+      titleFontWeight: titleFontWeight ?? this.titleFontWeight,
+      subtitleFontWeight: subtitleFontWeight ?? this.subtitleFontWeight,
       styleId: styleId ?? this.styleId,
       cardRatioId: cardRatioId ?? this.cardRatioId,
       iconId: iconId ?? this.iconId,
@@ -2342,6 +2405,8 @@ class _MainSquareCardSettings {
       'subtitle': subtitle,
       'titleFontSize': titleFontSize,
       'subtitleFontSize': subtitleFontSize,
+      'titleFontWeight': titleFontWeight,
+      'subtitleFontWeight': subtitleFontWeight,
       'styleId': styleId,
       'cardRatioId': cardRatioId,
       'iconId': iconId,
@@ -2373,6 +2438,14 @@ class _MainSquareCardSettings {
       subtitleFontSize:
           ((map['subtitleFontSize'] as num?)?.toDouble() ?? 12)
               .clamp(8.0, 22.0)
+              .toDouble(),
+      titleFontWeight:
+          ((map['titleFontWeight'] as num?)?.toDouble() ?? 700)
+              .clamp(100.0, 900.0)
+              .toDouble(),
+      subtitleFontWeight:
+          ((map['subtitleFontWeight'] as num?)?.toDouble() ?? 400)
+              .clamp(100.0, 900.0)
               .toDouble(),
       styleId: (map['styleId'] as String?) ?? 'white',
       cardRatioId: (map['cardRatioId'] as String?) ?? 'square',
@@ -2594,6 +2667,8 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   late double _titleFontSize;
   late double _subtitleFontSize;
+  late double _titleFontWeight;
+  late double _subtitleFontWeight;
 
   late String _styleId;
   late String _cardRatioId;
@@ -2686,6 +2761,12 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
         widget.initialSettings.titleFontSize.clamp(10.0, 28.0).toDouble();
     _subtitleFontSize =
         widget.initialSettings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
+    _titleFontWeight =
+        widget.initialSettings.titleFontWeight.clamp(100.0, 900.0).toDouble();
+    _subtitleFontWeight =
+        widget.initialSettings.subtitleFontWeight
+            .clamp(100.0, 900.0)
+            .toDouble();
 
     _styleId = widget.initialSettings.styleId;
     _cardRatioId = widget.initialSettings.cardRatioId;
@@ -2732,6 +2813,8 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       subtitle: _subtitleController.text,
       titleFontSize: _titleFontSize,
       subtitleFontSize: _subtitleFontSize,
+      titleFontWeight: _titleFontWeight,
+      subtitleFontWeight: _subtitleFontWeight,
       styleId: _styleId,
       cardRatioId: _cardRatioId,
       iconId: _iconId,
@@ -2764,6 +2847,10 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       _subtitleController.text = settings.subtitle;
       _titleFontSize = settings.titleFontSize.clamp(10.0, 28.0).toDouble();
       _subtitleFontSize = settings.subtitleFontSize.clamp(8.0, 22.0).toDouble();
+      _titleFontWeight =
+          settings.titleFontWeight.clamp(100.0, 900.0).toDouble();
+      _subtitleFontWeight =
+          settings.subtitleFontWeight.clamp(100.0, 900.0).toDouble();
       _styleId = settings.styleId;
       _cardRatioId = settings.cardRatioId;
       _iconId = settings.iconId;
@@ -2835,27 +2922,45 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     );
   }
 
-  Future<String?> _askPresetName() async {
-    var draftName = '프리셋 ${_savedPresets.length + 1}';
+  Future<String?> _askPresetName({
+    String? initialName,
+    String dialogTitle = '프리셋 이름',
+  }) async {
+    final baseName = initialName?.trim();
+
+    var draftName =
+        (baseName == null || baseName.isEmpty)
+            ? '프리셋 ${_savedPresets.length + 1}'
+            : baseName;
 
     final result = await showDialog<String>(
       context: context,
+      barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
-          title: const Text(
-            '프리셋 이름',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _ink,
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(8, 0, 16, 12),
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          title: Center(
+            child: Text(
+              dialogTitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+                height: 1.0,
+              ),
             ),
           ),
           content: TextFormField(
             initialValue: draftName,
             autofocus: true,
             maxLength: 16,
+            textAlign: TextAlign.center,
             decoration: _inputDecoration(label: '이름', hint: '예: 사진 포스터'),
             onChanged: (value) => draftName = value,
             onFieldSubmitted: (value) {
@@ -2908,12 +3013,95 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     AppToast.show(context, '프리셋 저장 완료');
   }
 
+  Future<void> _renamePreset(_MainSquareCardPreset preset) async {
+    final name = await _askPresetName(
+      initialName: preset.name,
+      dialogTitle: '프리셋 이름 교체',
+    );
+
+    if (!mounted || name == null) return;
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty || trimmedName == preset.name.trim()) return;
+
+    setState(() {
+      _savedPresets =
+          _savedPresets.map((item) {
+            if (item.id != preset.id) return item;
+
+            return _MainSquareCardPreset(
+              id: item.id,
+              name: trimmedName,
+              settings: item.settings,
+            );
+          }).toList();
+    });
+
+    await _persistSavedPresets();
+
+    if (!mounted) return;
+    AppToast.show(context, '프리셋 이름 교체 완료');
+  }
+
   Future<void> _deletePreset(String id) async {
     setState(() {
       _savedPresets = _savedPresets.where((e) => e.id != id).toList();
     });
 
     await _persistSavedPresets();
+  }
+
+  Widget _presetTooltipPill(_MainSquareCardPreset preset) {
+    const Color tooltipBg = Color(0xEEFFFFFF);
+    const Color tooltipBorder = Color(0xFFE6ECF3);
+    const Color tooltipInk = Color(0xFF1F3A56);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _applySettings(preset.settings),
+        onLongPress: () => _renamePreset(preset),
+        borderRadius: BorderRadius.circular(999),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.only(left: 15, right: 8),
+          decoration: BoxDecoration(
+            color: tooltipBg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: tooltipBorder, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                preset.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: tooltipInk,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(width: 7),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _deletePreset(preset.id),
+                child: const Padding(
+                  padding: EdgeInsets.all(3),
+                  child: Icon(Icons.close, size: 14, color: tooltipInk),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -2933,6 +3121,8 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
       _subtitleController.text = '';
       _titleFontSize = 16;
       _subtitleFontSize = 12;
+      _titleFontWeight = 700;
+      _subtitleFontWeight = 400;
       _styleId = 'white';
       _cardRatioId = 'square';
       _iconId = 'add';
@@ -2955,23 +3145,44 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Future<void> _pickBackgroundImage() async {
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 92,
+      final assets = await AssetPicker.pickAssets(
+        context,
+        pickerConfig: const AssetPickerConfig(
+          maxAssets: 1,
+          requestType: RequestType.image,
+          textDelegate: KoreanAssetPickerTextDelegate(),
+          themeColor: Color(0xFF77BCEB),
+        ),
       );
 
-      if (picked == null) return;
+      if (assets == null || assets.isEmpty) return;
+
+      final asset = assets.first;
+      final sourceFile = await asset.originFile;
+
+      if (sourceFile == null || !await sourceFile.exists()) {
+        if (!mounted) return;
+        AppToast.show(context, '원본 파일을 불러오지 못했습니다');
+        return;
+      }
 
       final appDocDir = await getApplicationDocumentsDirectory();
+
+      final originalName = await asset.titleAsync;
+      final originalExt = p.extension(originalName).toLowerCase();
+      final sourceExt = p.extension(sourceFile.path).toLowerCase();
+
       final ext =
-          p.extension(picked.path).isEmpty ? '.jpg' : p.extension(picked.path);
+          originalExt.isNotEmpty
+              ? originalExt
+              : sourceExt.isNotEmpty
+              ? sourceExt
+              : '.jpg';
+
       final fileName =
           'main_square_background_${DateTime.now().millisecondsSinceEpoch}$ext';
 
-      final savedFile = await File(
-        picked.path,
-      ).copy(p.join(appDocDir.path, fileName));
+      final savedFile = await sourceFile.copy(p.join(appDocDir.path, fileName));
 
       if (!mounted) return;
 
@@ -2982,7 +3193,9 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
         _backgroundImageOffsetX = 0;
         _backgroundImageOffsetY = 0;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('배경 이미지 선택 실패: $e');
+
       if (!mounted) return;
       AppToast.show(context, '사진을 불러오지 못했습니다');
     }
@@ -3422,6 +3635,8 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                       iconThinness: _iconThinness,
                       titleFontSize: _titleFontSize,
                       subtitleFontSize: _subtitleFontSize,
+                      titleFontWeight: _titleFontWeight,
+                      subtitleFontWeight: _subtitleFontWeight,
                       contentScale:
                           previewWidth /
                           (MediaQuery.sizeOf(context).width - 32),
@@ -3457,17 +3672,33 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: -26,
+                        bottom: -38,
                         child: IgnorePointer(
-                          child: Text(
-                            '드래그 이동 · 두 손가락 확대 · 더블 탭 초기화',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: _subInk.withValues(alpha: 0.88),
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '드래그 이동 · 두 손가락 확대 · 더블 탭 초기화',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: _subInk.withValues(alpha: 0.88),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                "jpg · jpeg · png · gif",
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: _subInk.withValues(alpha: 0.68),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -3476,58 +3707,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _presetTooltipPill(_MainSquareCardPreset preset) {
-    const Color tooltipBg = Color(0xEEFFFFFF);
-    const Color tooltipBorder = Color(0xFFE6ECF3);
-    const Color tooltipInk = Color(0xFF1F3A56);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _applySettings(preset.settings),
-        borderRadius: BorderRadius.circular(999),
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: WidgetStateProperty.all(Colors.transparent),
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.only(left: 15, right: 8),
-          decoration: BoxDecoration(
-            color: tooltipBg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: tooltipBorder, width: 1),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                preset.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: tooltipInk,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  height: 1.15,
-                ),
-              ),
-              const SizedBox(width: 7),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _deletePreset(preset.id),
-                child: const Padding(
-                  padding: EdgeInsets.all(3),
-                  child: Icon(Icons.close, size: 14, color: tooltipInk),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -3688,6 +3867,34 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             onChanged: (value) {
               setState(() {
                 _subtitleFontSize = value.clamp(8.0, 22.0).toDouble();
+              });
+            },
+          ),
+          const SizedBox(height: 14),
+          _sliderRow(
+            title: '큰 문구 두께',
+            value: _titleFontWeight,
+            min: 100,
+            max: 900,
+            divisions: 8,
+            label: 'w${_titleFontWeight.round()}',
+            onChanged: (value) {
+              setState(() {
+                _titleFontWeight = value.clamp(100.0, 900.0).toDouble();
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          _sliderRow(
+            title: '작은 문구 두께',
+            value: _subtitleFontWeight,
+            min: 100,
+            max: 900,
+            divisions: 8,
+            label: 'w${_subtitleFontWeight.round()}',
+            onChanged: (value) {
+              setState(() {
+                _subtitleFontWeight = value.clamp(100.0, 900.0).toDouble();
               });
             },
           ),

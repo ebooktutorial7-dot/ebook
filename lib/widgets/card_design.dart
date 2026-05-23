@@ -189,6 +189,8 @@ class AddSquareCard extends StatelessWidget {
     this.iconThinness = 50,
     this.titleFontSize = 16,
     this.subtitleFontSize = 12,
+    this.titleFontWeight = 700,
+    this.subtitleFontWeight = 400,
     this.contentScale = 1.0,
     this.backgroundColor = Colors.white,
     this.backgroundGradient,
@@ -222,6 +224,8 @@ class AddSquareCard extends StatelessWidget {
   final double iconThinness;
   final double titleFontSize;
   final double subtitleFontSize;
+  final double titleFontWeight;
+  final double subtitleFontWeight;
   final double contentScale;
   final Color backgroundColor;
   final Gradient? backgroundGradient;
@@ -263,6 +267,9 @@ class AddSquareCard extends StatelessWidget {
     final safeIconThinness = iconThinness.clamp(0.0, 100.0).toDouble();
     final safeTitleFontSize = titleFontSize.clamp(10.0, 28.0).toDouble();
     final safeSubtitleFontSize = subtitleFontSize.clamp(8.0, 22.0).toDouble();
+    final safeTitleFontWeight = titleFontWeight.clamp(100.0, 900.0).toDouble();
+    final safeSubtitleFontWeight =
+        subtitleFontWeight.clamp(100.0, 900.0).toDouble();
     final resolvedIconStrokeWidth =
         ((4.2 - (safeIconThinness * 0.03)) * safeContentScale)
             .clamp(0.55, 4.2)
@@ -419,6 +426,14 @@ class AddSquareCard extends StatelessWidget {
             )
             : null;
 
+    FontWeight fontWeightFromValue(double value) {
+      final index =
+          (((value.clamp(100.0, 900.0) - 100) / 100).round())
+              .clamp(0, FontWeight.values.length - 1)
+              .toInt();
+      return FontWeight.values[index];
+    }
+
     final titleTextAlign = textAlignForPosition(textPosition);
     final titleBlock = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 260),
@@ -433,7 +448,7 @@ class AddSquareCard extends StatelessWidget {
             textAlign: titleTextAlign,
             style: TextStyle(
               fontSize: safeTitleFontSize * safeContentScale,
-              fontWeight: FontWeight.w700,
+              fontWeight: fontWeightFromValue(safeTitleFontWeight),
               color: resolvedTitleColor,
               shadows:
                   shouldUseLightContent
@@ -456,7 +471,7 @@ class AddSquareCard extends StatelessWidget {
               textAlign: titleTextAlign,
               style: TextStyle(
                 fontSize: safeSubtitleFontSize * safeContentScale,
-                fontWeight: FontWeight.w400,
+                fontWeight: fontWeightFromValue(safeSubtitleFontWeight),
                 color: resolvedSubtitleColor,
                 height: 1.2,
                 shadows:
