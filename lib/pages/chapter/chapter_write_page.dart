@@ -205,6 +205,54 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         s.startsWith('data:');
   }
 
+  Offset? _worldSwipeStart;
+  bool _worldSwipeTriggered = false;
+
+  static const double _worldSwipeMinDx = 40;
+  static const double _worldSwipeMinRatio = 1.3;
+
+  void _onWorldSwipeStart(DragStartDetails d) {
+    _worldSwipeStart = d.globalPosition;
+    _worldSwipeTriggered = false;
+  }
+
+  void _onWorldSwipeUpdate(DragUpdateDetails d) {
+    if (_worldSwipeTriggered) return;
+    if (_worldSwipeStart == null) return;
+
+    if (_scrollCtrl.hasClients &&
+        _scrollCtrl.position.isScrollingNotifier.value) {
+      return;
+    }
+
+    if (!_controller.selection.isCollapsed) return;
+
+    final now = d.globalPosition;
+    final dx = now.dx - _worldSwipeStart!.dx;
+    final dy = now.dy - _worldSwipeStart!.dy;
+
+    if (dx < -_worldSwipeMinDx && dx.abs() > dy.abs() * _worldSwipeMinRatio) {
+      _worldSwipeTriggered = true;
+      _openWorldSeat();
+    }
+  }
+
+  void _onWorldSwipeEnd() {
+    _worldSwipeStart = null;
+    _worldSwipeTriggered = false;
+  }
+
+  Widget _withWorldSwipe({required Widget child}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onHorizontalDragStart: _onWorldSwipeStart,
+      onHorizontalDragUpdate: _onWorldSwipeUpdate,
+      onHorizontalDragEnd: (_) => _onWorldSwipeEnd(),
+      onHorizontalDragCancel: _onWorldSwipeEnd,
+      child: child,
+    );
+  }
+
   Map<String, dynamic>? _imageDataToMap(dynamic data) {
     if (data == null) return null;
 
@@ -609,35 +657,39 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final savedTitle = prefs.getString(_prefsKeyDraftTitle);
     final savedDeltaString = prefs.getString(_prefsKeyDraftDelta);
 
-    if ((savedTitle == null || savedTitle.isEmpty) &&
-        (savedDeltaString == null || savedDeltaString.isEmpty)) {
-      return;
-    }
+    final bool hasDraft =
+        (savedTitle != null && savedTitle.isNotEmpty) ||
+        (savedDeltaString != null && savedDeltaString.isNotEmpty);
 
     try {
       _isRestoringDraft = true;
 
-      if (savedTitle != null) {
-        _titleCtrl.text = savedTitle;
-        _titleCtrl.selection = TextSelection.collapsed(
-          offset: _titleCtrl.text.length,
-        );
-      }
+      if (hasDraft) {
+        if (savedTitle != null) {
+          _titleCtrl.text = savedTitle;
+          _titleCtrl.selection = TextSelection.collapsed(
+            offset: _titleCtrl.text.length,
+          );
+        }
 
-      if (savedDeltaString != null && savedDeltaString.isNotEmpty) {
-        final decoded = jsonDecode(savedDeltaString);
-        if (decoded is List) {
-          final savedDelta = decoded
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList(growable: true);
+        if (savedDeltaString != null && savedDeltaString.isNotEmpty) {
+          final decoded = jsonDecode(savedDeltaString);
+          if (decoded is List) {
+            final savedDelta = decoded
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList(growable: true);
 
-          final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(savedDelta);
-          _controller.document = quill.Document.fromJson(editorDelta);
+            final editorDelta = _mergeBgAlphaIntoBackgroundForEditor(
+              savedDelta,
+            );
+            _controller.document = quill.Document.fromJson(editorDelta);
+          }
         }
       }
 
+      // draft 유무와 상관없이 커서 위치 복원
       final max = _controller.document.toPlainText().length;
-      final sel = (_restoredSelection ?? 0).clamp(0, max);
+      final sel = (_restoredSelection ?? 0).clamp(0, max).toInt();
 
       _controller.updateSelection(
         TextSelection.collapsed(offset: sel),
@@ -934,6 +986,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     unawaited(_restoreKeywords());
     unawaited(_restoreDraftAndPosition());
+    unawaited(_restoreFocusMode());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _recomputePaginationFromStoredHeight();
@@ -1207,13 +1260,41 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }
 
   Future<void> _persistSelection() async {
+    final sel = _controller.selection;
+    if (!sel.isValid) return;
+
+    final max = _controller.document.toPlainText().length;
+
+    final rawOffset = sel.isCollapsed ? sel.baseOffset : sel.extentOffset;
+    final offset = rawOffset.clamp(0, max).toInt();
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_prefsKeySelection, _controller.selection.baseOffset);
+    await prefs.setInt(_prefsKeySelection, offset);
   }
 
   Future<void> _persistFocus() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefsKeyFocus, _isFocusWriting);
+  }
+
+  Future<void> _restoreFocusMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool(_prefsKeyFocus) ?? false;
+
+    if (!saved) return;
+    if (!mounted) return;
+
+    setState(() {
+      _isFocusWriting = true;
+      _toolbarLocked = false;
+      _chromeVisible = false;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focusNode.requestFocus();
+      unawaited(_applySystemUi());
+    });
   }
 
   Future<void> _save() async {
@@ -1538,8 +1619,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     final monthIndexKey = _prefsMonthIndexKey(day.year, day.month);
 
     final chapterSessionId = 'chapter:${widget.documentId}:$_baseKey:$dayKey';
-
-    // 오늘 이 챕터를 처음 열었을 때 글자 수를 기준점으로 저장
     final dayBaseKey = 'chapter_day_base_chars_${_baseKey}_$dayKey';
 
     int dayBaseChars;
@@ -1956,300 +2035,276 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child:
-                          isSpaceTheme
-                              ? Stack(
-                                children: [
-                                  const Positioned.fill(
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            Color.fromARGB(255, 6, 10, 38),
-                                            Color.fromARGB(255, 20, 27, 69),
-                                            Color.fromARGB(246, 33, 23, 38),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const Positioned.fill(
-                                    child: _AnimatedStarField(starCount: 260),
-                                  ),
-                                  const Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: _ShootingStarLayer(),
-                                    ),
-                                  ),
-                                  Container(
-                                    color: Colors.transparent,
-                                    child: Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        settings.horizontalMargin,
-                                        editorTopChromeInset +
-                                            _a4VerticalMargin,
-                                        settings.horizontalMargin,
-                                        (_chromeVisible ? 0 : 0) +
-                                            _a4VerticalMargin,
-                                      ),
-                                      child: DefaultTextStyle.merge(
-                                        style: TextStyle(
-                                          fontSize: 15.0,
-                                          height: settings.lineHeight,
-                                          letterSpacing: settings.letterSpacing,
-                                          fontFamily: _resolveFontFamily(
-                                            settings.fontFamily,
-                                          ),
-                                          color: _textColorFromSettings(
-                                            settings,
-                                          ),
-                                        ),
-
-                                        child: quill.QuillEditor(
-                                          controller: _controller,
-                                          focusNode: _focusNode,
-                                          scrollController: _scrollCtrl,
-                                          config: quill.QuillEditorConfig(
-                                            scrollable: true,
-                                            padding: EdgeInsets.zero,
-                                            expands: true,
-
-                                            customLeadingBlockBuilder:
-                                                buildCustomLeadingWithColor(
-                                                  (settings.themeId ==
-                                                          'default')
-                                                      ? null
-                                                      : _textColorFromSettings(
-                                                        settings,
-                                                      ),
-                                                ),
-                                            embedBuilders: [
-                                              _SafeImageEmbedBuilder(),
-                                              _HrSolidEmbedBuilder(),
-                                              _HrEmbedBuilder(),
-                                              ...safeEmbeds,
+                      child: _withWorldSwipe(
+                        child:
+                            isSpaceTheme
+                                ? Stack(
+                                  children: [
+                                    const Positioned.fill(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Color.fromARGB(255, 6, 10, 38),
+                                              Color.fromARGB(255, 20, 27, 69),
+                                              Color.fromARGB(246, 33, 23, 38),
                                             ],
-                                            customStyles: customStyles,
-                                            onTapDown: (details, pos) {
-                                              if (!_controller
-                                                  .selection
-                                                  .isCollapsed) {
-                                                final o =
-                                                    _controller
-                                                        .selection
-                                                        .extentOffset;
-                                                _controller.updateSelection(
-                                                  TextSelection.collapsed(
-                                                    offset: o,
-                                                  ),
-                                                  quill.ChangeSource.local,
-                                                );
-                                              }
-                                              final wasDouble =
-                                                  _handleDoubleTapForToolbar(
-                                                    details,
-                                                  );
-                                              if (!wasDouble &&
-                                                  _toolbarLocked) {
-                                                setState(
-                                                  () => _toolbarLocked = false,
-                                                );
-                                              }
-                                              return false;
-                                            },
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              )
-                              : isLightSkyTheme
-                              ? Stack(
-                                children: [
-                                  const Positioned.fill(
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            Color.fromARGB(255, 238, 248, 255),
-                                            Color(0xFFBBDEFB),
-                                            Color.fromARGB(255, 241, 249, 255),
-                                          ],
+                                    const Positioned.fill(
+                                      child: _AnimatedStarField(starCount: 260),
+                                    ),
+                                    const Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: _ShootingStarLayer(),
+                                      ),
+                                    ),
+                                    Container(
+                                      color: Colors.transparent,
+                                      child: Padding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          settings.horizontalMargin,
+                                          editorTopChromeInset +
+                                              _a4VerticalMargin,
+                                          settings.horizontalMargin,
+                                          (_chromeVisible ? 0 : 0) +
+                                              _a4VerticalMargin,
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                  const Positioned.fill(
-                                    child: CustomPaint(
-                                      painter: _SunRayPainter(),
-                                    ),
-                                  ),
-                                  Container(
-                                    color: Colors.transparent,
-                                    child: Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        settings.horizontalMargin,
-                                        editorTopChromeInset +
-                                            _a4VerticalMargin,
-                                        settings.horizontalMargin,
-                                        (_chromeVisible ? 0 : 0) +
-                                            _a4VerticalMargin,
-                                      ),
-                                      child: DefaultTextStyle.merge(
-                                        style: TextStyle(
-                                          fontSize: 15.0,
-                                          height: settings.lineHeight,
-                                          letterSpacing: settings.letterSpacing,
-                                          fontFamily: _resolveFontFamily(
-                                            settings.fontFamily,
-                                          ),
-                                          color: _textColorFromSettings(
-                                            settings,
-                                          ),
-                                        ),
-
-                                        child: quill.QuillEditor(
-                                          controller: _controller,
-                                          focusNode: _focusNode,
-                                          scrollController: _scrollCtrl,
-                                          config: quill.QuillEditorConfig(
-                                            scrollable: true,
-                                            padding: EdgeInsets.zero,
-                                            expands: true,
-
-                                            customLeadingBlockBuilder:
-                                                buildCustomLeadingWithColor(
-                                                  (settings.themeId ==
-                                                          'default')
-                                                      ? null
-                                                      : _textColorFromSettings(
-                                                        settings,
-                                                      ),
-                                                ),
-                                            embedBuilders: [
-                                              _SafeImageEmbedBuilder(),
-                                              _HrSolidEmbedBuilder(),
-                                              _HrEmbedBuilder(),
-                                              ...safeEmbeds,
-                                            ],
-                                            customStyles: customStyles,
-                                            onTapDown: (details, pos) {
-                                              if (!_controller
-                                                  .selection
-                                                  .isCollapsed) {
-                                                final o =
-                                                    _controller
-                                                        .selection
-                                                        .extentOffset;
-                                                _controller.updateSelection(
-                                                  TextSelection.collapsed(
-                                                    offset: o,
-                                                  ),
-                                                  quill.ChangeSource.local,
-                                                );
-                                              }
-                                              final wasDouble =
-                                                  _handleDoubleTapForToolbar(
-                                                    details,
-                                                  );
-                                              if (!wasDouble &&
-                                                  _toolbarLocked) {
-                                                setState(
-                                                  () => _toolbarLocked = false,
-                                                );
-                                              }
-                                              return false;
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                              : Container(
-                                color: pageBg,
-                                child: Padding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    settings.horizontalMargin,
-                                    editorTopChromeInset + _a4VerticalMargin,
-                                    settings.horizontalMargin,
-                                    (_chromeVisible ? 0 : 0) +
-                                        _a4VerticalMargin,
-                                  ),
-                                  child: DefaultTextStyle.merge(
-                                    style: TextStyle(
-                                      fontSize: 15.0,
-                                      height: settings.lineHeight,
-                                      letterSpacing: settings.letterSpacing,
-                                      fontFamily: _resolveFontFamily(
-                                        settings.fontFamily,
-                                      ),
-                                      color: _textColorFromSettings(settings),
-                                    ),
-
-                                    child: quill.QuillEditor(
-                                      controller: _controller,
-                                      focusNode: _focusNode,
-                                      scrollController: _scrollCtrl,
-                                      config: quill.QuillEditorConfig(
-                                        scrollable: true,
-                                        padding: EdgeInsets.zero,
-                                        expands: true,
-
-                                        customLeadingBlockBuilder:
-                                            buildCustomLeadingWithColor(
-                                              (settings.themeId == 'default')
-                                                  ? null
-                                                  : _textColorFromSettings(
-                                                    settings,
-                                                  ),
+                                        child: DefaultTextStyle.merge(
+                                          style: TextStyle(
+                                            fontSize: 15.0,
+                                            height: settings.lineHeight,
+                                            letterSpacing:
+                                                settings.letterSpacing,
+                                            fontFamily: _resolveFontFamily(
+                                              settings.fontFamily,
                                             ),
-                                        embedBuilders: [
-                                          _SafeImageEmbedBuilder(),
-                                          _HrSolidEmbedBuilder(),
-                                          _HrEmbedBuilder(),
-                                          ...safeEmbeds,
-                                        ],
-                                        customStyles: customStyles,
-                                        onTapDown: (details, pos) {
-                                          if (!_controller
-                                              .selection
-                                              .isCollapsed) {
-                                            final o =
-                                                _controller
-                                                    .selection
-                                                    .extentOffset;
-                                            _controller.updateSelection(
-                                              TextSelection.collapsed(
-                                                offset: o,
+                                            color: _textColorFromSettings(
+                                              settings,
+                                            ),
+                                          ),
+
+                                          child: quill.QuillEditor(
+                                            controller: _controller,
+                                            focusNode: _focusNode,
+                                            scrollController: _scrollCtrl,
+                                            config: quill.QuillEditorConfig(
+                                              scrollable: true,
+                                              padding: EdgeInsets.zero,
+                                              expands: true,
+                                              detectWordBoundary: false,
+
+                                              customLeadingBlockBuilder:
+                                                  buildCustomLeadingWithColor(
+                                                    (settings.themeId ==
+                                                            'default')
+                                                        ? null
+                                                        : _textColorFromSettings(
+                                                          settings,
+                                                        ),
+                                                  ),
+                                              embedBuilders: [
+                                                _SafeImageEmbedBuilder(),
+                                                _HrSolidEmbedBuilder(),
+                                                _HrEmbedBuilder(),
+                                                ...safeEmbeds,
+                                              ],
+                                              customStyles: customStyles,
+                                              onTapDown: (details, pos) {
+                                                final wasDouble =
+                                                    _handleDoubleTapForToolbar(
+                                                      details,
+                                                    );
+                                                if (!wasDouble &&
+                                                    _toolbarLocked) {
+                                                  setState(
+                                                    () =>
+                                                        _toolbarLocked = false,
+                                                  );
+                                                }
+                                                return false;
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : isLightSkyTheme
+                                ? Stack(
+                                  children: [
+                                    const Positioned.fill(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Color.fromARGB(
+                                                255,
+                                                238,
+                                                248,
+                                                255,
                                               ),
-                                              quill.ChangeSource.local,
-                                            );
-                                          }
-                                          final wasDouble =
-                                              _handleDoubleTapForToolbar(
-                                                details,
+                                              Color(0xFFBBDEFB),
+                                              Color.fromARGB(
+                                                255,
+                                                241,
+                                                249,
+                                                255,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const Positioned.fill(
+                                      child: CustomPaint(
+                                        painter: _SunRayPainter(),
+                                      ),
+                                    ),
+                                    Container(
+                                      color: Colors.transparent,
+                                      child: Padding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          settings.horizontalMargin,
+                                          editorTopChromeInset +
+                                              _a4VerticalMargin,
+                                          settings.horizontalMargin,
+                                          (_chromeVisible ? 0 : 0) +
+                                              _a4VerticalMargin,
+                                        ),
+                                        child: DefaultTextStyle.merge(
+                                          style: TextStyle(
+                                            fontSize: 15.0,
+                                            height: settings.lineHeight,
+                                            letterSpacing:
+                                                settings.letterSpacing,
+                                            fontFamily: _resolveFontFamily(
+                                              settings.fontFamily,
+                                            ),
+                                            color: _textColorFromSettings(
+                                              settings,
+                                            ),
+                                          ),
+
+                                          child: quill.QuillEditor(
+                                            controller: _controller,
+                                            focusNode: _focusNode,
+                                            scrollController: _scrollCtrl,
+                                            config: quill.QuillEditorConfig(
+                                              scrollable: true,
+                                              padding: EdgeInsets.zero,
+                                              expands: true,
+                                              detectWordBoundary: false,
+
+                                              customLeadingBlockBuilder:
+                                                  buildCustomLeadingWithColor(
+                                                    (settings.themeId ==
+                                                            'default')
+                                                        ? null
+                                                        : _textColorFromSettings(
+                                                          settings,
+                                                        ),
+                                                  ),
+                                              embedBuilders: [
+                                                _SafeImageEmbedBuilder(),
+                                                _HrSolidEmbedBuilder(),
+                                                _HrEmbedBuilder(),
+                                                ...safeEmbeds,
+                                              ],
+                                              customStyles: customStyles,
+                                              onTapDown: (details, pos) {
+                                                final wasDouble =
+                                                    _handleDoubleTapForToolbar(
+                                                      details,
+                                                    );
+                                                if (!wasDouble &&
+                                                    _toolbarLocked) {
+                                                  setState(
+                                                    () =>
+                                                        _toolbarLocked = false,
+                                                  );
+                                                }
+                                                return false;
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : Container(
+                                  color: pageBg,
+                                  child: Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      settings.horizontalMargin,
+                                      editorTopChromeInset + _a4VerticalMargin,
+                                      settings.horizontalMargin,
+                                      (_chromeVisible ? 0 : 0) +
+                                          _a4VerticalMargin,
+                                    ),
+                                    child: DefaultTextStyle.merge(
+                                      style: TextStyle(
+                                        fontSize: 15.0,
+                                        height: settings.lineHeight,
+                                        letterSpacing: settings.letterSpacing,
+                                        fontFamily: _resolveFontFamily(
+                                          settings.fontFamily,
+                                        ),
+                                        color: _textColorFromSettings(settings),
+                                      ),
+
+                                      child: quill.QuillEditor(
+                                        controller: _controller,
+                                        focusNode: _focusNode,
+                                        scrollController: _scrollCtrl,
+                                        config: quill.QuillEditorConfig(
+                                          scrollable: true,
+                                          padding: EdgeInsets.zero,
+                                          expands: true,
+                                          detectWordBoundary: false,
+
+                                          customLeadingBlockBuilder:
+                                              buildCustomLeadingWithColor(
+                                                (settings.themeId == 'default')
+                                                    ? null
+                                                    : _textColorFromSettings(
+                                                      settings,
+                                                    ),
+                                              ),
+                                          embedBuilders: [
+                                            _SafeImageEmbedBuilder(),
+                                            _HrSolidEmbedBuilder(),
+                                            _HrEmbedBuilder(),
+                                            ...safeEmbeds,
+                                          ],
+                                          customStyles: customStyles,
+                                          onTapDown: (details, pos) {
+                                            final wasDouble =
+                                                _handleDoubleTapForToolbar(
+                                                  details,
+                                                );
+                                            if (!wasDouble && _toolbarLocked) {
+                                              setState(
+                                                () => _toolbarLocked = false,
                                               );
-                                          if (!wasDouble && _toolbarLocked) {
-                                            setState(
-                                              () => _toolbarLocked = false,
-                                            );
-                                          }
-                                          return false;
-                                        },
+                                            }
+                                            return false;
+                                          },
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
+                      ),
                     ),
-
                     if (_chromeVisible)
                       Positioned(
                         top: 0,
@@ -2329,13 +2384,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                         ),
                       ),
                     ],
-                    Positioned.fill(
-                      child: _FullScreenSwipeToWorld(
-                        scrollCtrl: _scrollCtrl,
-                        controller: _controller,
-                        onTrigger: _openWorldSeat,
-                      ),
-                    ),
                   ],
                 ),
               ),
