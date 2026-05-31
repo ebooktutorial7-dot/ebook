@@ -52,45 +52,64 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.transparent,
+    elevation: 0,
     builder: (ctx) {
       final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
-      final sheetBorder = Colors.white.withValues(alpha: theme.borderOpacity);
+
+      const double glassRadius = 24;
+
+      final Color glassBg = Colors.white.withValues(alpha: 0.38);
+      final Color glassBorder = Colors.white.withValues(alpha: 0.68);
+      final Color glassSoft = Colors.white.withValues(alpha: 0.24);
+      final Color glassSoftBorder = Colors.white.withValues(alpha: 0.42);
+      const Color textStrong = ui.Color.fromARGB(255, 16, 34, 50);
 
       Widget handle() => Center(
         child: Container(
-          margin: const EdgeInsets.only(top: 10, bottom: 10),
+          margin: const EdgeInsets.only(top: 10, bottom: 12),
           width: 44,
           height: 5,
           decoration: BoxDecoration(
-            color: Colors.black12,
+            color: Colors.white.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(999),
           ),
         ),
       );
 
       Widget inputCard(StateSetter setState) => Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: current,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.black12, width: 1),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: glassSoft,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: glassSoftBorder, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: current,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    width: 1,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              _hexFromColor(current),
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Colors.black,
+              const SizedBox(width: 10),
+              Text(
+                _hexFromColor(current),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: textStrong,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 
@@ -101,8 +120,14 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
         const double thumbR = 6;
 
         return Center(
-          child: SizedBox(
+          child: Container(
             width: sliderW,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            decoration: BoxDecoration(
+              color: glassSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: glassSoftBorder, width: 1),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -113,16 +138,29 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
                     children: [
                       const Text(
                         '투명도',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: textStrong,
+                        ),
                       ),
-                      Text('${(v * 100).round()}%'),
+                      Text(
+                        '${(v * 100).round()}%',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: textStrong,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 2),
                 SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
+                  data: SliderTheme.of(ctx).copyWith(
                     trackHeight: 1.0,
+                    activeTrackColor: textStrong.withValues(alpha: 0.78),
+                    inactiveTrackColor: textStrong.withValues(alpha: 0.18),
+                    thumbColor: textStrong,
+                    overlayColor: Colors.transparent,
                     thumbShape: const RoundSliderThumbShape(
                       enabledThumbRadius: thumbR,
                     ),
@@ -142,9 +180,14 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
         );
       }
 
-      Widget wheelCard(StateSetter setState) => Padding(
-        padding: const EdgeInsets.all(12),
-        child: Center(
+      Widget wheelCard(StateSetter setState) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: glassSoft,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: glassSoftBorder, width: 1),
+          ),
           child: SizedBox(
             width: wheelSize,
             height: wheelSize,
@@ -156,7 +199,7 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
               wheelSquarePadding: 20,
               wheelSquareBorderRadius: 999,
               hasBorder: true,
-              borderColor: Colors.black12,
+              borderColor: Colors.white.withValues(alpha: 0.35),
             ),
           ),
         ),
@@ -165,31 +208,52 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
       Widget actions() => Row(
         children: [
           TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: textStrong,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
             onPressed:
                 () => Navigator.pop(ctx, const _ColorSheetResult.clear()),
-            icon: const Icon(Icons.block),
-            label: const Text('해제'),
+            icon: const Icon(Icons.block, size: 18),
+            label: const Text(
+              '해제',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           const Spacer(),
           TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: textStrong,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
             onPressed:
                 () => Navigator.pop(ctx, const _ColorSheetResult.cancel()),
-            child: const Text('취소'),
+            child: const Text(
+              '취소',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           const SizedBox(width: 8),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1F3A56),
-              foregroundColor: Colors.white,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              backgroundColor: Colors.white.withValues(alpha: 0.72),
+              foregroundColor: textStrong,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(999),
+                side: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  width: 1,
+                ),
               ),
             ),
             onPressed:
                 () => Navigator.pop(ctx, _ColorSheetResult.apply(current)),
             child: const Text(
               '적용',
-              style: TextStyle(fontWeight: FontWeight.w500),
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -200,43 +264,49 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
           padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
           child: Material(
             color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              decoration: BoxDecoration(
-                color: const ui.Color.fromARGB(70, 207, 232, 255),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(22),
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(glassRadius),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  decoration: BoxDecoration(
+                    color: glassBg,
+                    borderRadius: BorderRadius.circular(glassRadius),
+                    border: Border.all(color: glassBorder, width: 1),
+                  ),
+                  child: StatefulBuilder(
+                    builder: (ctx, setState) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          handle(),
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: textStrong,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          inputCard(setState),
+                          const SizedBox(height: 12),
+                          wheelCard(setState),
+                          if (forBackground) ...[
+                            const SizedBox(height: 15),
+                            alphaCard(setState),
+                          ],
+                          const SizedBox(height: 15),
+                          actions(),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-                border: Border.all(color: sheetBorder, width: 1),
-              ),
-              child: StatefulBuilder(
-                builder: (ctx, setState) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      handle(),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1F3A56),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      inputCard(setState),
-                      const SizedBox(height: 10),
-                      wheelCard(setState),
-                      if (forBackground) ...[
-                        const SizedBox(height: 15),
-                        alphaCard(setState),
-                      ],
-                      const SizedBox(height: 15),
-                      actions(),
-                    ],
-                  );
-                },
               ),
             ),
           ),

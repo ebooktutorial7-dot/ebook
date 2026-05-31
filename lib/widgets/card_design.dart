@@ -298,21 +298,25 @@ class AddSquareCard extends StatelessWidget {
         shouldUseLightContent
             ? Colors.white.withValues(alpha: 0.92)
             : isLiquidGlass
-            ? iconColor.withValues(alpha: 0.94)
+            ? iconColor.withValues(alpha: (iconColor.a * 0.94).clamp(0.0, 1.0))
             : iconColor;
 
     final resolvedTitleColor =
         shouldUseLightContent
             ? Colors.white.withValues(alpha: 0.94)
             : isLiquidGlass
-            ? titleColor.withValues(alpha: 0.95)
+            ? titleColor.withValues(
+              alpha: (titleColor.a * 0.95).clamp(0.0, 1.0),
+            )
             : titleColor;
 
     final resolvedSubtitleColor =
         shouldUseLightContent
             ? Colors.white.withValues(alpha: 0.80)
             : isLiquidGlass
-            ? subtitleColor.withValues(alpha: 0.84)
+            ? subtitleColor.withValues(
+              alpha: (subtitleColor.a * 0.84).clamp(0.0, 1.0),
+            )
             : subtitleColor;
 
     final decoration = BoxDecoration(

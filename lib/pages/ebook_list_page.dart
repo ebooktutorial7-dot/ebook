@@ -16,6 +16,7 @@ import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart'
 import 'package:ebook_tutorial_app/services/ebook_service.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
+import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:ebook_tutorial_app/dialogs/dialogs.dart';
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/utils/delta_utils.dart';
@@ -84,6 +85,33 @@ Future<String> _resolvePersistedMainSquareImagePath(String? value) async {
   } catch (_) {}
 
   return '';
+}
+
+const String _customMainSquareTextColorPrefix = 'custom:';
+
+String _mainSquareTextColorIdFromColor(Color color) {
+  return '$_customMainSquareTextColorPrefix${color.toARGB32()}';
+}
+
+Color? _mainSquareColorFromTextColorId(String id) {
+  if (!id.startsWith(_customMainSquareTextColorPrefix)) return null;
+
+  final raw = id.substring(_customMainSquareTextColorPrefix.length);
+  final value = int.tryParse(raw);
+
+  if (value == null) return null;
+  return Color(value);
+}
+
+String _hexFromColorRgb(Color color) {
+  final r = (color.r * 255).round().clamp(0, 255);
+  final g = (color.g * 255).round().clamp(0, 255);
+  final b = (color.b * 255).round().clamp(0, 255);
+
+  return '#'
+      '${r.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+      '${g.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+      '${b.toRadixString(16).padLeft(2, '0').toUpperCase()}';
 }
 
 class _EbookListPageState extends State<EbookListPage>
@@ -799,11 +827,23 @@ class _EbookListPageState extends State<EbookListPage>
     orElse: () => _mainSquareIcons.first,
   );
 
-  _MainSquareTextColorOption get _mainSquareTextColor =>
-      _mainSquareTextColors.firstWhere(
-        (e) => e.id == _mainSquareTextColorId,
-        orElse: () => _mainSquareTextColors.first,
+  _MainSquareTextColorOption get _mainSquareTextColor {
+    final customColor = _mainSquareColorFromTextColorId(_mainSquareTextColorId);
+
+    if (customColor != null) {
+      return _MainSquareTextColorOption(
+        id: _mainSquareTextColorId,
+        label: _hexFromColorRgb(customColor),
+        titleColor: customColor,
+        subtitleColor: customColor,
       );
+    }
+
+    return _mainSquareTextColors.firstWhere(
+      (e) => e.id == _mainSquareTextColorId,
+      orElse: () => _mainSquareTextColors.first,
+    );
+  }
 
   _MainSquareBorderOption get _mainSquareBorder =>
       _mainSquareBorders.firstWhere(
@@ -1697,8 +1737,10 @@ class _EbookListPageState extends State<EbookListPage>
             savedIconThinness.clamp(0.0, 100.0).toDouble();
       }
 
-      if (_mainSquareTextColors.any((e) => e.id == savedTextColor)) {
-        _mainSquareTextColorId = savedTextColor!;
+      if (savedTextColor != null &&
+          (_mainSquareTextColors.any((e) => e.id == savedTextColor) ||
+              _mainSquareColorFromTextColorId(savedTextColor) != null)) {
+        _mainSquareTextColorId = savedTextColor;
       }
 
       if (_mainSquareBorders.any((e) => e.id == savedBorder)) {
@@ -2718,11 +2760,23 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     orElse: () => widget.icons.first,
   );
 
-  _MainSquareTextColorOption get _selectedTextColor =>
-      widget.textColors.firstWhere(
-        (e) => e.id == _textColorId,
-        orElse: () => widget.textColors.first,
+  _MainSquareTextColorOption get _selectedTextColor {
+    final customColor = _mainSquareColorFromTextColorId(_textColorId);
+
+    if (customColor != null) {
+      return _MainSquareTextColorOption(
+        id: _textColorId,
+        label: _hexFromColorRgb(customColor),
+        titleColor: customColor,
+        subtitleColor: customColor,
       );
+    }
+
+    return widget.textColors.firstWhere(
+      (e) => e.id == _textColorId,
+      orElse: () => widget.textColors.first,
+    );
+  }
 
   _MainSquareBorderOption get _selectedBorder => widget.borders.firstWhere(
     (e) => e.id == _borderId,
@@ -3431,21 +3485,6 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     );
   }
 
-  Widget _colorDot(Color color, {bool white = false}) {
-    return Container(
-      width: 15,
-      height: 15,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: white ? const Color(0xFFB7C7D7) : color,
-          width: 1,
-        ),
-      ),
-    );
-  }
-
   Widget _wrap(List<Widget> children) {
     return Wrap(spacing: 12, runSpacing: 12, children: children);
   }
@@ -3906,27 +3945,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           ),
           const SizedBox(height: 22),
           _miniLabel('문구 아이콘 색상'),
-          _wrap(
-            widget.textColors.map((option) {
-              final color = option.resolveTitleColor(_selectedStyle);
-              final selected = _textColorId == option.id;
-
-              return _choice(
-                selected: selected,
-                leading: _colorDot(color, white: option.id == 'white'),
-                label: Text(option.label),
-                onTap: () {
-                  setState(() {
-                    _textColorId = option.id;
-
-                    if (_threeDGlassMode && option.id != 'white') {
-                      _useLightContentOnImage = false;
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
+          _inlineTextIconColorWheel(),
           if (_hasBackgroundImage && _useLightContentOnImage) ...[
             const SizedBox(height: 14),
             const Text(
@@ -3941,6 +3960,88 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _inlineTextIconColorWheel() {
+    final currentColor = _selectedTextColor.resolveTitleColor(_selectedStyle);
+    final hex = _hexFromColorRgb(currentColor);
+    final alpha = currentColor.a.clamp(0.0, 1.0).toDouble();
+    final alphaPercent = (alpha * 100).round();
+
+    void applyColor(Color color) {
+      setState(() {
+        _textColorId = _mainSquareTextColorIdFromColor(color);
+
+        if (_threeDGlassMode && color.a < 1.0) {
+          _useLightContentOnImage = false;
+        }
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: currentColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  width: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              hex,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: _subInk,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 27),
+
+        Center(
+          child: SizedBox(
+            width: 190,
+            height: 190,
+            child: ColorWheelPicker(
+              color: currentColor,
+              onWheel: (_) {},
+              onChanged: applyColor,
+              wheelWidth: 18,
+              wheelSquarePadding: 20,
+              wheelSquareBorderRadius: 999,
+              hasBorder: true,
+              borderColor: Colors.black.withValues(alpha: 0.10),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 27),
+
+        _sliderRow(
+          title: '투명도',
+          value: alpha,
+          min: 0,
+          max: 1,
+          divisions: 10,
+          label: '$alphaPercent%',
+          onChanged: (value) {
+            final a = (value * 255).round().clamp(0, 255);
+            applyColor(currentColor.withAlpha(a));
+          },
+        ),
+      ],
     );
   }
 
@@ -4160,7 +4261,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 27),
             _sliderRow(
               title: '투명도',
               value: _backgroundImageTransparency,

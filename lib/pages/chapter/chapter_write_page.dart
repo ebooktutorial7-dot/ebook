@@ -3081,18 +3081,50 @@ class _SafeImageEmbedBuilder extends quill.EmbedBuilder {
     controller.replaceText(offset, 1, '', null);
   }
 
+  bool _hasImageEmbedAt({
+    required quill.QuillController controller,
+    required int offset,
+  }) {
+    final delta = controller.document.toDelta().toJson();
+    var cursor = 0;
+
+    for (final rawOp in delta) {
+      final op = Map<String, dynamic>.from(rawOp as Map);
+      final insert = op['insert'];
+
+      final length = insert is String ? insert.length : 1;
+
+      if (cursor == offset) {
+        if (insert is Map) {
+          return insert.containsKey('image') || insert.containsKey('custom');
+        }
+        return false;
+      }
+
+      cursor += length;
+    }
+
+    return false;
+  }
+
   void _replaceEmbedData({
     required quill.QuillController controller,
     required int offset,
     required Map<String, dynamic> data,
   }) {
+    if (!_hasImageEmbedAt(controller: controller, offset: offset)) {
+      return;
+    }
+
     final payload = jsonEncode(data);
+    final embed = quill.BlockEmbed.image(payload);
 
-    final embed = quill.BlockEmbed.custom(
-      quill.CustomBlockEmbed('image', payload),
+    controller.replaceText(
+      offset,
+      1,
+      embed,
+      TextSelection.collapsed(offset: offset + 1),
     );
-
-    controller.replaceText(offset, 1, embed, null);
   }
 }
 
@@ -3209,6 +3241,30 @@ class _ResizableImageBox extends StatefulWidget {
 class _ResizableImageBoxState extends State<_ResizableImageBox> {
   late double _w;
   bool _selected = false;
+  bool _resizing = false;
+
+  void _resizeBy(double delta) {
+    if (_resizing) return;
+
+    final newW = (_w + delta).clamp(
+      _SafeImageEmbedBuilder._minWidth,
+      widget.maxWidth,
+    );
+
+    if ((newW - _w).abs() < 0.5) return;
+
+    setState(() {
+      _w = newW;
+      _resizing = true;
+    });
+
+    widget.onResize(newW);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _resizing = false);
+    });
+  }
 
   @override
   void initState() {
@@ -3260,28 +3316,14 @@ class _ResizableImageBoxState extends State<_ResizableImageBox> {
                     children: [
                       _ResizeButton(
                         icon: Icons.remove,
-                        onTap: () {
-                          final newW = (_w - 24).clamp(
-                            _SafeImageEmbedBuilder._minWidth,
-                            widget.maxWidth,
-                          );
-
-                          setState(() => _w = newW);
-                          widget.onResize(newW);
-                        },
+                        onTap: () => _resizeBy(-24),
                       ),
+
                       const SizedBox(width: 10),
+
                       _ResizeButton(
                         icon: Icons.add,
-                        onTap: () {
-                          final newW = (_w + 24).clamp(
-                            _SafeImageEmbedBuilder._minWidth,
-                            widget.maxWidth,
-                          );
-
-                          setState(() => _w = newW);
-                          widget.onResize(newW);
-                        },
+                        onTap: () => _resizeBy(24),
                       ),
                     ],
                   ),

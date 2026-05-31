@@ -640,43 +640,44 @@ Future<ColorSheetResult> showPrettyWheelBottomSheet(
           padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
           child: Material(
             color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              decoration: BoxDecoration(
-                color: const ui.Color.fromARGB(70, 207, 232, 255),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(22),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                decoration: BoxDecoration(
+                  color: const ui.Color.fromARGB(70, 207, 232, 255),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: sheetBorder, width: 1),
                 ),
-                border: Border.all(color: sheetBorder, width: 1),
-              ),
-              child: StatefulBuilder(
-                builder: (ctx, setState) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      handle(),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1F3A56),
+                child: StatefulBuilder(
+                  builder: (ctx, setState) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        handle(),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1F3A56),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      inputCard(setState),
-                      const SizedBox(height: 10),
-                      wheelCard(setState),
-                      if (showAlpha) ...[
+                        const SizedBox(height: 10),
+                        inputCard(setState),
+                        const SizedBox(height: 10),
+                        wheelCard(setState),
+                        if (showAlpha) ...[
+                          const SizedBox(height: 15),
+                          alphaCard(setState),
+                        ],
                         const SizedBox(height: 15),
-                        alphaCard(setState),
+                        actions(),
                       ],
-                      const SizedBox(height: 15),
-                      actions(),
-                    ],
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),

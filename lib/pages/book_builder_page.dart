@@ -2201,7 +2201,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
     await _persistTitle(_titleCtrl.text.trim());
     await _persistPenName(_penNameCtrl.text.trim());
-    await _persistCoverPath(_coverPath); // 추가
+    await _persistCoverPath(_coverPath);
 
     await _persistChapters();
     await _persistMeta();
@@ -2926,7 +2926,6 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     await prefs.remove('chapter_write_draft_title_$baseKey');
     await prefs.remove('chapter_write_draft_delta_$baseKey');
 
-    // 선택/스크롤 위치까지 초기화하고 싶으면 같이 삭제
     await prefs.remove('chapter_write_selection_$baseKey');
     await prefs.remove('chapter_write_scroll_$baseKey');
   }
@@ -4129,7 +4128,6 @@ $coverRel
 
     final content = _buildTxtContentForBook(chapters);
 
-    // 한글 깨짐 방지를 위해 UTF-8 BOM 추가
     final bytes = <int>[0xEF, 0xBB, 0xBF, ...utf8.encode(content)];
 
     await txtFile.writeAsBytes(bytes, flush: true);
@@ -6182,7 +6180,7 @@ $coverRel
                             ),
                           ),
 
-                          const SizedBox(width: 6), // 공유 아이콘을 왼쪽으로 밀어주는 간격
+                          const SizedBox(width: 6),
 
                           Semantics(
                             button: true,
@@ -6546,23 +6544,18 @@ Map<String, dynamic>? _splitImageDataToMap(dynamic data) {
 
   if (data is Map) {
     final m = Map<String, dynamic>.from(data);
-
-    // 이미 원하는 형태: {'source': ..., 'w': ...}
     if (m.containsKey('source') || m.containsKey('w')) {
       return m;
     }
 
-    // custom: {'image': ...}
     if (m.containsKey('image')) {
       return _splitImageDataToMap(m['image']);
     }
 
-    // custom: {'type': 'image', 'data': '{...}'}
     if (m['type'] == 'image' && m.containsKey('data')) {
       return _splitImageDataToMap(m['data']);
     }
 
-    // 일부 버전에서 {'data': ...}만 오는 경우
     if (m.containsKey('data')) {
       return _splitImageDataToMap(m['data']);
     }
@@ -6591,7 +6584,6 @@ void _writeSplitImageSourceToInsert({
 }) {
   imageMap['source'] = source;
 
-  // 편집 중 custom embed를 저장 시 일반 image embed로 정리
   insert.remove('custom');
 
   if (imageMap.containsKey('w')) {
@@ -7293,7 +7285,6 @@ class _SplitSwipeToWorldState extends State<_SplitSwipeToWorld> {
         final dx = now.dx - _start!.dx;
         final dy = now.dy - _start!.dy;
 
-        // 단일 편집의 조건과 동일하게 사용
         if (dx < -_minDx && dx.abs() > dy.abs() * _minRatio) {
           _triggered = true;
           widget.onTrigger();
