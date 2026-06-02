@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 class EmailSignupPage extends StatefulWidget {
   const EmailSignupPage({super.key});
@@ -30,25 +31,42 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
     super.dispose();
   }
 
+  String _signupErrorMessage(FirebaseAuthException e, AppLocalizations l10n) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return l10n.emailAlreadyInUse;
+      case 'invalid-email':
+        return l10n.invalidEmail;
+      case 'weak-password':
+        return l10n.weakPassword;
+      case 'network-request-failed':
+        return l10n.emailLoginNetworkError;
+      default:
+        return e.message ?? l10n.emailSignupFailed;
+    }
+  }
+
   Future<void> _signup() async {
     if (_isSubmitting) return;
+
+    final l10n = AppLocalizations.of(context);
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmController.text;
 
     if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      setState(() => _error = '모든 항목을 입력해 주세요.');
+      setState(() => _error = l10n.allFieldsRequired);
       return;
     }
 
     if (password.length < 6) {
-      setState(() => _error = '비밀번호는 6자 이상이어야 합니다.');
+      setState(() => _error = l10n.passwordMinLength);
       return;
     }
 
     if (password != confirmPassword) {
-      setState(() => _error = '비밀번호가 일치하지 않습니다.');
+      setState(() => _error = l10n.passwordMismatch);
       return;
     }
 
@@ -65,7 +83,7 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
 
       if (!mounted) return;
 
-      AppToast.show(context, '회원가입이 완료되었습니다');
+      AppToast.show(context, l10n.emailSignupComplete);
 
       await Future.delayed(const Duration(milliseconds: 900));
 
@@ -73,10 +91,10 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
       Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message ?? '회원가입에 실패했습니다.');
+      setState(() => _error = _signupErrorMessage(e, l10n));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = '알 수 없는 오류가 발생했습니다.');
+      setState(() => _error = l10n.unknownErrorOccurred);
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -86,6 +104,8 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     const Color pastelBlue = Color(0xFF9AD0F5);
     const Color border = Color(0xFFE5E7EB);
 
@@ -115,12 +135,15 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          tooltip: '뒤로',
+          tooltip: l10n.back,
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('이메일 회원가입', style: TextStyle(color: Colors.black)),
+        title: Text(
+          l10n.emailSignupTitle,
+          style: const TextStyle(color: Colors.black),
+        ),
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -146,10 +169,10 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
 
                         const SizedBox(height: 18),
 
-                        const Text(
-                          '새 계정을 만들어 주세요',
+                        Text(
+                          l10n.emailSignupCreateAccount,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w500,
                             color: Color.fromARGB(255, 0, 0, 0),
@@ -159,10 +182,10 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
 
                         const SizedBox(height: 7),
 
-                        const Text(
-                          '이메일과 비밀번호를 입력해 주세요',
+                        Text(
+                          l10n.emailSignupGuide,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             color: Colors.black54,
                             fontWeight: FontWeight.w500,
@@ -176,7 +199,7 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
-                            hintText: '이메일',
+                            hintText: l10n.email,
                             hintStyle: const TextStyle(color: Colors.black38),
                             prefixIcon: const Icon(
                               Icons.mail_outline,
@@ -204,14 +227,17 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
-                            hintText: '비밀번호 (6자 이상)',
+                            hintText: l10n.passwordMinLengthHint,
                             hintStyle: const TextStyle(color: Colors.black38),
                             prefixIcon: const Icon(
                               Icons.lock_outline,
                               color: pastelBlue,
                             ),
                             suffixIcon: IconButton(
-                              tooltip: _obscurePassword ? '표시' : '숨기기',
+                              tooltip:
+                                  _obscurePassword
+                                      ? l10n.showPassword
+                                      : l10n.hidePassword,
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility
@@ -246,14 +272,17 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                           obscureText: _obscureConfirm,
                           onSubmitted: (_) => _signup(),
                           decoration: InputDecoration(
-                            hintText: '비밀번호 확인',
+                            hintText: l10n.confirmPassword,
                             hintStyle: const TextStyle(color: Colors.black38),
                             prefixIcon: const Icon(
                               Icons.lock_reset_outlined,
                               color: pastelBlue,
                             ),
                             suffixIcon: IconButton(
-                              tooltip: _obscureConfirm ? '표시' : '숨기기',
+                              tooltip:
+                                  _obscureConfirm
+                                      ? l10n.showPassword
+                                      : l10n.hidePassword,
                               icon: Icon(
                                 _obscureConfirm
                                     ? Icons.visibility
@@ -333,7 +362,7 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                                   ),
                                 )
                               else
-                                const Text('회원가입', style: thinText),
+                                Text(l10n.signUp, style: thinText),
                               if (!_isSubmitting) ...const [
                                 SizedBox(width: 8),
                                 Icon(
@@ -351,9 +380,9 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text(
-                              '이미 계정이 있으신가요? ',
-                              style: TextStyle(color: Colors.black54),
+                            Text(
+                              l10n.emailSignupAlreadyHaveAccount,
+                              style: const TextStyle(color: Colors.black54),
                             ),
                             OutlinedButton(
                               onPressed: () => Navigator.pop(context),
@@ -365,12 +394,12 @@ class _EmailSignupPageState extends State<EmailSignupPage> {
                                   ),
                                 ),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text('로그인', style: thinText),
-                                  SizedBox(width: 8),
-                                  Icon(
+                                  Text(l10n.login, style: thinText),
+                                  const SizedBox(width: 8),
+                                  const Icon(
                                     Icons.login,
                                     size: 20,
                                     color: pastelBlue,

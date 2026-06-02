@@ -1,3 +1,5 @@
+// simple_memo_page.dart
+
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,11 @@ import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
 import 'package:ebook_tutorial_app/models/memo.dart';
 import 'package:ebook_tutorial_app/data/memo_storage.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
+extension _SimpleMemoL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 class SimpleMemoPage extends StatefulWidget {
   const SimpleMemoPage({super.key, required this.genre});
@@ -71,11 +78,13 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
 
     if (!mounted) return;
 
+    final l10n = context.l10n;
+
     setState(() {
       _memosByGenre
         ..clear()
         ..addAll(next);
-      _rebuildSections();
+      _rebuildSections(l10n);
     });
   }
 
@@ -98,7 +107,28 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
 
   String _itemKey(Genre genre, int index) => '${genre.name}_$index';
 
-  void _rebuildSections() {
+  String _genreLabel(BuildContext context, Genre genre) {
+    final l10n = context.l10n;
+
+    switch (genre) {
+      case Genre.main:
+        return l10n.bookListTitle;
+      case Genre.webNovel:
+        return l10n.genreWebNovel;
+      case Genre.novel:
+        return l10n.genreNovel;
+      case Genre.poem:
+        return l10n.genrePoetry;
+      case Genre.freeForm:
+        return l10n.genreFreeForm;
+      case Genre.selfHelp:
+        return l10n.genreSelfImprovement;
+      case Genre.science:
+        return l10n.genreScienceBook;
+    }
+  }
+
+  void _rebuildSections(AppLocalizations l10n) {
     final items = <_SectionItem>[];
 
     for (final entry in _memosByGenre.entries) {
@@ -112,7 +142,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
             genre: genre,
             index: i,
             memo: memo,
-            title: _extractTitle(memo.text),
+            title: _extractTitle(memo.text, l10n),
           ),
         );
       }
@@ -130,10 +160,10 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
     _sectionKeys = grouped.keys.toList();
   }
 
-  String _extractTitle(String text) {
+  String _extractTitle(String text, AppLocalizations l10n) {
     final nl = text.indexOf('\n');
     final t = (nl == -1 ? text : text.substring(0, nl)).trim();
-    return t.isEmpty ? '제목 없음' : t;
+    return t.isEmpty ? l10n.untitledBook : t;
   }
 
   IconData _genreIcon(Genre genre) {
@@ -185,9 +215,9 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      '장르 선택',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.genreSelect,
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: Colors.black87,
@@ -198,7 +228,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                       GlassActionButton(
                         theme: theme,
                         icon: _genreIcon(genre),
-                        label: genreLabel(genre),
+                        label: _genreLabel(context, genre),
                         onPressed: () => Navigator.of(dialogCtx).pop(genre),
                       ),
                       const SizedBox(height: 8),
@@ -206,7 +236,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                     TextButton(
                       onPressed: () => Navigator.of(dialogCtx).pop(),
                       child: Text(
-                        '닫기',
+                        context.l10n.close,
                         style: TextStyle(
                           fontSize: 16,
                           color: theme.accentColor,
@@ -272,9 +302,9 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      '더보기',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.more,
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: Colors.black87,
@@ -284,7 +314,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.checklist_rtl,
-                      label: '메모 선택',
+                      label: context.l10n.selectMemo,
                       onPressed: () {
                         Navigator.of(dialogCtx).pop();
                         _enterSelectionMode();
@@ -294,7 +324,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                     TextButton(
                       onPressed: () => Navigator.of(dialogCtx).pop(),
                       child: Text(
-                        '닫기',
+                        context.l10n.close,
                         style: TextStyle(
                           fontSize: 16,
                           color: theme.accentColor,
@@ -329,11 +359,13 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
     if (!mounted) return;
     if (result == null || result.trim().isEmpty) return;
 
+    final l10n = context.l10n;
+
     setState(() {
       final list = _memosByGenre[targetGenre] ?? <Memo>[];
       list.add(Memo(result.trim(), DateTime.now()));
       _memosByGenre[targetGenre] = list;
-      _rebuildSections();
+      _rebuildSections(l10n);
     });
 
     await _saveGenre(targetGenre);
@@ -355,12 +387,14 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
     if (!mounted) return;
     if (result == null || result.trim().isEmpty) return;
 
+    final l10n = this.context.l10n;
+
     setState(() {
       final list = _memosByGenre[genre] ?? <Memo>[];
       if (index >= 0 && index < list.length) {
         list[index] = Memo(result.trim(), DateTime.now());
         _memosByGenre[genre] = list;
-        _rebuildSections();
+        _rebuildSections(l10n);
       }
     });
 
@@ -374,8 +408,8 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
       context: context,
       builder: (sheetCtx) {
         return CupertinoActionSheet(
-          title: const Text('삭제 확인'),
-          message: const Text('선택된 메모를 삭제하시겠습니까?'),
+          title: Text(context.l10n.deleteBooksConfirmTitle),
+          message: Text(context.l10n.selectedMemosDeleteMessage),
           actions: [
             CupertinoActionSheetAction(
               isDestructiveAction: true,
@@ -394,6 +428,8 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                   (removeByGenre[item.genre] ??= <int>[]).add(item.index);
                 }
 
+                final l10n = context.l10n;
+
                 setState(() {
                   for (final entry in removeByGenre.entries) {
                     final genre = entry.key;
@@ -411,7 +447,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
 
                   _selectionMode = false;
                   _selectedKeys.clear();
-                  _rebuildSections();
+                  _rebuildSections(l10n);
                 });
 
                 Navigator.of(sheetCtx).pop();
@@ -420,12 +456,12 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                   await _saveGenre(genre);
                 }
               },
-              child: const Text('삭제'),
+              child: Text(context.l10n.delete),
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.of(sheetCtx).pop(),
-            child: const Text('취소'),
+            child: Text(context.l10n.cancel),
           ),
         );
       },
@@ -524,7 +560,7 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                                         ),
                                       ),
                                       child: Text(
-                                        genreLabel(item.genre),
+                                        _genreLabel(context, item.genre),
                                         style: const TextStyle(
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.w700,
@@ -621,28 +657,30 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          _selectionMode ? '${_selectedKeys.length}개 선택됨' : 'simple memo',
+          _selectionMode
+              ? context.l10n.selectedMemosCount(_selectedKeys.length)
+              : context.l10n.simpleMemoTitle,
           style: const TextStyle(color: Colors.black87),
         ),
         leading:
             _selectionMode
                 ? IconButton(
                   icon: const Icon(Icons.close, color: Colors.black87),
-                  tooltip: '선택 취소',
+                  tooltip: context.l10n.cancelSelection,
                   onPressed: _exitSelectionMode,
                 )
                 : IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new),
-                  tooltip: '뒤로가기',
+                  tooltip: context.l10n.back,
                   onPressed: () => Navigator.pop(context, true),
                 ),
         actions: [
           if (_selectionMode)
             TextButton(
               onPressed: _deleteSelected,
-              child: const Text(
-                'Delete',
-                style: TextStyle(
+              child: Text(
+                context.l10n.delete,
+                style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w500,
                   color: Colors.black87,
@@ -652,12 +690,12 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
           else ...[
             IconButton(
               icon: const Icon(Icons.add),
-              tooltip: '새 메모 추가',
+              tooltip: context.l10n.simpleMemoAddTooltip,
               onPressed: _openMemoEditor,
             ),
             IconButton(
               icon: const Icon(Icons.more_vert),
-              tooltip: '더보기',
+              tooltip: context.l10n.more,
               onPressed: () => _showMoreDialog(context),
             ),
           ],
@@ -673,8 +711,8 @@ class _SimpleMemoPageState extends State<SimpleMemoPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
                     _isMain
-                        ? '저장된 메모가 없습니다.\n오른쪽 상단 + 버튼으로 장르를 선택해 메모를 추가하세요.'
-                        : '저장된 메모가 없습니다.\n오른쪽 상단 + 버튼으로 메모를 추가하세요.',
+                        ? context.l10n.simpleMemoEmptyMain
+                        : context.l10n.simpleMemoEmptyGenre,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -724,7 +762,11 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
       backgroundColor: Colors.white,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: Colors.white,
-        middle: Text(widget.initialText == null ? 'New Memo' : 'Edit Memo'),
+        middle: Text(
+          widget.initialText == null
+              ? context.l10n.memoAdd
+              : context.l10n.memoEdit,
+        ),
         leading: CupertinoNavigationBarBackButton(
           color: const Color.fromARGB(255, 52, 96, 143),
           onPressed: _cancel,
@@ -732,9 +774,9 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _save,
-          child: const Text(
-            '저장',
-            style: TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
+          child: Text(
+            context.l10n.save,
+            style: const TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
           ),
         ),
         border: null,
@@ -747,7 +789,7 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
             child: CupertinoTextField(
               controller: _controller,
               focusNode: _focus,
-              placeholder: '메모를 입력하세요',
+              placeholder: context.l10n.memoHint,
               placeholderStyle: const TextStyle(
                 color: Color.fromARGB(221, 100, 159, 198),
                 fontSize: 15,

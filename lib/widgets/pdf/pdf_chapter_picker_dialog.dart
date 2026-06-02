@@ -1,4 +1,5 @@
 // lib/widgets/pdf/pdf_chapter_picker_dialog.dart
+
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
@@ -7,11 +8,13 @@ import 'package:ebook_tutorial_app/pages/book_builder_page.dart'
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/widgets/glass/glass_container.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 const _primaryBlue = ui.Color.fromARGB(255, 79, 164, 255);
 
 class ChapterPickResult {
   const ChapterPickResult({required this.useAll, required this.selected});
+
   final bool useAll;
   final Set<int> selected;
 }
@@ -20,13 +23,31 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
   required BuildContext context,
   required List<ChapterItem> chapters,
   required GlassTheme glassTheme,
-  Color barrierColor = Colors.transparent, // ✅ 배경(딤) 제거 기본값
-  // ✅ 미리보기/내보내기 공용으로 쓰기 위한 옵션
-  String dialogTitle = 'PDF 미리보기',
-  String confirmLabel = '미리보기',
+  Color barrierColor = Colors.transparent,
+
+  String? dialogTitle,
+  String? confirmLabel,
+  String? emptyChaptersMessage,
+  String? selectChapterRequiredMessage,
+  String? allChaptersLabel,
+  String? selectedChaptersLabel,
+  String? closeLabel,
 }) async {
+  final l10n = AppLocalizations.of(context);
+
+  final resolvedDialogTitle = dialogTitle ?? l10n.pdfPreviewDialogTitle;
+  final resolvedConfirmLabel = confirmLabel ?? l10n.pdfPreviewConfirm;
+  final resolvedEmptyChaptersMessage =
+      emptyChaptersMessage ?? l10n.pdfChapterListEmpty;
+  final resolvedSelectChapterRequiredMessage =
+      selectChapterRequiredMessage ?? l10n.pdfChapterSelectRequired;
+  final resolvedAllChaptersLabel = allChaptersLabel ?? l10n.allChaptersOption;
+  final resolvedSelectedChaptersLabel =
+      selectedChaptersLabel ?? l10n.selectedChapters;
+  final resolvedCloseLabel = closeLabel ?? l10n.close;
+
   if (chapters.isEmpty) {
-    AppToast.show(context, '목차가 없습니다');
+    AppToast.show(context, resolvedEmptyChaptersMessage);
     return null;
   }
 
@@ -41,9 +62,10 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
         builder: (context, setModalState) {
           void applyAndClose() {
             if (!useAll && tmpSelected.isEmpty) {
-              AppToast.show(context, '회차를 선택해 주세요');
+              AppToast.show(context, resolvedSelectChapterRequiredMessage);
               return;
             }
+
             Navigator.pop(
               context,
               ChapterPickResult(useAll: useAll, selected: tmpSelected),
@@ -73,9 +95,8 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // ✅ 타이틀을 파라미터로
                         Text(
-                          dialogTitle,
+                          resolvedDialogTitle,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 18.5,
@@ -110,7 +131,7 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
-                                      '모든 회차',
+                                      resolvedAllChaptersLabel,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 14,
@@ -145,7 +166,7 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
-                                      '선택 회차',
+                                      resolvedSelectedChaptersLabel,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 14,
@@ -208,9 +229,11 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
                             Expanded(
                               child: TextButton(
                                 onPressed: () => Navigator.pop(context),
-                                child: const Text(
-                                  '닫기',
-                                  style: TextStyle(color: Color(0xFF1F3A56)),
+                                child: Text(
+                                  resolvedCloseLabel,
+                                  style: const TextStyle(
+                                    color: Color(0xFF1F3A56),
+                                  ),
                                 ),
                               ),
                             ),
@@ -236,8 +259,7 @@ Future<ChapterPickResult?> showPdfChapterPickerDialog({
                                   ),
                                 ),
                                 onPressed: applyAndClose,
-                                // ✅ 버튼 라벨도 파라미터로
-                                child: Text(confirmLabel),
+                                child: Text(resolvedConfirmLabel),
                               ),
                             ),
                           ],

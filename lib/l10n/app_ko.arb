@@ -1,0 +1,867 @@
+{
+  "@@locale": "ko",
+  "settings": "설정",
+  "language": "언어",
+  "korean": "한국어",
+  "english": "English",
+  "japanese": "日本語",
+  "screenSettings": "화면 설정",
+  "defaultValue": "기본",
+  "notification": "알림",
+  "cloudSync": "클라우드 동기화",
+  "appInfo": "앱 정보",
+  "appDescription": "AI 전자책 튜토리얼",
+  "version": "버전",
+  "close": "닫기",
+  "connect": "연결",
+  "save": "저장",
+  "delete": "삭제",
+  "search": "검색",
+  "accountConnect": "계정 연결",
+  "accountConnectMessage": "비회원 계정을 로그인 계정으로 연결할 수 있습니다.",
+  "connectLoginAccount": "로그인 계정 연결하기",
+  "appleAccountConnect": "Apple 계정 연결",
+  "googleAccountConnect": "Google 계정 연결",
+  "emailAccountConnect": "이메일 계정 연결",
+  "googleAccount": "Google 계정",
+  "appleAccount": "Apple 계정",
+  "emailAccount": "이메일 계정",
+  "guestAccount": "비회원 계정",
+  "unknown": "알 수 없음",
+  "guestUser": "비회원 사용자",
+  "user": "사용자",
+  "email": "이메일",
+  "passwordMinLengthHint": "비밀번호 6자 이상",
+  "confirmPassword": "비밀번호 확인",
+  "allFieldsRequired": "모든 항목을 입력해 주세요.",
+  "passwordMinLength": "비밀번호는 6자 이상이어야 합니다.",
+  "passwordMismatch": "비밀번호가 일치하지 않습니다.",
+  "signInInfoNotFound": "로그인 정보가 없습니다.",
+  "accountAlreadyLinked": "이미 계정이 연결되어 있습니다.",
+  "emailAccountLinked": "이메일 계정이 연결되었습니다.",
+  "appleAccountLinked": "Apple 계정이 연결되었습니다.",
+  "googleAccountLinked": "Google 계정이 연결되었습니다.",
+  "emailAlreadyInUse": "이미 사용 중인 이메일입니다.",
+  "invalidEmail": "이메일 형식이 올바르지 않습니다.",
+  "weakPassword": "비밀번호가 너무 약합니다.",
+  "accountConnectFailed": "계정 연결에 실패했습니다.",
+  "appleCredentialAlreadyInUse": "이미 다른 계정에 연결된 Apple 계정입니다.",
+  "appleProviderAlreadyLinked": "이미 Apple 계정이 연결되어 있습니다.",
+  "appleLoginNotEnabled": "Firebase에서 Apple 로그인이 활성화되어 있지 않습니다.",
+  "appleAccountConnectFailed": "Apple 계정 연결에 실패했습니다.",
+  "googleCredentialAlreadyInUse": "이미 다른 계정에 연결된 Google 계정입니다.",
+  "googleAccountConnectFailed": "Google 계정 연결에 실패했습니다.",
+  "appTitle": "AI 전자책 튜토리얼",
+  "appSubtitle": "지식을 여는 가장 쉬운 첫걸음",
+  "tryAsGuest": "비회원으로 체험하기",
+  "accountConnectNotice": "계정은 설정에서 언제든 연결하실 수 있습니다.",
+  "firebaseInitFailed": "❗ Firebase 초기화 실패",
+  "providerLoginFailed": "{provider} 로그인에 실패했습니다.",
+  "@providerLoginFailed": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "providerLoginFailedWithReason": "{provider} 로그인 실패: {reason}",
+  "@providerLoginFailedWithReason": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "guestLoginFailed": "비회원 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+  "genreSelect": "장르 선택",
+  "genreWebNovel": "웹 소설",
+  "genreNovel": "소설",
+  "genrePoetry": "시",
+  "genreFreeForm": "자유 서식",
+  "genreSelfImprovement": "자기 계발",
+  "genreScienceBook": "과학 책",
+  "more": "더보기",
+  "logout": "로그아웃",
+  "speechRecognitionUnavailable": "음성 인식을 사용할 수 없습니다.",
+  "speechRecognitionError": "음성 인식 오류: {error}",
+  "@speechRecognitionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "keywordAlreadyExists": "이미 등록된 키워드입니다.",
+  "chapterTitleHint": "회차 제목 입력",
+  "focusWritingModeToggle": "집중 글쓰기 모드 토글",
+  "exitFocusMode": "집중 모드 해제",
+  "focusWritingMode": "집중 글쓰기 모드",
+  "convertPng": "PNG 변환",
+  "pngPreview": "PNG 미리보기",
+  "keywordInputHint": "키워드 입력",
+  "charCountLabel": "{count}자",
+  "@charCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "character": "캐릭터",
+  "characterColor": "캐릭터 색상",
+  "transparency": "투명도",
+  "clear": "해제",
+  "cancel": "취소",
+  "apply": "적용",
+  "addPhoto": "+ 사진",
+  "tapToAddOrChange": "탭 : 추가/변경",
+  "name": "이름",
+  "birthday": "생일",
+  "height": "키",
+  "bloodType": "혈액형",
+  "blood": "혈액형",
+  "profile": "프로필",
+  "profileUpper": "PROFILE",
+  "color": "색상",
+  "personality": "성격",
+  "personalityKeywords": "성격 키워드",
+  "likesAndDislikes": "좋아/싫어",
+  "likes": "좋아하는 것",
+  "dislikes": "싫어하는 것",
+  "bodyAppearance": "신체 / 외형",
+  "bodyAppearanceMemo": "신체 / 외형 메모",
+  "enterAfterInput": "입력 후 Enter",
+  "keywordEnterAfterInput": "키워드 입력 후 Enter",
+  "memoEnterAfterInput": "메모 입력 후 Enter",
+  "noRegisteredItems": "아직 등록된 항목이 없습니다.",
+  "exampleName": "예) 무무",
+  "exampleBirthday": "예) 2005-01-01",
+  "exampleHeight": "예) 159cm",
+  "exampleBloodType": "예) O+",
+  "exampleProfile": "예) 낮에는 잠이 많음",
+  "exampleBodyAppearanceMemo": "예) 인간형일 때 투명하게 빛나는 귀와 꼬리",
+  "faction": "세력",
+  "addShape": "도형 추가",
+  "zoomOut": "축소",
+  "zoomIn": "확대",
+  "edgeColor": "선 색상",
+  "replacePhoto": "사진 교체",
+  "deletePhoto": "사진 삭제",
+  "addPhotoToDiagram": "사진 추가",
+  "replaceColor": "색상 교체",
+  "deleteColor": "색상 삭제",
+  "addColor": "색상 추가",
+  "addText": "텍스트 추가",
+  "replaceText": "텍스트 교체",
+  "deleteText": "텍스트 삭제",
+  "addTextColor": "텍스트 색상 추가",
+  "replaceTextColor": "텍스트 색상 교체",
+  "deleteTextColor": "텍스트 색상 삭제",
+  "textColor": "텍스트 색상",
+  "shapeColor": "도형 색상",
+  "relation": "관계",
+  "relationHint": "예: 동맹, 적대, 가족",
+  "moveLocked": "이동 잠김",
+  "moveAvailable": "이동 가능",
+  "factionSelectionHint": "도형 또는 선을 선택해 주세요.",
+  "changeShape": "도형 변경",
+  "lock": "잠금",
+  "unlock": "잠금 해제",
+  "deleteShape": "도형 삭제",
+  "deleteLine": "선 삭제",
+  "size": "크기",
+  "curvature": "곡률",
+  "lineWidth": "선 굵기",
+  "selectColor": "색상 선택",
+  "dashedLine": "점선",
+  "arrow": "화살표",
+  "none": "없음",
+  "start": "시작",
+  "end": "끝",
+  "bothEnds": "양쪽",
+  "insideTextHint": "도형 안에 표시할 텍스트",
+  "nameHint": "이름",
+  "newNode": "새 항목",
+  "timeline": "타임라인",
+  "timelineAdd": "Timeline 추가",
+  "timelineEdit": "Timeline 편집",
+  "timelineEmpty": "타임라인을 추가해 보세요.",
+  "timelineSeedCreate": "create",
+  "timelineSeedCreateOne": "create 1",
+  "timelineSeedUnnamed": "Unnamed",
+  "timelineSeedEditWord": "탭 하여 단어를 편집해 보세요",
+  "timelineSeedReorderColor": "색상을 길게 탭 하여 위치를 바꿔보세요",
+  "timelineSeedEditColorName": "탭 하여 색상 이름을 편집해 보세요",
+  "timelineSeedEditContent": "탭 하여 내용을 편집해 보세요",
+  "unnamed": "이름 없음",
+  "barName": "바 이름",
+  "barNameHint": "예) Chapter 1",
+  "wordDescription": "단어 / 설명",
+  "description": "설명",
+  "barColor": "바 색상",
+  "worldSeat": "월드 시트",
+  "glossary": "용어집",
+  "freeMemo": "자유 메모",
+  "glossaryEmpty": "용어를 추가해 보세요.",
+  "freeMemoEmpty": "자유 메모를 추가해 보세요.",
+  "noSearchResults": "검색 결과가 없습니다.",
+  "pinAdd": "핀 추가",
+  "pinRemove": "핀 해제",
+  "term": "단어",
+  "glossaryAdd": "용어 추가",
+  "glossaryEdit": "용어 편집",
+  "glossaryDeleteTitle": "용어 삭제",
+  "glossaryDeleteMessage": "이 용어를 삭제하시겠습니까?",
+  "memoAdd": "새 메모",
+  "memoEdit": "메모 편집",
+  "memoHint": "메모를 입력하세요",
+  "memoDeleteTitle": "메모 삭제",
+  "memoDeleteMessage": "이 메모를 삭제하시겠습니까?",
+  "timelineDeleteTitle": "{name} 삭제",
+  "@timelineDeleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineDeleteMessage": "이 타임라인({name})을 삭제하시겠습니까?",
+  "@timelineDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "characterDeleteTitle": "캐릭터 삭제",
+  "characterDeleteMessage": "이 캐릭터를 삭제하시겠습니까?",
+  "protagonistCharacter": "주인공 캐릭터",
+  "supportingCharacter": "조연 캐릭터",
+  "emptyProtagonistCharacters": "주인공 캐릭터를 추가해 보세요.",
+  "emptySupportingCharacters": "조연 캐릭터를 추가해 보세요.",
+  "emptyCharacters": "캐릭터를 추가해 보세요.",
+  "tapToEdit": "탭하여 편집",
+  "descriptionInputHint": "설명을 입력하세요",
+  "seedCharacterMainTone": "메인 톤",
+  "seedCharacterHikaraName": "히카라",
+  "seedCharacterHikaraSpecialNote": "목표: 엘프 종족의 근원을 찾는다.",
+  "seedCharacterHikaraPersonalityResponsibility": "책임감",
+  "seedCharacterHikaraLikeObservation": "관측",
+  "seedCharacterHikaraLikeOldBooks": "고서",
+  "seedCharacterHikaraDislikeIrresponsibility": "무책임",
+  "seedCharacterHikaraPhysicalBlueEyes": "푸른 눈",
+  "seedCharacterElixiName": "엘릭시",
+  "seedCharacterElixiSpecialNote": "마법 약초를 연구한다.",
+  "seedCharacterElixiPersonalityCuriosity": "호기심",
+  "seedCharacterElixiLikeHerbs": "약초",
+  "seedCharacterElixiLikePharmacology": "약학",
+  "seedCharacterElixiDislikeBugs": "벌레",
+  "seedCharacterElixiPhysicalGoldenHair": "금빛 머리카락",
+  "bookListTitle": "책 목록",
+  "selectBooks": "책 선택",
+  "selectedBooksCount": "{count}개 선택됨",
+  "@selectedBooksCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cancelSelection": "선택 취소",
+  "deleteBooksConfirmTitle": "삭제 확인",
+  "deleteBooksConfirmMessage": "선택된 책을 삭제하시겠습니까?",
+  "untitledBook": "제목 없음",
+  "enterBookTitle": "제목을 입력하세요",
+  "share": "공유",
+  "restore": "불러오기",
+  "preparingPdf": "PDF를 준비 중입니다",
+  "zipShare": "ZIP 공유",
+  "creatingZipFile": "ZIP 파일을 만드는 중입니다",
+  "zipNoFiles": "ZIP에 넣을 파일이 없습니다",
+  "zipShareComplete": "ZIP 공유 완료",
+  "zipShareFailed": "ZIP 공유 실패: {error}",
+  "@zipShareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectChapterCoverMessage": "이 회차 표지로 사용할 이미지를 선택하세요.",
+  "takePhoto": "카메라로 촬영",
+  "chooseFromAlbum": "앨범에서 선택",
+  "chapterCoverDeleted": "이 회차 표지가 삭제되었습니다",
+  "chapterCoverSet": "회차 표지가 설정되었습니다",
+  "coverFileNotFound": "표지 파일을 찾을 수 없습니다",
+  "selectCoverPhoto": "표지 사진 선택",
+  "selectBookCoverMessage": "책 표지로 사용할 이미지를 선택하세요.",
+  "coverPhotoDeleted": "표지 사진이 삭제되었습니다",
+  "coverPhotoSet": "표지 사진이 설정되었습니다",
+  "preparingBackupZip": "백업 ZIP 파일을 준비 중입니다",
+  "bookBackupDescription": "책 백업 파일입니다.",
+  "shareBackupInstruction": "공유 화면에서 iCloud Drive 또는 파일 앱을 선택하세요",
+  "backupExportFailed": "백업 파일 내보내기 실패: {error}",
+  "@backupExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectBackupZipFile": "백업 ZIP 파일을 선택하세요",
+  "backupFileReadFailed": "백업 파일을 읽을 수 없습니다",
+  "backupRestoreComplete": "백업 불러오기 완료",
+  "backupRestoreFailed": "백업 불러오기 실패: {error}",
+  "@backupRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSavingZipBackup": "Google Drive에 ZIP 백업 저장 중입니다",
+  "googleDriveSaveComplete": "Google Drive 저장 완료: {savedName}",
+  "@googleDriveSaveComplete": {
+    "placeholders": {
+      "savedName": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSaveFailed": "Google Drive 저장 실패: {error}",
+  "@googleDriveSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveNoBackupFiles": "Google Drive 백업 파일이 없습니다",
+  "googleDriveImport": "Google Drive 불러오기",
+  "selectBackupFileMessage": "불러올 백업 파일을 선택하세요.",
+  "backupImport": "백업 불러오기",
+  "googleDriveBackupReplaceConfirm": "현재 화면의 책 내용이 Google Drive 백업 내용으로 교체됩니다. 계속하시겠습니까?",
+  "bookBackupJsonNotFound": "book_backup.json을 찾을 수 없습니다",
+  "restoredChapter": "복원된 회차",
+  "googleDriveBackupListLoading": "Google Drive 백업 목록을 불러오는 중입니다",
+  "googleDriveBackupDownloading": "Google Drive 백업을 다운로드 중입니다",
+  "googleDriveBackupRestoreComplete": "Google Drive 백업 불러오기 완료",
+  "googleDriveRestoreFailed": "Google Drive 불러오기 실패: {error}",
+  "@googleDriveRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noOtherChapterToSplitEdit": "같이 편집할 다른 회차가 없습니다",
+  "splitSelectChapterTitle": "{title}와 같이 편집할 회차 선택",
+  "@splitSelectChapterTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "splitEditSaveComplete": "분할 편집 저장 완료",
+  "splitEdit": "분할 편집",
+  "top": "위쪽",
+  "bottom": "아래쪽",
+  "defaultBookTitle": "책 제목",
+  "chapterAutoTitle": "{title} {number}화",
+  "@chapterAutoTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterSaveComplete": "회차 저장 완료",
+  "chapterDeleteConfirmTitle": "삭제 확인",
+  "chapterDeleteConfirmMessage": "‘{title}’ 회차를 삭제하시겠습니까?",
+  "@chapterDeleteConfirmMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "deletedComplete": "삭제되었습니다",
+  "chapterReorder": "회차 이동",
+  "reorderModeMessage": "이동 모드입니다. 드래그하여 순서를 바꾸세요",
+  "chapterShareLabel": "‘{title}’ 공유",
+  "@chapterShareLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterDeleteLabel": "‘{title}’ 삭제",
+  "@chapterDeleteLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterReordering": "회차 이동 중",
+  "totalChapterCount": "전체 {count}회",
+  "@totalChapterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addChapterHint": "우측 상단의 + 버튼을 눌러 회차를 추가하세요.",
+  "addChapterFirst": "먼저 회차를 추가해 주세요",
+  "allChapters": "전체 회차",
+  "selectedChapters": "선택 회차",
+  "noSelectedChapters": "선택된 회차가 없습니다",
+  "allChaptersOption": "모든 회차",
+  "chapters": "회차",
+  "chapterTitleInput": "회차 제목 입력",
+  "sortOldestFirst": "첫화부터",
+  "sortNewestFirst": "마지막화부터",
+  "memoDeletedComplete": "메모가 삭제되었습니다",
+  "bookMemo": "책 메모",
+  "bookMemoEmptyHint": "+ 이 책과 관련된 메모를 추가해 보세요.",
+  "memo": "메모",
+  "docxImageAlt": "[이미지: {fileName}]",
+  "@docxImageAlt": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingWordFile": "MS Word 파일을 준비 중입니다",
+  "wordShareOpened": "MS Word 파일 공유를 열었습니다",
+  "wordCreateFailed": "MS Word 파일 생성 실패: {error}",
+  "@wordCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingTxtFile": "TXT 파일을 준비 중입니다",
+  "txtShareOpened": "TXT 파일 공유를 열었습니다",
+  "txtCreateFailed": "TXT 파일 생성 실패: {error}",
+  "@txtCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "localCloud": "로컬 / 클라우드",
+  "iCloudImport": "iCloud 불러오기",
+  "epubForEbook": "ePub 전자책용",
+  "pdfCreateFailed": "PDF 생성 실패: {error}",
+  "@pdfCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "theme": "테마",
+  "font": "폰트",
+  "defaultFont": "기본체",
+  "batangFont": "바탕체",
+  "gothicFont": "고딕체",
+  "lineSpacing": "줄 간격",
+  "letterSpacing": "글 간격",
+  "margin": "여백",
+  "unpinChapter": "고정 해제",
+  "pinChapter": "회차 고정",
+  "unpinned": "고정 해제됨",
+  "chapterPinned": "회차 고정됨",
+  "workIntro": "작품 소개",
+  "workIntroHint": "작품의 분위기, 줄거리, 세계관 등을 간단히 소개해 주세요.",
+  "keywords": "키워드",
+  "keywordsHelper": "#로맨스 #성장물 #판타지 처럼 자유롭게 추가하세요.",
+  "emptyKeywords": "아직 등록된 키워드가 없습니다.",
+  "keywordInput": "키워드 입력",
+  "detailInfo": "상세 정보",
+  "authorOriginal": "글 / 원작",
+  "authorOriginalHint": "글 / 원작 정보를 입력하세요.",
+  "workCategory": "작품 분류",
+  "workCategoryHint": "작품 분류를 입력하세요.",
+  "ageRating": "연령 등급",
+  "ageRatingHint": "연령 등급을 입력하세요.",
+  "pageIndicator": "페이지 {current} / {total}",
+  "@pageIndicator": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterMeta": "{size} · {chars}자 · {date}",
+  "@chapterMeta": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "penNameHint": "필명 작성",
+  "bookPreview": "책 미리보기",
+  "workInfo": "작품 정보",
+  "allSettings": "전체 설정",
+  "back": "뒤로가기",
+  "coverPhotoAdd": "+ 표지 사진",
+  "example": "예시",
+  "settingsPreviewSample": "Build Story\n예시 글 입니다\n설정을 바꿔보세요",
+  "calendarEditSchedule": "일정 편집",
+  "calendarNewSchedule": "신규 일정",
+  "calendarTitleHint": "제목 입력",
+  "calendarStartDate": "시작일",
+  "calendarEndDate": "종료일",
+  "calendarColor": "색상",
+  "calendarMemoHint": "메모 입력",
+  "calendarDeleteSchedule": "일정 삭제",
+  "calendarDeleteScheduleConfirm": "“{title}” 일정을 삭제하시겠습니까?",
+  "@calendarDeleteScheduleConfirm": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarNoTitle": "제목 없음",
+  "calendarPickDate": "날짜 선택",
+  "calendarConfirm": "확인",
+  "calendarWritingDays": "집필한 날",
+  "calendarTodayWritten": "오늘 작성",
+  "calendarTotalChars": "총 글자수",
+  "calendarBestRecord": "최고 기록",
+  "calendarDaysValue": "{count}일",
+  "@calendarDaysValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCharsValue": "{count}자",
+  "@calendarCharsValue": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarBestRecordValue": "{chars}자 ({date})",
+  "@calendarBestRecordValue": {
+    "placeholders": {
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetAll": "전체 초기화",
+  "calendarDeleteAllDataConfirm": "모든 캘린더 데이터를 삭제하시겠습니까?",
+  "calendarDeleteAllDataMessage": "일정 / 오늘 할 일 / 연재 / 반복 설정 / 집필 기록이 모두 삭제됩니다.",
+  "calendarDeleteAll": "전체 삭제",
+  "calendarResetRecord": "기록 초기화",
+  "calendarDeleteDateRecordConfirm": "{date} 기록을 삭제하시겠습니까?",
+  "@calendarDeleteDateRecordConfirm": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarDeleteDateRecordMessage": "오늘 할 일 / 연재 / 집필 기록이 모두 삭제됩니다.",
+  "calendarNoEvents": "등록된 일정이 없습니다.",
+  "calendarTodayTodo": "오늘 할 일",
+  "calendarAdd": "추가",
+  "calendarTodoHelper": "오늘 해야 할 작업을 추가해두면, 작업 흐름이 정리됩니다.",
+  "calendarReleaseUpload": "연재 [ 업로드 ]",
+  "calendarReleaseHelper": "업로드 계획/완료를 기록해두면, 연재 주기 관리에 도움이 됩니다.",
+  "calendarMonthlyStats": "월 통계 [ {month} ]",
+  "@calendarMonthlyStats": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetThisDateRecord": "이 날짜 기록 초기화",
+  "calendarResetAllData": "전체 데이터 초기화",
+  "calendarTaskHint": "할 일을 입력하세요",
+  "calendarZeroChars": "0자",
+  "calendarUploadTitleHint": "업로드 제목을 입력하세요",
+  "calendarComplete": "완료",
+  "calendarPlan": "계획",
+  "ebookSaveComplete": "저장 완료",
+  "ebookDefaultContent": "작품 내용을 입력하세요",
+  "ebookLatestEpisode": "최신 회차",
+  "ebookCountValue": "{count}개",
+  "@ebookCountValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookTodayNoRecord": "오늘 등록된 기록이 없습니다.",
+  "ebookTodaySummary": "오늘 할 일 {doneTasks}/{totalTasks} · 업로드 {releaseCount}개 · 일정 {eventCount}개",
+  "@ebookTodaySummary": {
+    "placeholders": {
+      "doneTasks": {
+        "type": "int"
+      },
+      "totalTasks": {
+        "type": "int"
+      },
+      "releaseCount": {
+        "type": "int"
+      },
+      "eventCount": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookMainSquareCreateTitle": "새 작품 만들기",
+  "ebookMainCardCustomizeSaveComplete": "메인 카드 꾸미기 저장 완료",
+  "ebookPreset": "프리셋",
+  "ebookPresetName": "프리셋 이름",
+  "ebookPresetDefaultName": "프리셋 {number}",
+  "@ebookPresetDefaultName": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookPresetNameReplace": "프리셋 이름 교체",
+  "ebookPresetSaveComplete": "프리셋 저장 완료",
+  "ebookPresetRenameComplete": "프리셋 이름 교체 완료",
+  "ebookPresetNameHintExample": "예: 사진 포스터",
+  "ebookOriginalFileLoadFailed": "원본 파일을 불러오지 못했습니다",
+  "ebookPhotoLoadFailed": "사진을 불러오지 못했습니다",
+  "ebookBackgroundImagePickFailed": "배경 이미지 선택 실패: {error}",
+  "@ebookBackgroundImagePickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ebookBackgroundImageGestureHint": "드래그 이동 · 두 손가락 확대 · 더블 탭 초기화",
+  "ebookReset": "초기화",
+  "ebookEffect": "효과",
+  "ebookGlassMode": "글라스 모드",
+  "ebookGlassModeSubtitle": "부드러운 유리감과 렌즈 반사를 적용합니다.",
+  "ebookPresetSectionSubtitle": "현재 조합을 저장해두고 나중에 다시 적용할 수 있습니다.",
+  "ebookSaveCurrentPreset": "현재 프리셋 저장",
+  "ebookNoSavedPreset": "저장된 프리셋이 없습니다.",
+  "ebookTextSection": "문구",
+  "ebookMainText": "큰 문구",
+  "ebookSubText": "작은 문구",
+  "ebookOptional": "선택 사항",
+  "ebookMainTextWeight": "큰 문구 두께",
+  "ebookSubTextWeight": "작은 문구 두께",
+  "ebookTextPosition": "텍스트 위치",
+  "ebookTextIconColor": "문구 아이콘 색상",
+  "ebookLightTextModeNotice": "밝은 문구 모드가 켜져 있으면 사진 위에서는 흰색 문구가 우선 적용됩니다.",
+  "ebookCardStyle": "카드 스타일",
+  "ebookCardRatio": "카드 비율",
+  "ebookBackgroundStyle": "배경 스타일",
+  "ebookBorderStyle": "테두리 스타일",
+  "ebookBackgroundImage": "배경 이미지",
+  "ebookBackgroundImageSubtitle": "사진을 넣으면 미리보기 카드에서 직접 위치와 확대를 조절할 수 있습니다.",
+  "ebookSelectPhoto": "사진 선택",
+  "ebookDeleteImage": "이미지 삭제",
+  "ebookResetPosition": "위치 초기화",
+  "ebookDarkPhotoWhiteText": "어두운 사진용 흰 글자",
+  "ebookDarkPhotoWhiteTextSubtitle": "사진 배경 위에서 아이콘과 문구를 흰색으로 보여줍니다.",
+  "ebookIcon": "아이콘",
+  "ebookShowIcon": "아이콘 보이기",
+  "ebookIconShape": "아이콘 모양",
+  "ebookIconPosition": "아이콘 위치",
+  "ebookSize": "크기",
+  "ebookThinness": "얇기",
+  "ebookRatioSquare": "정사각형",
+  "ebookRatioPortrait": "세로형",
+  "ebookRatioTall": "긴 세로형",
+  "ebookRatioLandscape": "가로형",
+  "ebookRatioWide": "와이드",
+  "ebookStyleNone": "없음",
+  "ebookStyleSky": "맑은 하늘",
+  "ebookStyleSoftPink": "소프트 핑크",
+  "ebookStyleLightLavender": "라이트 라벤더",
+  "ebookStyleVanillaCream": "바닐라 크림",
+  "ebookStyleClearMint": "클리어 민트",
+  "ebookStyleBrightAurora": "밝은 오로라",
+  "ebookOptionDefault": "기본",
+  "ebookOptionWriting": "글쓰기",
+  "ebookOptionBook": "책",
+  "ebookOptionDrawing": "드로잉",
+  "ebookOptionStar": "별",
+  "ebookOptionHeart": "하트",
+  "ebookBorderThin": "기본 얇은 테두리",
+  "ebookBorderThick": "두꺼운 테두리",
+  "ebookBorderNone": "테두리 없음",
+  "ebookBorderPastel": "파스텔 테두리",
+  "ebookBorderDashed": "점선 느낌",
+  "ebookPosTopLeft": "상단 왼쪽",
+  "ebookPosTopCenter": "상단 중앙",
+  "ebookPosTopRight": "상단 오른쪽",
+  "ebookPosCenterLeft": "중앙 왼쪽",
+  "ebookPosCenter": "정중앙",
+  "ebookPosCenterRight": "중앙 오른쪽",
+  "ebookPosBottomLeft": "하단 왼쪽",
+  "ebookPosBottomCenter": "하단 중앙",
+  "ebookPosBottomRight": "하단 오른쪽",
+  "episodesPageTitle": "회차",
+  "episodeToggleAll": "전체",
+  "episodeToggleSelected": "선택",
+  "episodeCountLabel": "{count}개 회차",
+  "@episodeCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "emptySavedEpisodes": "저장된 회차가 없습니다.",
+  "shareCurrentPage": "지금",
+  "shareAllPages": "전체",
+  "shareCustomRange": "직접",
+  "shareNoFiles": "공유할 파일이 없습니다.",
+  "shareFailed": "공유 실패",
+  "shareFailedWithReason": "공유 실패: {error}",
+  "@shareFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfShareComplete": "PDF 공유 완료",
+  "pngShareComplete": "PNG 공유 완료",
+  "jpgShareComplete": "JPG 공유 완료",
+  "pdfOpenFailed": "PDF 열기 실패: {error}",
+  "@pdfOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfSavedToApp": "앱에 저장 완료: {fileName}",
+  "@pdfSavedToApp": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFailedWithReason": "저장 실패: {error}",
+  "@saveFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveCompletePath": "PNG 저장 완료\n{path}",
+  "@pngSaveCompletePath": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveFailed": "PNG 저장 실패",
+  "simpleMemoTitle": "간단 메모",
+  "selectMemo": "메모 선택",
+  "selectedMemosCount": "{count}개 선택됨",
+  "@selectedMemosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectedMemosDeleteMessage": "선택된 메모를 삭제하시겠습니까?",
+  "simpleMemoAddTooltip": "새 메모 추가",
+  "simpleMemoEmptyMain": "저장된 메모가 없습니다.\n오른쪽 상단 + 버튼으로 장르를 선택해 메모를 추가하세요.",
+  "simpleMemoEmptyGenre": "저장된 메모가 없습니다.\n오른쪽 상단 + 버튼으로 메모를 추가하세요.",
+  "pdfEmptyContent": "(내용 없음)",
+
+  "pdfPreviewDialogTitle": "PDF 미리보기",
+  "pdfPreviewConfirm": "미리보기",
+  "pdfChapterListEmpty": "목차가 없습니다",
+  "pdfChapterSelectRequired": "회차를 선택해 주세요",
+  
+  "ebookMainCardCustomize": "메인 카드 꾸미기",
+
+  "toolbarKeywordHide": "키워드 숨기기",
+  "toolbarKeywordOpen": "키워드 열기",
+  "toolbarSpeechStop": "음성 입력 중지",
+  "toolbarSpeechInput": "음성 입력",
+  "toolbarUndo": "실행 취소",
+  "toolbarRedo": "다시 실행",
+  "toolbarBold": "굵게",
+  "toolbarTextColor": "글자 색",
+  "toolbarTextBackgroundColor": "글자 배경 색",
+  "toolbarHighlight": "하이라이트",
+  "toolbarDividerSolid": "구분선(기본)",
+  "toolbarDividerDashed": "점선 구분선",
+  "toolbarAlign": "정렬",
+  "toolbarItalic": "기울임",
+  "toolbarUnderline": "밑줄",
+  "toolbarStrikethrough": "취소선",
+  "toolbarOrderedList": "번호 목록",
+  "toolbarBulletedList": "글머리 목록",
+  "toolbarBlockquote": "인용문",
+  "toolbarClearFormatting": "서식 초기화",
+  "toolbarImageUpload": "이미지 업로드",
+  "toolbarFontSize": "글자 크기",
+  "toolbarClearSize": "크기 해제",
+
+  "emailLoginTitle": "이메일 로그인",
+  "emailLoginGuide": "이메일과 비밀번호를 입력해 주세요",
+  "password": "비밀번호",
+  "showPassword": "표시",
+  "hidePassword": "숨기기",
+  "login": "로그인",
+  "signUp": "회원가입",
+  "emailLoginNotMember": "아직 회원이 아니신가요? ",
+  "emailLoginFailed": "로그인에 실패했습니다.",
+  "emailLoginInvalidCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "emailLoginNetworkError": "네트워크 연결을 확인해 주세요.",
+  "unknownErrorOccurred": "알 수 없는 오류가 발생했습니다.",
+  
+  "emailSignupTitle": "이메일 회원가입",
+  "emailSignupCreateAccount": "새 계정을 만들어 주세요",
+  "emailSignupGuide": "이메일과 비밀번호를 입력해 주세요",
+  "emailSignupComplete": "회원가입이 완료되었습니다",
+  "emailSignupFailed": "회원가입에 실패했습니다.",
+  "emailSignupAlreadyHaveAccount": "이미 계정이 있으신가요? "
+}

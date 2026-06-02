@@ -1,0 +1,867 @@
+{
+  "@@locale": "en",
+  "settings": "Settings",
+  "language": "Language",
+  "korean": "한국어",
+  "english": "English",
+  "japanese": "日本語",
+  "screenSettings": "Display Settings",
+  "defaultValue": "Default",
+  "notification": "Notifications",
+  "cloudSync": "Cloud Sync",
+  "appInfo": "App Info",
+  "appDescription": "AI E-book Tutorial",
+  "version": "Version",
+  "close": "Close",
+  "connect": "Connect",
+  "save": "Save",
+  "delete": "Delete",
+  "search": "Search",
+  "accountConnect": "Connect Account",
+  "accountConnectMessage": "You can connect your guest account to a login account.",
+  "connectLoginAccount": "Connect login account",
+  "appleAccountConnect": "Connect Apple account",
+  "googleAccountConnect": "Connect Google account",
+  "emailAccountConnect": "Connect email account",
+  "googleAccount": "Google account",
+  "appleAccount": "Apple account",
+  "emailAccount": "Email account",
+  "guestAccount": "Guest account",
+  "unknown": "Unknown",
+  "guestUser": "Guest User",
+  "user": "User",
+  "email": "Email",
+  "passwordMinLengthHint": "Password, at least 6 characters",
+  "confirmPassword": "Confirm password",
+  "allFieldsRequired": "Please fill in all fields.",
+  "passwordMinLength": "Password must be at least 6 characters.",
+  "passwordMismatch": "Passwords do not match.",
+  "signInInfoNotFound": "Sign-in information was not found.",
+  "accountAlreadyLinked": "An account is already linked.",
+  "emailAccountLinked": "Email account has been linked.",
+  "appleAccountLinked": "Apple account has been linked.",
+  "googleAccountLinked": "Google account has been linked.",
+  "emailAlreadyInUse": "This email is already in use.",
+  "invalidEmail": "The email format is invalid.",
+  "weakPassword": "The password is too weak.",
+  "accountConnectFailed": "Failed to connect account.",
+  "appleCredentialAlreadyInUse": "This Apple account is already linked to another account.",
+  "appleProviderAlreadyLinked": "Apple account is already linked.",
+  "appleLoginNotEnabled": "Apple sign-in is not enabled in Firebase.",
+  "appleAccountConnectFailed": "Failed to connect Apple account.",
+  "googleCredentialAlreadyInUse": "This Google account is already linked to another account.",
+  "googleAccountConnectFailed": "Failed to connect Google account.",
+  "appTitle": "AI E-book Tutorial",
+  "appSubtitle": "The easiest first step to opening knowledge",
+  "tryAsGuest": "Try as guest",
+  "accountConnectNotice": "You can connect your account anytime in Settings.",
+  "firebaseInitFailed": "❗ Failed to initialize Firebase",
+  "providerLoginFailed": "{provider} login failed.",
+  "@providerLoginFailed": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "providerLoginFailedWithReason": "{provider} login failed: {reason}",
+  "@providerLoginFailedWithReason": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "guestLoginFailed": "Guest login failed. Please try again later.",
+  "genreSelect": "Select Genre",
+  "genreWebNovel": "Web Novel",
+  "genreNovel": "Novel",
+  "genrePoetry": "Poetry",
+  "genreFreeForm": "Free Form",
+  "genreSelfImprovement": "Self-improvement",
+  "genreScienceBook": "Science Book",
+  "more": "More",
+  "logout": "Log Out",
+  "speechRecognitionUnavailable": "Speech recognition is not available.",
+  "speechRecognitionError": "Speech recognition error: {error}",
+  "@speechRecognitionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "keywordAlreadyExists": "This keyword is already registered.",
+  "chapterTitleHint": "Enter chapter title",
+  "focusWritingModeToggle": "Toggle focus writing mode",
+  "exitFocusMode": "Exit focus mode",
+  "focusWritingMode": "Focus writing mode",
+  "convertPng": "Convert to PNG",
+  "pngPreview": "PNG Preview",
+  "keywordInputHint": "Enter keyword",
+  "charCountLabel": "{count} chars",
+  "@charCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "character": "Character",
+  "characterColor": "Character Color",
+  "transparency": "Transparency",
+  "clear": "Clear",
+  "cancel": "Cancel",
+  "apply": "Apply",
+  "addPhoto": "+ Photo",
+  "tapToAddOrChange": "Tap: Add / Change",
+  "name": "Name",
+  "birthday": "Birthday",
+  "height": "Height",
+  "bloodType": "Blood type",
+  "blood": "Blood",
+  "profile": "Profile",
+  "profileUpper": "PROFILE",
+  "color": "color",
+  "personality": "Personality",
+  "personalityKeywords": "Personality Keywords",
+  "likesAndDislikes": "Likes / Dislikes",
+  "likes": "Likes",
+  "dislikes": "Dislikes",
+  "bodyAppearance": "Body / Appearance",
+  "bodyAppearanceMemo": "Body / Appearance Memo",
+  "enterAfterInput": "Enter after typing",
+  "keywordEnterAfterInput": "Enter keyword and press Enter",
+  "memoEnterAfterInput": "Enter memo and press Enter",
+  "noRegisteredItems": "No items have been registered yet.",
+  "exampleName": "e.g. Mumu",
+  "exampleBirthday": "e.g. 2005-01-01",
+  "exampleHeight": "e.g. 159cm",
+  "exampleBloodType": "e.g. O+",
+  "exampleProfile": "e.g. Sleeps a lot during the day",
+  "exampleBodyAppearanceMemo": "e.g. Transparent glowing ears and tail in human form",
+  "faction": "Faction",
+  "addShape": "Add shape",
+  "zoomOut": "Zoom out",
+  "zoomIn": "Zoom in",
+  "edgeColor": "Line color",
+  "replacePhoto": "Replace photo",
+  "deletePhoto": "Delete photo",
+  "addPhotoToDiagram": "Add photo",
+  "replaceColor": "Replace color",
+  "deleteColor": "Delete color",
+  "addColor": "Add color",
+  "addText": "Add text",
+  "replaceText": "Replace text",
+  "deleteText": "Delete text",
+  "addTextColor": "Add text color",
+  "replaceTextColor": "Replace text color",
+  "deleteTextColor": "Delete text color",
+  "textColor": "Text color",
+  "shapeColor": "Shape color",
+  "relation": "Relation",
+  "relationHint": "e.g. Alliance, hostility, family",
+  "moveLocked": "Move locked",
+  "moveAvailable": "Move available",
+  "factionSelectionHint": "Select a shape or line.",
+  "changeShape": "Change shape",
+  "lock": "Lock",
+  "unlock": "Unlock",
+  "deleteShape": "Delete shape",
+  "deleteLine": "Delete line",
+  "size": "Size",
+  "curvature": "Curvature",
+  "lineWidth": "Line width",
+  "selectColor": "Select color",
+  "dashedLine": "Dashed line",
+  "arrow": "Arrow",
+  "none": "None",
+  "start": "Start",
+  "end": "End",
+  "bothEnds": "Both ends",
+  "insideTextHint": "Text to display inside the shape",
+  "nameHint": "Name",
+  "newNode": "New",
+  "timeline": "Timeline",
+  "timelineAdd": "Add Timeline",
+  "timelineEdit": "Edit Timeline",
+  "timelineEmpty": "Add a timeline.",
+  "timelineSeedCreate": "create",
+  "timelineSeedCreateOne": "create 1",
+  "timelineSeedUnnamed": "Unnamed",
+  "timelineSeedEditWord": "Tap to edit the word",
+  "timelineSeedReorderColor": "Long-press a color to change its position",
+  "timelineSeedEditColorName": "Tap to edit the color name",
+  "timelineSeedEditContent": "Tap to edit the content",
+  "unnamed": "Unnamed",
+  "barName": "Bar name",
+  "barNameHint": "e.g. Chapter 1",
+  "wordDescription": "Word / Description",
+  "description": "Description",
+  "barColor": "Bar color",
+  "worldSeat": "World Seat",
+  "glossary": "Glossary",
+  "freeMemo": "Free memo",
+  "glossaryEmpty": "Add a glossary term.",
+  "freeMemoEmpty": "Add a free memo.",
+  "noSearchResults": "No search results.",
+  "pinAdd": "Pin",
+  "pinRemove": "Unpin",
+  "term": "Word",
+  "glossaryAdd": "Add Glossary Term",
+  "glossaryEdit": "Edit Glossary Term",
+  "glossaryDeleteTitle": "Delete glossary term",
+  "glossaryDeleteMessage": "Do you want to delete this glossary term?",
+  "memoAdd": "New memo",
+  "memoEdit": "Edit memo",
+  "memoHint": "Enter a memo",
+  "memoDeleteTitle": "Delete memo",
+  "memoDeleteMessage": "Do you want to delete this memo?",
+  "timelineDeleteTitle": "Delete {name}",
+  "@timelineDeleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineDeleteMessage": "Do you want to delete this timeline ({name})?",
+  "@timelineDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "characterDeleteTitle": "Delete character",
+  "characterDeleteMessage": "Do you want to delete this character?",
+  "protagonistCharacter": "Protagonist Character",
+  "supportingCharacter": "Supporting Character",
+  "emptyProtagonistCharacters": "Add a protagonist character.",
+  "emptySupportingCharacters": "Add a supporting character.",
+  "emptyCharacters": "Add a character.",
+  "tapToEdit": "Tap to edit",
+  "descriptionInputHint": "Enter a description",
+  "seedCharacterMainTone": "Main tone",
+  "seedCharacterHikaraName": "Hikara",
+  "seedCharacterHikaraSpecialNote": "Goal: Find the origin of the elf race.",
+  "seedCharacterHikaraPersonalityResponsibility": "Responsible",
+  "seedCharacterHikaraLikeObservation": "Observation",
+  "seedCharacterHikaraLikeOldBooks": "Ancient books",
+  "seedCharacterHikaraDislikeIrresponsibility": "Irresponsibility",
+  "seedCharacterHikaraPhysicalBlueEyes": "Blue eyes",
+  "seedCharacterElixiName": "Elixi",
+  "seedCharacterElixiSpecialNote": "Studies magical herbs.",
+  "seedCharacterElixiPersonalityCuriosity": "Curious",
+  "seedCharacterElixiLikeHerbs": "Herbs",
+  "seedCharacterElixiLikePharmacology": "Pharmacology",
+  "seedCharacterElixiDislikeBugs": "Bugs",
+  "seedCharacterElixiPhysicalGoldenHair": "Golden hair",
+  "bookListTitle": "Book List",
+  "selectBooks": "Select Books",
+  "selectedBooksCount": "{count} selected",
+  "@selectedBooksCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cancelSelection": "Cancel Selection",
+  "deleteBooksConfirmTitle": "Confirm Delete",
+  "deleteBooksConfirmMessage": "Do you want to delete the selected books?",
+  "untitledBook": "Untitled",
+  "enterBookTitle": "Enter a title",
+  "share": "Share",
+  "restore": "Restore",
+  "preparingPdf": "Preparing PDF.",
+  "zipShare": "Share ZIP",
+  "creatingZipFile": "Creating ZIP file.",
+  "zipNoFiles": "There are no files to add to the ZIP.",
+  "zipShareComplete": "ZIP shared.",
+  "zipShareFailed": "Failed to share ZIP: {error}",
+  "@zipShareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectChapterCoverMessage": "Select an image to use as this chapter cover.",
+  "takePhoto": "Take Photo",
+  "chooseFromAlbum": "Choose from Album",
+  "chapterCoverDeleted": "Chapter cover deleted.",
+  "chapterCoverSet": "Chapter cover set.",
+  "coverFileNotFound": "Cover file could not be found.",
+  "selectCoverPhoto": "Select Cover Photo",
+  "selectBookCoverMessage": "Select an image to use as the book cover.",
+  "coverPhotoDeleted": "Cover photo deleted.",
+  "coverPhotoSet": "Cover photo set.",
+  "preparingBackupZip": "Preparing backup ZIP file.",
+  "bookBackupDescription": "This is a book backup file.",
+  "shareBackupInstruction": "Choose iCloud Drive or the Files app from the share sheet.",
+  "backupExportFailed": "Failed to export backup file: {error}",
+  "@backupExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectBackupZipFile": "Select a backup ZIP file.",
+  "backupFileReadFailed": "Could not read the backup file.",
+  "backupRestoreComplete": "Backup restored.",
+  "backupRestoreFailed": "Failed to restore backup: {error}",
+  "@backupRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSavingZipBackup": "Saving ZIP backup to Google Drive.",
+  "googleDriveSaveComplete": "Saved to Google Drive: {savedName}",
+  "@googleDriveSaveComplete": {
+    "placeholders": {
+      "savedName": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSaveFailed": "Failed to save to Google Drive: {error}",
+  "@googleDriveSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveNoBackupFiles": "There are no Google Drive backup files.",
+  "googleDriveImport": "Import from Google Drive",
+  "selectBackupFileMessage": "Select a backup file to import.",
+  "backupImport": "Import Backup",
+  "googleDriveBackupReplaceConfirm": "The current book content will be replaced with the Google Drive backup. Continue?",
+  "bookBackupJsonNotFound": "book_backup.json was not found.",
+  "restoredChapter": "Restored Chapter",
+  "googleDriveBackupListLoading": "Loading Google Drive backup list.",
+  "googleDriveBackupDownloading": "Downloading Google Drive backup.",
+  "googleDriveBackupRestoreComplete": "Google Drive backup restored.",
+  "googleDriveRestoreFailed": "Failed to import from Google Drive: {error}",
+  "@googleDriveRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noOtherChapterToSplitEdit": "There are no other chapters to edit together.",
+  "splitSelectChapterTitle": "Select a chapter to edit with {title}",
+  "@splitSelectChapterTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "splitEditSaveComplete": "Split edit saved.",
+  "splitEdit": "Split Edit",
+  "top": "Top",
+  "bottom": "Bottom",
+  "defaultBookTitle": "Book Title",
+  "chapterAutoTitle": "{title} Episode {number}",
+  "@chapterAutoTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterSaveComplete": "Chapter saved.",
+  "chapterDeleteConfirmTitle": "Confirm Delete",
+  "chapterDeleteConfirmMessage": "Do you want to delete “{title}”?",
+  "@chapterDeleteConfirmMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "deletedComplete": "Deleted.",
+  "chapterReorder": "Reorder Chapters",
+  "reorderModeMessage": "Reorder mode is on. Drag to change the order.",
+  "chapterShareLabel": "Share “{title}”",
+  "@chapterShareLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterDeleteLabel": "Delete “{title}”",
+  "@chapterDeleteLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterReordering": "Reordering chapters",
+  "totalChapterCount": "{count} chapters total",
+  "@totalChapterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addChapterHint": "Tap the + button in the top right to add a chapter.",
+  "addChapterFirst": "Please add a chapter first.",
+  "allChapters": "All Chapters",
+  "selectedChapters": "Selected Chapters",
+  "noSelectedChapters": "No chapters selected.",
+  "allChaptersOption": "All chapters",
+  "chapters": "Chapters",
+  "chapterTitleInput": "Enter chapter title",
+  "sortOldestFirst": "From First Episode",
+  "sortNewestFirst": "From Latest Episode",
+  "memoDeletedComplete": "Memo deleted.",
+  "bookMemo": "Book Memo",
+  "bookMemoEmptyHint": "+ Add a memo related to this book.",
+  "memo": "Memo",
+  "docxImageAlt": "[Image: {fileName}]",
+  "@docxImageAlt": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingWordFile": "Preparing MS Word file.",
+  "wordShareOpened": "MS Word share sheet opened.",
+  "wordCreateFailed": "Failed to create MS Word file: {error}",
+  "@wordCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingTxtFile": "Preparing TXT file.",
+  "txtShareOpened": "TXT file share sheet opened.",
+  "txtCreateFailed": "Failed to create TXT file: {error}",
+  "@txtCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "localCloud": "Local / Cloud",
+  "iCloudImport": "Import from iCloud",
+  "epubForEbook": "For ePub e-books",
+  "pdfCreateFailed": "Failed to create PDF: {error}",
+  "@pdfCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "theme": "Theme",
+  "font": "Font",
+  "defaultFont": "Default Font",
+  "batangFont": "Serif Font",
+  "gothicFont": "Sans-serif Font",
+  "lineSpacing": "Line Spacing",
+  "letterSpacing": "Letter Spacing",
+  "margin": "Margin",
+  "unpinChapter": "Unpin",
+  "pinChapter": "Pin Chapter",
+  "unpinned": "Unpinned.",
+  "chapterPinned": "Chapter pinned.",
+  "workIntro": "Work Introduction",
+  "workIntroHint": "Briefly introduce the mood, plot, and world of the work.",
+  "keywords": "Keywords",
+  "keywordsHelper": "Add freely, like #romance #growth #fantasy.",
+  "emptyKeywords": "No keywords have been registered yet.",
+  "keywordInput": "Enter keyword",
+  "detailInfo": "Details",
+  "authorOriginal": "Writer / Original Work",
+  "authorOriginalHint": "Enter writer / original work information.",
+  "workCategory": "Work Category",
+  "workCategoryHint": "Enter the work category.",
+  "ageRating": "Age Rating",
+  "ageRatingHint": "Enter the age rating.",
+  "pageIndicator": "Page {current} / {total}",
+  "@pageIndicator": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterMeta": "{size} · {chars} chars · {date}",
+  "@chapterMeta": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "penNameHint": "Pen name",
+  "bookPreview": "Book Preview",
+  "workInfo": "Work Info",
+  "allSettings": "All Settings",
+  "back": "Back",
+  "coverPhotoAdd": "+ Cover Photo",
+  "example": "Example",
+  "settingsPreviewSample": "Build Story\nExample text\nTry changing settings",
+  "calendarEditSchedule": "Edit Schedule",
+  "calendarNewSchedule": "New Schedule",
+  "calendarTitleHint": "Enter a title",
+  "calendarStartDate": "Start Date",
+  "calendarEndDate": "End Date",
+  "calendarColor": "Color",
+  "calendarMemoHint": "Enter a memo",
+  "calendarDeleteSchedule": "Delete Schedule",
+  "calendarDeleteScheduleConfirm": "Do you want to delete “{title}”?",
+  "@calendarDeleteScheduleConfirm": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarNoTitle": "Untitled",
+  "calendarPickDate": "Select Date",
+  "calendarConfirm": "OK",
+  "calendarWritingDays": "Writing Days",
+  "calendarTodayWritten": "Today’s Writing",
+  "calendarTotalChars": "Total Characters",
+  "calendarBestRecord": "Best Record",
+  "calendarDaysValue": "{count} days",
+  "@calendarDaysValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCharsValue": "{count} chars",
+  "@calendarCharsValue": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarBestRecordValue": "{chars} chars ({date})",
+  "@calendarBestRecordValue": {
+    "placeholders": {
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetAll": "Reset All",
+  "calendarDeleteAllDataConfirm": "Do you want to delete all calendar data?",
+  "calendarDeleteAllDataMessage": "Schedules / Today’s tasks / Releases / Repeat settings / Writing records will all be deleted.",
+  "calendarDeleteAll": "Delete All",
+  "calendarResetRecord": "Reset Record",
+  "calendarDeleteDateRecordConfirm": "Do you want to delete the record for {date}?",
+  "@calendarDeleteDateRecordConfirm": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarDeleteDateRecordMessage": "Today’s tasks / Releases / Writing records will all be deleted.",
+  "calendarNoEvents": "No schedules registered.",
+  "calendarTodayTodo": "Today’s Tasks",
+  "calendarAdd": "Add",
+  "calendarTodoHelper": "Add tasks for today to organize your workflow.",
+  "calendarReleaseUpload": "Release [ Upload ]",
+  "calendarReleaseHelper": "Record upload plans and completions to manage your release cycle.",
+  "calendarMonthlyStats": "Monthly Stats [ {month} ]",
+  "@calendarMonthlyStats": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetThisDateRecord": "Reset This Date’s Record",
+  "calendarResetAllData": "Reset All Data",
+  "calendarTaskHint": "Enter a task",
+  "calendarZeroChars": "0 chars",
+  "calendarUploadTitleHint": "Enter upload title",
+  "calendarComplete": "Complete",
+  "calendarPlan": "Planned",
+  "ebookSaveComplete": "Saved.",
+  "ebookDefaultContent": "Start writing your work here.",
+  "ebookLatestEpisode": "Latest Episode",
+  "ebookCountValue": "{count}",
+  "@ebookCountValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookTodayNoRecord": "No records registered for today.",
+  "ebookTodaySummary": "Tasks {doneTasks}/{totalTasks} · uploads {releaseCount} · schedules {eventCount}",
+  "@ebookTodaySummary": {
+    "placeholders": {
+      "doneTasks": {
+        "type": "int"
+      },
+      "totalTasks": {
+        "type": "int"
+      },
+      "releaseCount": {
+        "type": "int"
+      },
+      "eventCount": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookMainSquareCreateTitle": "Create New Work",
+  "ebookMainCardCustomizeSaveComplete": "Main card customization saved.",
+  "ebookPreset": "Preset",
+  "ebookPresetName": "Preset Name",
+  "ebookPresetDefaultName": "Preset {number}",
+  "@ebookPresetDefaultName": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookPresetNameReplace": "Rename Preset",
+  "ebookPresetSaveComplete": "Preset saved.",
+  "ebookPresetRenameComplete": "Preset renamed.",
+  "ebookPresetNameHintExample": "e.g. Photo Poster",
+  "ebookOriginalFileLoadFailed": "Could not load the original file.",
+  "ebookPhotoLoadFailed": "Could not load the photo.",
+  "ebookBackgroundImagePickFailed": "Background image selection failed: {error}",
+  "@ebookBackgroundImagePickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ebookBackgroundImageGestureHint": "Drag to move · Pinch to zoom · Double-tap to reset",
+  "ebookReset": "Reset",
+  "ebookEffect": "Effects",
+  "ebookGlassMode": "Glass Mode",
+  "ebookGlassModeSubtitle": "Applies a soft glass effect and lens reflection.",
+  "ebookPresetSectionSubtitle": "Save the current combination and apply it again later.",
+  "ebookSaveCurrentPreset": "Save Current Preset",
+  "ebookNoSavedPreset": "No saved presets.",
+  "ebookTextSection": "Text",
+  "ebookMainText": "Main Text",
+  "ebookSubText": "Sub Text",
+  "ebookOptional": "Optional",
+  "ebookMainTextWeight": "Main Text Weight",
+  "ebookSubTextWeight": "Sub Text Weight",
+  "ebookTextPosition": "Text Position",
+  "ebookTextIconColor": "Text / Icon Color",
+  "ebookLightTextModeNotice": "When bright text mode is on, white text is prioritized over photos.",
+  "ebookCardStyle": "Card Style",
+  "ebookCardRatio": "Card Ratio",
+  "ebookBackgroundStyle": "Background Style",
+  "ebookBorderStyle": "Border Style",
+  "ebookBackgroundImage": "Background Image",
+  "ebookBackgroundImageSubtitle": "Add a photo, then adjust its position and zoom directly on the preview card.",
+  "ebookSelectPhoto": "Select Photo",
+  "ebookDeleteImage": "Delete Image",
+  "ebookResetPosition": "Reset Position",
+  "ebookDarkPhotoWhiteText": "White Text for Dark Photos",
+  "ebookDarkPhotoWhiteTextSubtitle": "Shows icons and text in white over photo backgrounds.",
+  "ebookIcon": "Icon",
+  "ebookShowIcon": "Show Icon",
+  "ebookIconShape": "Icon Shape",
+  "ebookIconPosition": "Icon Position",
+  "ebookSize": "Size",
+  "ebookThinness": "Thinness",
+  "ebookRatioSquare": "Square",
+  "ebookRatioPortrait": "Portrait",
+  "ebookRatioTall": "Tall Portrait",
+  "ebookRatioLandscape": "Landscape",
+  "ebookRatioWide": "Wide",
+  "ebookStyleNone": "None",
+  "ebookStyleSky": "Clear Sky",
+  "ebookStyleSoftPink": "Soft Pink",
+  "ebookStyleLightLavender": "Light Lavender",
+  "ebookStyleVanillaCream": "Vanilla Cream",
+  "ebookStyleClearMint": "Clear Mint",
+  "ebookStyleBrightAurora": "Bright Aurora",
+  "ebookOptionDefault": "Default",
+  "ebookOptionWriting": "Writing",
+  "ebookOptionBook": "Book",
+  "ebookOptionDrawing": "Drawing",
+  "ebookOptionStar": "Star",
+  "ebookOptionHeart": "Heart",
+  "ebookBorderThin": "Default Thin Border",
+  "ebookBorderThick": "Thick Border",
+  "ebookBorderNone": "No Border",
+  "ebookBorderPastel": "Pastel Border",
+  "ebookBorderDashed": "Dashed Feel",
+  "ebookPosTopLeft": "Top Left",
+  "ebookPosTopCenter": "Top Center",
+  "ebookPosTopRight": "Top Right",
+  "ebookPosCenterLeft": "Center Left",
+  "ebookPosCenter": "Center",
+  "ebookPosCenterRight": "Center Right",
+  "ebookPosBottomLeft": "Bottom Left",
+  "ebookPosBottomCenter": "Bottom Center",
+  "ebookPosBottomRight": "Bottom Right",
+  "episodesPageTitle": "Episodes",
+  "episodeToggleAll": "All",
+  "episodeToggleSelected": "Selected",
+  "episodeCountLabel": "{count} episodes",
+  "@episodeCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "emptySavedEpisodes": "No saved episodes.",
+  "shareCurrentPage": "Current",
+  "shareAllPages": "All",
+  "shareCustomRange": "Custom",
+  "shareNoFiles": "There are no files to share.",
+  "shareFailed": "Sharing failed.",
+  "shareFailedWithReason": "Sharing failed: {error}",
+  "@shareFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfShareComplete": "PDF shared.",
+  "pngShareComplete": "PNG shared.",
+  "jpgShareComplete": "JPG shared.",
+  "pdfOpenFailed": "Failed to open PDF: {error}",
+  "@pdfOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfSavedToApp": "Saved to app: {fileName}",
+  "@pdfSavedToApp": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFailedWithReason": "Save failed: {error}",
+  "@saveFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveCompletePath": "Saved PNG files.\n{path}",
+  "@pngSaveCompletePath": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveFailed": "Failed to save PNG files.",
+  "simpleMemoTitle": "Simple Memo",
+  "selectMemo": "Select Memos",
+  "selectedMemosCount": "{count} selected",
+  "@selectedMemosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectedMemosDeleteMessage": "Do you want to delete the selected memos?",
+  "simpleMemoAddTooltip": "Add new memo",
+  "simpleMemoEmptyMain": "No memos have been saved.\nTap the + button in the top right to choose a genre and add a memo.",
+  "simpleMemoEmptyGenre": "No memos have been saved.\nTap the + button in the top right to add a memo.",
+  "pdfEmptyContent": "(No content)",
+
+  "pdfPreviewDialogTitle": "PDF Preview",
+  "pdfPreviewConfirm": "Preview",
+  "pdfChapterListEmpty": "There are no chapters.",
+  "pdfChapterSelectRequired": "Please select a chapter.",
+  
+  "ebookMainCardCustomize": "Customize Main Card",
+
+  "toolbarKeywordHide": "Hide Keywords",
+  "toolbarKeywordOpen": "Open Keywords",
+  "toolbarSpeechStop": "Stop Voice Input",
+  "toolbarSpeechInput": "Voice Input",
+  "toolbarUndo": "Undo",
+  "toolbarRedo": "Redo",
+  "toolbarBold": "Bold",
+  "toolbarTextColor": "Text Color",
+  "toolbarTextBackgroundColor": "Text Background Color",
+  "toolbarHighlight": "Highlight",
+  "toolbarDividerSolid": "Divider",
+  "toolbarDividerDashed": "Dashed Divider",
+  "toolbarAlign": "Align",
+  "toolbarItalic": "Italic",
+  "toolbarUnderline": "Underline",
+  "toolbarStrikethrough": "Strikethrough",
+  "toolbarOrderedList": "Numbered List",
+  "toolbarBulletedList": "Bulleted List",
+  "toolbarBlockquote": "Quote",
+  "toolbarClearFormatting": "Clear Formatting",
+  "toolbarImageUpload": "Upload Image",
+  "toolbarFontSize": "Font Size",
+  "toolbarClearSize": "Clear Size",
+
+  "emailLoginTitle": "Email Login",
+  "emailLoginGuide": "Please enter your email and password.",
+  "password": "Password",
+  "showPassword": "Show",
+  "hidePassword": "Hide",
+  "login": "Log In",
+  "signUp": "Sign Up",
+  "emailLoginNotMember": "Not a member yet? ",
+  "emailLoginFailed": "Login failed.",
+  "emailLoginInvalidCredentials": "The email or password is incorrect.",
+  "emailLoginNetworkError": "Please check your network connection.",
+  "unknownErrorOccurred": "An unknown error occurred.",
+  
+  "emailSignupTitle": "Email Sign Up",
+  "emailSignupCreateAccount": "Create a new account",
+  "emailSignupGuide": "Please enter your email and password.",
+  "emailSignupComplete": "Sign-up complete.",
+  "emailSignupFailed": "Sign-up failed.",
+  "emailSignupAlreadyHaveAccount": "Already have an account? "
+}

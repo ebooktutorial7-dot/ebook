@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 
 import 'package:isar/isar.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
 import 'world_seat_isar.dart';
 
 class TimelineTab extends StatefulWidget {
@@ -40,6 +42,7 @@ class TimelineColorSection {
 
 class TimelineEvent {
   TimelineEvent({required this.year, required this.desc});
+
   final String year;
   final String desc;
 }
@@ -48,10 +51,13 @@ class TimelineEvent {
 
 class TimelineStoreIsar {
   final String documentId;
+
   TimelineStoreIsar(this.documentId);
 
   String _newUid() =>
       't_${documentId}_${DateTime.now().microsecondsSinceEpoch}';
+
+  String _fallbackUnnamed() => 'Unnamed';
 
   TimelineColorSection _toModel(TimelineBarEntity e) {
     return TimelineColorSection(
@@ -70,7 +76,8 @@ class TimelineStoreIsar {
     required int order,
     required int now,
   }) {
-    final cleanedLabel = s.label.trim().isEmpty ? 'Unnamed' : s.label.trim();
+    final cleanedLabel =
+        s.label.trim().isEmpty ? _fallbackUnnamed() : s.label.trim();
 
     final cleanedEvents =
         (s.events.isEmpty
@@ -186,52 +193,62 @@ class _TimelineTabState extends State<TimelineTab> {
 
   late final TimelineStoreIsar _store = TimelineStoreIsar(widget.documentId);
 
+  bool _didStartLoad = false;
   bool _loading = true;
   List<TimelineColorSection> _sections = [];
   List<String> _uids = [];
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_didStartLoad) return;
+    _didStartLoad = true;
+
+    final l10n = AppLocalizations.of(context);
+    _load(l10n);
   }
 
-  List<TimelineColorSection> _seedDefault() {
+  List<TimelineColorSection> _seedDefault(AppLocalizations l10n) {
     return [
       TimelineColorSection(
-        label: 'create',
+        label: l10n.timelineSeedCreate,
         color: const Color.fromARGB(255, 255, 194, 222),
         events: [
-          TimelineEvent(year: '2029', desc: '탭 하여 단어를 편집해 보세요'),
+          TimelineEvent(year: '2029', desc: l10n.timelineSeedEditWord),
           TimelineEvent(year: '2030', desc: ''),
           TimelineEvent(year: '2031', desc: ''),
           TimelineEvent(year: '2039', desc: ''),
         ],
       ),
       TimelineColorSection(
-        label: 'create 1',
+        label: l10n.timelineSeedCreateOne,
         color: const Color.fromARGB(255, 255, 244, 169),
-        events: [TimelineEvent(year: '2040', desc: '색상을 길게 탭 하여 위치를 바꿔보세요')],
+        events: [
+          TimelineEvent(year: '2040', desc: l10n.timelineSeedReorderColor),
+        ],
       ),
       TimelineColorSection(
-        label: 'create',
+        label: l10n.timelineSeedCreate,
         color: const Color.fromARGB(255, 207, 241, 255),
         events: [
-          TimelineEvent(year: '2090', desc: '탭 하여 색상 이름을 편집해 보세요'),
+          TimelineEvent(year: '2090', desc: l10n.timelineSeedEditColorName),
           TimelineEvent(year: '2091', desc: ''),
         ],
       ),
       TimelineColorSection(
-        label: 'Unname',
+        label: l10n.timelineSeedUnnamed,
         color: const Color.fromARGB(255, 125, 211, 254),
-        events: [TimelineEvent(year: '2100', desc: '탭 하여 내용을 편집해 보세요')],
+        events: [
+          TimelineEvent(year: '2100', desc: l10n.timelineSeedEditContent),
+        ],
       ),
     ];
   }
 
-  Future<void> _load() async {
+  Future<void> _load(AppLocalizations l10n) async {
     try {
-      await _store.seedIfEmpty(_seedDefault());
+      await _store.seedIfEmpty(_seedDefault(l10n));
 
       final isar = await WorldSeatIsar.instance;
       final rows =
@@ -259,6 +276,7 @@ class _TimelineTabState extends State<TimelineTab> {
               .toList();
 
       if (!mounted) return;
+
       setState(() {
         _sections = sections;
         _uids = rows.map((e) => e.uid).toList();
@@ -266,6 +284,7 @@ class _TimelineTabState extends State<TimelineTab> {
       });
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
         _sections = [];
         _uids = [];
@@ -275,6 +294,8 @@ class _TimelineTabState extends State<TimelineTab> {
   }
 
   Future<void> _openEditor({int? sectionIndex}) async {
+    final l10n = AppLocalizations.of(context);
+
     final initial =
         (sectionIndex != null &&
                 sectionIndex >= 0 &&
@@ -303,18 +324,19 @@ class _TimelineTabState extends State<TimelineTab> {
       );
 
       if (!mounted) return;
+
       if (ok) {
         await _deleteSectionAt(sectionIndex);
       }
+
       return;
     }
 
     final payload = result.payload;
     if (payload == null) return;
 
-    final newSection = payload.toSection();
+    final newSection = payload.toSection(unnamedLabel: l10n.unnamed);
 
-    // edit
     if (sectionIndex != null &&
         sectionIndex >= 0 &&
         sectionIndex < _sections.length) {
@@ -332,15 +354,14 @@ class _TimelineTabState extends State<TimelineTab> {
       return;
     }
 
-    // add
     setState(() {
       _sections.add(newSection);
-      _uids.add(''); // 임시 placeholder
+      _uids.add('');
     });
 
     final newIndex = _sections.length - 1;
     await _store.upsertAt(order: newIndex, section: newSection);
-    unawaited(_load());
+    unawaited(_load(l10n));
   }
 
   Future<void> _deleteSectionAt(int index) async {
@@ -366,6 +387,8 @@ class _TimelineTabState extends State<TimelineTab> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -380,9 +403,9 @@ class _TimelineTabState extends State<TimelineTab> {
             children: [
               Row(
                 children: [
-                  const Text(
-                    'Timeline',
-                    style: TextStyle(
+                  Text(
+                    l10n.timeline,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
@@ -408,10 +431,10 @@ class _TimelineTabState extends State<TimelineTab> {
               Expanded(
                 child:
                     _sections.isEmpty
-                        ? const Center(
+                        ? Center(
                           child: Text(
-                            '타임라인을 추가해 보세요.',
-                            style: TextStyle(
+                            l10n.timelineEmpty,
+                            style: const TextStyle(
                               color: Color.fromARGB(221, 83, 129, 159),
                               fontSize: 13,
                             ),
@@ -740,8 +763,8 @@ class _EditPayload {
     );
   }
 
-  TimelineColorSection toSection() {
-    final name = barName.trim().isEmpty ? 'Unnamed' : barName.trim();
+  TimelineColorSection toSection({required String unnamedLabel}) {
+    final name = barName.trim().isEmpty ? unnamedLabel : barName.trim();
 
     final cleanedEvents =
         events.map((e) => TimelineEvent(year: e.year, desc: e.desc)).toList();
@@ -765,12 +788,14 @@ class _EditResult {
 
   factory _EditResult.saved(_EditPayload p) =>
       _EditResult._(payload: p, deleted: false);
+
   factory _EditResult.delete() =>
       const _EditResult._(payload: null, deleted: true);
 }
 
 class _TimelineBarEditPage extends StatefulWidget {
   final _EditPayload? initial;
+
   const _TimelineBarEditPage({required this.initial});
 
   @override
@@ -781,6 +806,7 @@ class _EditEventRow extends StatelessWidget {
   const _EditEventRow({
     required this.yearCtrl,
     required this.descCtrl,
+    required this.descriptionHint,
     required this.isDragging,
     required this.onRemove,
     required this.dragIndex,
@@ -788,6 +814,7 @@ class _EditEventRow extends StatelessWidget {
 
   final TextEditingController yearCtrl;
   final TextEditingController descCtrl;
+  final String descriptionHint;
   final bool isDragging;
   final VoidCallback onRemove;
   final int dragIndex;
@@ -843,12 +870,12 @@ class _EditEventRow extends StatelessWidget {
               maxLines: null,
               textAlignVertical: TextAlignVertical.top,
               style: const TextStyle(fontSize: 13, height: 1.25),
-              decoration: const InputDecoration(
-                hintText: '설명',
+              decoration: InputDecoration(
+                hintText: descriptionHint,
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   fontSize: 13,
                   color: Color.fromARGB(221, 147, 212, 255),
                 ),
@@ -881,6 +908,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
   @override
   void initState() {
     super.initState();
+
     _nameCtrl = TextEditingController(text: widget.initial?.barName ?? '');
     _color = widget.initial?.barColor ?? _color;
 
@@ -897,12 +925,15 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+
     for (final c in _yearCtrls) {
       c.dispose();
     }
+
     for (final c in _descCtrls) {
       c.dispose();
     }
+
     super.dispose();
   }
 
@@ -917,6 +948,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
 
   void _removeEventRow(int i) {
     if (i < 0 || i >= _yearCtrls.length) return;
+
     setState(() {
       _yearCtrls[i].dispose();
       _descCtrls[i].dispose();
@@ -936,6 +968,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
     final name = _nameCtrl.text.trim();
 
     final events = <TimelineEvent>[];
+
     for (int i = 0; i < _yearCtrls.length; i++) {
       final y = _yearCtrls[i].text;
       final d = _descCtrls[i].text;
@@ -955,6 +988,8 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     Widget label(String s) => Text(
       s,
       style: const TextStyle(
@@ -971,7 +1006,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          _isEdit ? 'Timeline 편집' : 'Timeline 추가',
+          _isEdit ? l10n.timelineEdit : l10n.timelineAdd,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -995,7 +1030,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
-            label('바 이름'),
+            label(l10n.barName),
             const SizedBox(height: 8),
             TextField(
               controller: _nameCtrl,
@@ -1005,12 +1040,12 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
                 fontWeight: FontWeight.w500,
                 color: Colors.black,
               ),
-              decoration: const InputDecoration(
-                hintText: '예) Chapter 1',
+              decoration: InputDecoration(
+                hintText: l10n.barNameHint,
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   fontSize: 16,
                   height: 1.25,
                   fontWeight: FontWeight.w400,
@@ -1021,7 +1056,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
             const SizedBox(height: 14),
             Row(
               children: [
-                label('단어 / 설명'),
+                label(l10n.wordDescription),
                 const Spacer(),
                 IconButton(
                   onPressed: _addEventRow,
@@ -1059,8 +1094,10 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
               onReorder: (oldIndex, newIndex) {
                 setState(() {
                   if (newIndex > oldIndex) newIndex -= 1;
+
                   final y = _yearCtrls.removeAt(oldIndex);
                   final d = _descCtrls.removeAt(oldIndex);
+
                   _yearCtrls.insert(newIndex, y);
                   _descCtrls.insert(newIndex, d);
                 });
@@ -1072,6 +1109,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
                   child: _EditEventRow(
                     yearCtrl: _yearCtrls[i],
                     descCtrl: _descCtrls[i],
+                    descriptionHint: l10n.description,
                     isDragging: _draggingEventIndex == i,
                     onRemove: () => _removeEventRow(i),
                     dragIndex: i,
@@ -1080,7 +1118,7 @@ class _TimelineBarEditPageState extends State<_TimelineBarEditPage> {
               },
             ),
             const SizedBox(height: 14),
-            label('바 색상'),
+            label(l10n.barColor),
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerLeft,

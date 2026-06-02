@@ -21,11 +21,14 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:ebook_tutorial_app/pages/ebook_list_page.dart';
 import 'package:ebook_tutorial_app/email_login_page.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
+import 'package:ebook_tutorial_app/app_locale_controller.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await migrateLegacyPrefsV1();
+  await appLocaleController.load();
 
   try {
     await Firebase.initializeApp(
@@ -37,15 +40,26 @@ void main() async {
         clientId:
             '574290558433-k7j2apemmr9c3cf3v1ejqu9gb6r4jkpj.apps.googleusercontent.com',
       );
-      debugPrint('GoogleSignIn 초기화 성공');
-    } catch (e) {
-      debugPrint('GoogleSignIn 초기화 실패: $e');
-    }
-  } catch (e) {
+    } catch (_) {}
+  } catch (_) {
     runApp(
-      const MaterialApp(
+      MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: Scaffold(body: Center(child: Text('❗ Firebase 초기화 실패'))),
+        locale: appLocaleController.locale,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ko'), Locale('en'), Locale('ja')],
+        home: Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context);
+
+            return Scaffold(body: Center(child: Text(l10n.firebaseInitFailed)));
+          },
+        ),
       ),
     );
     return;
@@ -75,64 +89,81 @@ class MyApp extends StatelessWidget {
     const Color selectionFill = Color(0x55FFF59D);
     const Color selectionHandle = Color(0xFFFFC107);
 
-    return MaterialApp(
-      title: '전자책 튜토리얼',
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('en'), Locale('ko')],
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.black,
-          brightness: Brightness.light,
-        ).copyWith(primary: Colors.black, secondary: Colors.black),
-        cupertinoOverrideTheme: const CupertinoThemeData(
-          primaryColor: Colors.black,
-        ),
-        scaffoldBackgroundColor: Colors.white,
-        splashFactory: NoSplash.splashFactory,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-          centerTitle: true,
-          foregroundColor: Colors.black,
-          shadowColor: Colors.transparent,
-        ),
-        textSelectionTheme: const TextSelectionThemeData(
-          selectionColor: selectionFill,
-          selectionHandleColor: selectionHandle,
-          cursorColor: Color.fromARGB(255, 156, 189, 218),
-        ),
-        tooltipTheme: TooltipThemeData(
-          decoration: BoxDecoration(
-            color: const Color.fromARGB(233, 0, 0, 0).withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(70),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 0.9,
+    return AnimatedBuilder(
+      animation: appLocaleController,
+      builder: (context, _) {
+        return MaterialApp(
+          onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+          debugShowCheckedModeBanner: false,
+
+          locale: appLocaleController.locale,
+
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            FlutterQuillLocalizations.delegate,
+          ],
+
+          supportedLocales: const [Locale('ko'), Locale('en'), Locale('ja')],
+
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.black,
+              brightness: Brightness.light,
+            ).copyWith(primary: Colors.black, secondary: Colors.black),
+            cupertinoOverrideTheme: const CupertinoThemeData(
+              primaryColor: Colors.black,
+            ),
+            scaffoldBackgroundColor: Colors.white,
+            splashFactory: NoSplash.splashFactory,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+              centerTitle: true,
+              foregroundColor: Colors.black,
+              shadowColor: Colors.transparent,
+            ),
+            textSelectionTheme: const TextSelectionThemeData(
+              selectionColor: selectionFill,
+              selectionHandleColor: selectionHandle,
+              cursorColor: Color.fromARGB(255, 156, 189, 218),
+            ),
+            tooltipTheme: TooltipThemeData(
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(
+                  233,
+                  0,
+                  0,
+                  0,
+                ).withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(70),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 0.9,
+                ),
+              ),
+              textStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.2,
+                fontWeight: FontWeight.w700,
+                height: 1.15,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              waitDuration: const Duration(milliseconds: 420),
+              showDuration: const Duration(milliseconds: 1100),
+              verticalOffset: 12,
+              triggerMode: TooltipTriggerMode.longPress,
             ),
           ),
-          textStyle: const TextStyle(
-            color: Colors.white,
-            fontSize: 12.2,
-            fontWeight: FontWeight.w700,
-            height: 1.15,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          waitDuration: const Duration(milliseconds: 420),
-          showDuration: const Duration(milliseconds: 1100),
-          verticalOffset: 12,
-          triggerMode: TooltipTriggerMode.longPress,
-        ),
-      ),
-      home: const HomePage(),
+
+          home: const HomePage(),
+        );
+      },
     );
   }
 }
@@ -172,12 +203,12 @@ class _WelcomePageState extends State<WelcomePage> {
   bool _isLoading = false;
 
   void _showAuthError(String provider, Object e) {
-    debugPrint('[$provider 로그인 오류] $e');
+    final l10n = AppLocalizations.of(context);
 
     final message =
         e is FirebaseAuthException
-            ? (e.message ?? '$provider 로그인에 실패했습니다.')
-            : '$provider 로그인 실패: $e';
+            ? (e.message ?? l10n.providerLoginFailed(provider))
+            : l10n.providerLoginFailedWithReason(provider, e.toString());
 
     AppToast.show(context, message);
   }
@@ -274,7 +305,8 @@ class _WelcomePageState extends State<WelcomePage> {
     } catch (e) {
       if (!mounted) return;
 
-      AppToast.show(context, '비회원 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      final l10n = AppLocalizations.of(context);
+      AppToast.show(context, l10n.guestLoginFailed);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -291,6 +323,8 @@ class _WelcomePageState extends State<WelcomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
@@ -327,12 +361,14 @@ class _WelcomePageState extends State<WelcomePage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const _LoginHeader(),
-
+                            _LoginHeader(
+                              title: l10n.appTitle,
+                              subtitle: l10n.appSubtitle,
+                            ),
                             const SizedBox(height: 26),
-
                             _LoginCard(
                               isLoading: _isLoading,
+                              guestLabel: l10n.tryAsGuest,
                               onEmailPressed:
                                   _isLoading ? null : _goToEmailLogin,
                               onGuestPressed:
@@ -342,13 +378,11 @@ class _WelcomePageState extends State<WelcomePage> {
                               onApplePressed:
                                   _isLoading ? null : _loginWithApple,
                             ),
-
                             const SizedBox(height: 10),
-
-                            const Text(
-                              '계정은 설정에서 언제든 연결하실 수 있습니다.',
+                            Text(
+                              l10n.accountConnectNotice,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: Color.fromARGB(186, 129, 178, 207),
                                 fontWeight: FontWeight.w500,
@@ -370,29 +404,32 @@ class _WelcomePageState extends State<WelcomePage> {
 }
 
 class _LoginHeader extends StatelessWidget {
-  const _LoginHeader();
+  const _LoginHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       children: [
-        Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 42),
-        SizedBox(height: 25),
+        const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 42),
+        const SizedBox(height: 25),
         Text(
-          'AI 전자책 튜토리얼',
+          title,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 23,
             fontWeight: FontWeight.w600,
             color: Color.fromARGB(255, 255, 255, 255),
             letterSpacing: -0.5,
           ),
         ),
-        SizedBox(height: 10),
+        const SizedBox(height: 10),
         Text(
-          '지식을 여는 가장 쉬운 첫걸음',
+          subtitle,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             color: Color.fromARGB(255, 255, 255, 255),
             fontWeight: FontWeight.w500,
@@ -406,6 +443,7 @@ class _LoginHeader extends StatelessWidget {
 class _LoginCard extends StatelessWidget {
   const _LoginCard({
     required this.isLoading,
+    required this.guestLabel,
     required this.onEmailPressed,
     required this.onGuestPressed,
     required this.onGooglePressed,
@@ -413,6 +451,7 @@ class _LoginCard extends StatelessWidget {
   });
 
   final bool isLoading;
+  final String guestLabel;
   final VoidCallback? onEmailPressed;
   final VoidCallback? onGuestPressed;
   final VoidCallback? onGooglePressed;
@@ -466,14 +505,12 @@ class _LoginCard extends StatelessWidget {
           ),
 
           const SizedBox(height: 26),
-
           _GlassActionButton(
-            label: '비회원으로 체험하기',
+            label: guestLabel,
             icon: Icons.person_outline_rounded,
             isLoading: isLoading,
             onPressed: onGuestPressed,
           ),
-
           const SizedBox(height: 26),
         ],
       ),

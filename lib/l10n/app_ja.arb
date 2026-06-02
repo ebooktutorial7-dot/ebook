@@ -1,0 +1,867 @@
+{
+  "@@locale": "ja",
+  "settings": "設定",
+  "language": "言語",
+  "korean": "한국어",
+  "english": "English",
+  "japanese": "日本語",
+  "screenSettings": "画面設定",
+  "defaultValue": "デフォルト",
+  "notification": "通知",
+  "cloudSync": "クラウド同期",
+  "appInfo": "アプリ情報",
+  "appDescription": "AI電子書籍チュートリアル",
+  "version": "バージョン",
+  "close": "閉じる",
+  "connect": "連携",
+  "save": "保存",
+  "delete": "削除",
+  "search": "検索",
+  "accountConnect": "アカウント連携",
+  "accountConnectMessage": "ゲストアカウントをログインアカウントに連携できます。",
+  "connectLoginAccount": "ログインアカウントを連携",
+  "appleAccountConnect": "Appleアカウントを連携",
+  "googleAccountConnect": "Googleアカウントを連携",
+  "emailAccountConnect": "メールアカウントを連携",
+  "googleAccount": "Googleアカウント",
+  "appleAccount": "Appleアカウント",
+  "emailAccount": "メールアカウント",
+  "guestAccount": "ゲストアカウント",
+  "unknown": "不明",
+  "guestUser": "ゲストユーザー",
+  "user": "ユーザー",
+  "email": "メールアドレス",
+  "passwordMinLengthHint": "パスワード6文字以上",
+  "confirmPassword": "パスワード確認",
+  "allFieldsRequired": "すべての項目を入力してください。",
+  "passwordMinLength": "パスワードは6文字以上で入力してください。",
+  "passwordMismatch": "パスワードが一致しません。",
+  "signInInfoNotFound": "ログイン情報がありません。",
+  "accountAlreadyLinked": "すでにアカウントが連携されています。",
+  "emailAccountLinked": "メールアカウントが連携されました。",
+  "appleAccountLinked": "Appleアカウントが連携されました。",
+  "googleAccountLinked": "Googleアカウントが連携されました。",
+  "emailAlreadyInUse": "すでに使用中のメールアドレスです。",
+  "invalidEmail": "メールアドレスの形式が正しくありません。",
+  "weakPassword": "パスワードが弱すぎます。",
+  "accountConnectFailed": "アカウント連携に失敗しました。",
+  "appleCredentialAlreadyInUse": "すでに他のアカウントに連携されているAppleアカウントです。",
+  "appleProviderAlreadyLinked": "すでにAppleアカウントが連携されています。",
+  "appleLoginNotEnabled": "FirebaseでAppleログインが有効になっていません。",
+  "appleAccountConnectFailed": "Appleアカウントの連携に失敗しました。",
+  "googleCredentialAlreadyInUse": "すでに他のアカウントに連携されているGoogleアカウントです。",
+  "googleAccountConnectFailed": "Googleアカウントの連携に失敗しました。",
+  "appTitle": "AI電子書籍チュートリアル",
+  "appSubtitle": "知識を開くいちばん簡単な第一歩",
+  "tryAsGuest": "ゲストとして試す",
+  "accountConnectNotice": "アカウントは設定からいつでも連携できます。",
+  "firebaseInitFailed": "❗ Firebaseの初期化に失敗しました",
+  "providerLoginFailed": "{provider}ログインに失敗しました。",
+  "@providerLoginFailed": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "providerLoginFailedWithReason": "{provider}ログイン失敗: {reason}",
+  "@providerLoginFailedWithReason": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "guestLoginFailed": "ゲストログインに失敗しました。しばらくしてからもう一度お試しください。",
+  "genreSelect": "ジャンル選択",
+  "genreWebNovel": "ウェブ小説",
+  "genreNovel": "小説",
+  "genrePoetry": "詩",
+  "genreFreeForm": "自由形式",
+  "genreSelfImprovement": "自己啓発",
+  "genreScienceBook": "科学書",
+  "more": "その他",
+  "logout": "ログアウト",
+  "speechRecognitionUnavailable": "音声認識を使用できません。",
+  "speechRecognitionError": "音声認識エラー: {error}",
+  "@speechRecognitionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "keywordAlreadyExists": "このキーワードはすでに登録されています。",
+  "chapterTitleHint": "章タイトルを入力",
+  "focusWritingModeToggle": "集中執筆モードを切り替え",
+  "exitFocusMode": "集中モードを終了",
+  "focusWritingMode": "集中執筆モード",
+  "convertPng": "PNGに変換",
+  "pngPreview": "PNGプレビュー",
+  "keywordInputHint": "キーワードを入力",
+  "charCountLabel": "{count}文字",
+  "@charCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "character": "キャラクター",
+  "characterColor": "キャラクター色",
+  "transparency": "透明度",
+  "clear": "解除",
+  "cancel": "キャンセル",
+  "apply": "適用",
+  "addPhoto": "+ 写真",
+  "tapToAddOrChange": "タップ：追加 / 変更",
+  "name": "名前",
+  "birthday": "誕生日",
+  "height": "身長",
+  "bloodType": "血液型",
+  "blood": "血液型",
+  "profile": "プロフィール",
+  "profileUpper": "PROFILE",
+  "color": "色",
+  "personality": "性格",
+  "personalityKeywords": "性格キーワード",
+  "likesAndDislikes": "好き / 嫌い",
+  "likes": "好きなもの",
+  "dislikes": "嫌いなもの",
+  "bodyAppearance": "身体 / 外見",
+  "bodyAppearanceMemo": "身体 / 外見メモ",
+  "enterAfterInput": "入力後 Enter",
+  "keywordEnterAfterInput": "キーワード入力後 Enter",
+  "memoEnterAfterInput": "メモ入力後 Enter",
+  "noRegisteredItems": "まだ登録された項目がありません。",
+  "exampleName": "例）ムム",
+  "exampleBirthday": "例）2005-01-01",
+  "exampleHeight": "例）159cm",
+  "exampleBloodType": "例）O+",
+  "exampleProfile": "例）昼間はよく眠る",
+  "exampleBodyAppearanceMemo": "例）人型の時に透明に光る耳と尻尾",
+  "faction": "勢力",
+  "addShape": "図形を追加",
+  "zoomOut": "縮小",
+  "zoomIn": "拡大",
+  "edgeColor": "線の色",
+  "replacePhoto": "写真を変更",
+  "deletePhoto": "写真を削除",
+  "addPhotoToDiagram": "写真を追加",
+  "replaceColor": "色を変更",
+  "deleteColor": "色を削除",
+  "addColor": "色を追加",
+  "addText": "テキストを追加",
+  "replaceText": "テキストを変更",
+  "deleteText": "テキストを削除",
+  "addTextColor": "テキスト色を追加",
+  "replaceTextColor": "テキスト色を変更",
+  "deleteTextColor": "テキスト色を削除",
+  "textColor": "テキスト色",
+  "shapeColor": "図形の色",
+  "relation": "関係",
+  "relationHint": "例：同盟、敵対、家族",
+  "moveLocked": "移動ロック中",
+  "moveAvailable": "移動可能",
+  "factionSelectionHint": "図形または線を選択してください。",
+  "changeShape": "図形を変更",
+  "lock": "ロック",
+  "unlock": "ロック解除",
+  "deleteShape": "図形を削除",
+  "deleteLine": "線を削除",
+  "size": "サイズ",
+  "curvature": "曲率",
+  "lineWidth": "線の太さ",
+  "selectColor": "色を選択",
+  "dashedLine": "点線",
+  "arrow": "矢印",
+  "none": "なし",
+  "start": "開始",
+  "end": "終了",
+  "bothEnds": "両端",
+  "insideTextHint": "図形内に表示するテキスト",
+  "nameHint": "名前",
+  "newNode": "新規",
+  "timeline": "タイムライン",
+  "timelineAdd": "Timelineを追加",
+  "timelineEdit": "Timelineを編集",
+  "timelineEmpty": "タイムラインを追加してください。",
+  "timelineSeedCreate": "create",
+  "timelineSeedCreateOne": "create 1",
+  "timelineSeedUnnamed": "Unnamed",
+  "timelineSeedEditWord": "タップして単語を編集してください",
+  "timelineSeedReorderColor": "色を長押しして位置を変更してください",
+  "timelineSeedEditColorName": "タップして色名を編集してください",
+  "timelineSeedEditContent": "タップして内容を編集してください",
+  "unnamed": "名前なし",
+  "barName": "バー名",
+  "barNameHint": "例）Chapter 1",
+  "wordDescription": "単語 / 説明",
+  "description": "説明",
+  "barColor": "バー色",
+  "worldSeat": "ワールドシート",
+  "glossary": "用語集",
+  "freeMemo": "自由メモ",
+  "glossaryEmpty": "用語を追加してください。",
+  "freeMemoEmpty": "自由メモを追加してください。",
+  "noSearchResults": "検索結果がありません。",
+  "pinAdd": "ピン留め",
+  "pinRemove": "ピン留め解除",
+  "term": "単語",
+  "glossaryAdd": "用語を追加",
+  "glossaryEdit": "用語を編集",
+  "glossaryDeleteTitle": "用語を削除",
+  "glossaryDeleteMessage": "この用語を削除しますか？",
+  "memoAdd": "新しいメモ",
+  "memoEdit": "メモを編集",
+  "memoHint": "メモを入力してください",
+  "memoDeleteTitle": "メモを削除",
+  "memoDeleteMessage": "このメモを削除しますか？",
+  "timelineDeleteTitle": "{name}を削除",
+  "@timelineDeleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineDeleteMessage": "このタイムライン（{name}）を削除しますか？",
+  "@timelineDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "characterDeleteTitle": "キャラクターを削除",
+  "characterDeleteMessage": "このキャラクターを削除しますか？",
+  "protagonistCharacter": "主人公キャラクター",
+  "supportingCharacter": "サブキャラクター",
+  "emptyProtagonistCharacters": "主人公キャラクターを追加してください。",
+  "emptySupportingCharacters": "サブキャラクターを追加してください。",
+  "emptyCharacters": "キャラクターを追加してください。",
+  "tapToEdit": "タップして編集",
+  "descriptionInputHint": "説明を入力してください",
+  "seedCharacterMainTone": "メイントーン",
+  "seedCharacterHikaraName": "ヒカラ",
+  "seedCharacterHikaraSpecialNote": "目標：エルフ種族の起源を探す。",
+  "seedCharacterHikaraPersonalityResponsibility": "責任感",
+  "seedCharacterHikaraLikeObservation": "観測",
+  "seedCharacterHikaraLikeOldBooks": "古書",
+  "seedCharacterHikaraDislikeIrresponsibility": "無責任",
+  "seedCharacterHikaraPhysicalBlueEyes": "青い目",
+  "seedCharacterElixiName": "エリクシ",
+  "seedCharacterElixiSpecialNote": "魔法薬草を研究している。",
+  "seedCharacterElixiPersonalityCuriosity": "好奇心",
+  "seedCharacterElixiLikeHerbs": "薬草",
+  "seedCharacterElixiLikePharmacology": "薬学",
+  "seedCharacterElixiDislikeBugs": "虫",
+  "seedCharacterElixiPhysicalGoldenHair": "金色の髪",
+  "bookListTitle": "本の一覧",
+  "selectBooks": "本を選択",
+  "selectedBooksCount": "{count}件選択中",
+  "@selectedBooksCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cancelSelection": "選択を解除",
+  "deleteBooksConfirmTitle": "削除確認",
+  "deleteBooksConfirmMessage": "選択した本を削除しますか？",
+  "untitledBook": "無題",
+  "enterBookTitle": "タイトルを入力してください",
+  "share": "共有",
+  "restore": "読み込み",
+  "preparingPdf": "PDFを準備しています。",
+  "zipShare": "ZIPを共有",
+  "creatingZipFile": "ZIPファイルを作成しています。",
+  "zipNoFiles": "ZIPに入れるファイルがありません。",
+  "zipShareComplete": "ZIPの共有が完了しました。",
+  "zipShareFailed": "ZIPの共有に失敗しました: {error}",
+  "@zipShareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectChapterCoverMessage": "この話の表紙として使用する画像を選択してください。",
+  "takePhoto": "カメラで撮影",
+  "chooseFromAlbum": "アルバムから選択",
+  "chapterCoverDeleted": "話の表紙を削除しました。",
+  "chapterCoverSet": "話の表紙を設定しました。",
+  "coverFileNotFound": "表紙ファイルが見つかりません。",
+  "selectCoverPhoto": "表紙写真を選択",
+  "selectBookCoverMessage": "本の表紙として使用する画像を選択してください。",
+  "coverPhotoDeleted": "表紙写真を削除しました。",
+  "coverPhotoSet": "表紙写真を設定しました。",
+  "preparingBackupZip": "バックアップZIPファイルを準備しています。",
+  "bookBackupDescription": "本のバックアップファイルです。",
+  "shareBackupInstruction": "共有画面でiCloud Driveまたはファイルアプリを選択してください。",
+  "backupExportFailed": "バックアップファイルの書き出しに失敗しました: {error}",
+  "@backupExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectBackupZipFile": "バックアップZIPファイルを選択してください。",
+  "backupFileReadFailed": "バックアップファイルを読み取れません。",
+  "backupRestoreComplete": "バックアップの読み込みが完了しました。",
+  "backupRestoreFailed": "バックアップの読み込みに失敗しました: {error}",
+  "@backupRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSavingZipBackup": "Google DriveにZIPバックアップを保存しています。",
+  "googleDriveSaveComplete": "Google Driveに保存しました: {savedName}",
+  "@googleDriveSaveComplete": {
+    "placeholders": {
+      "savedName": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveSaveFailed": "Google Driveへの保存に失敗しました: {error}",
+  "@googleDriveSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "googleDriveNoBackupFiles": "Google Driveのバックアップファイルがありません。",
+  "googleDriveImport": "Google Driveから読み込み",
+  "selectBackupFileMessage": "読み込むバックアップファイルを選択してください。",
+  "backupImport": "バックアップを読み込み",
+  "googleDriveBackupReplaceConfirm": "現在画面の本の内容がGoogle Driveのバックアップ内容に置き換わります。続行しますか？",
+  "bookBackupJsonNotFound": "book_backup.jsonが見つかりません。",
+  "restoredChapter": "復元された話",
+  "googleDriveBackupListLoading": "Google Driveのバックアップ一覧を読み込んでいます。",
+  "googleDriveBackupDownloading": "Google Driveのバックアップをダウンロードしています。",
+  "googleDriveBackupRestoreComplete": "Google Driveバックアップの読み込みが完了しました。",
+  "googleDriveRestoreFailed": "Google Driveからの読み込みに失敗しました: {error}",
+  "@googleDriveRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noOtherChapterToSplitEdit": "一緒に編集する他の話がありません。",
+  "splitSelectChapterTitle": "{title}と一緒に編集する話を選択",
+  "@splitSelectChapterTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "splitEditSaveComplete": "分割編集を保存しました。",
+  "splitEdit": "分割編集",
+  "top": "上",
+  "bottom": "下",
+  "defaultBookTitle": "本のタイトル",
+  "chapterAutoTitle": "{title} 第{number}話",
+  "@chapterAutoTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterSaveComplete": "話を保存しました。",
+  "chapterDeleteConfirmTitle": "削除確認",
+  "chapterDeleteConfirmMessage": "「{title}」を削除しますか？",
+  "@chapterDeleteConfirmMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "deletedComplete": "削除しました。",
+  "chapterReorder": "話を並べ替え",
+  "reorderModeMessage": "移動モードです。ドラッグして順番を変更してください。",
+  "chapterShareLabel": "「{title}」を共有",
+  "@chapterShareLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterDeleteLabel": "「{title}」を削除",
+  "@chapterDeleteLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "chapterReordering": "話を移動中",
+  "totalChapterCount": "全{count}話",
+  "@totalChapterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addChapterHint": "右上の+ボタンを押して話を追加してください。",
+  "addChapterFirst": "先に話を追加してください。",
+  "allChapters": "すべての話",
+  "selectedChapters": "選択した話",
+  "noSelectedChapters": "選択された話がありません。",
+  "allChaptersOption": "すべての話",
+  "chapters": "話",
+  "chapterTitleInput": "話タイトルを入力",
+  "sortOldestFirst": "最初の話から",
+  "sortNewestFirst": "最新話から",
+  "memoDeletedComplete": "メモを削除しました。",
+  "bookMemo": "本のメモ",
+  "bookMemoEmptyHint": "+ この本に関するメモを追加してください。",
+  "memo": "メモ",
+  "docxImageAlt": "[画像: {fileName}]",
+  "@docxImageAlt": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingWordFile": "MS Wordファイルを準備しています。",
+  "wordShareOpened": "MS Wordファイルの共有を開きました。",
+  "wordCreateFailed": "MS Wordファイルの作成に失敗しました: {error}",
+  "@wordCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingTxtFile": "TXTファイルを準備しています。",
+  "txtShareOpened": "TXTファイルの共有を開きました。",
+  "txtCreateFailed": "TXTファイルの作成に失敗しました: {error}",
+  "@txtCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "localCloud": "ローカル / クラウド",
+  "iCloudImport": "iCloudから読み込み",
+  "epubForEbook": "ePub電子書籍用",
+  "pdfCreateFailed": "PDFの作成に失敗しました: {error}",
+  "@pdfCreateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "theme": "テーマ",
+  "font": "フォント",
+  "defaultFont": "デフォルト書体",
+  "batangFont": "明朝体",
+  "gothicFont": "ゴシック体",
+  "lineSpacing": "行間",
+  "letterSpacing": "文字間隔",
+  "margin": "余白",
+  "unpinChapter": "ピン留め解除",
+  "pinChapter": "話をピン留め",
+  "unpinned": "ピン留めを解除しました。",
+  "chapterPinned": "話をピン留めしました。",
+  "workIntro": "作品紹介",
+  "workIntroHint": "作品の雰囲気、あらすじ、世界観などを簡単に紹介してください。",
+  "keywords": "キーワード",
+  "keywordsHelper": "#ロマンス #成長物 #ファンタジー のように自由に追加してください。",
+  "emptyKeywords": "まだ登録されたキーワードがありません。",
+  "keywordInput": "キーワードを入力",
+  "detailInfo": "詳細情報",
+  "authorOriginal": "作 / 原作",
+  "authorOriginalHint": "作 / 原作情報を入力してください。",
+  "workCategory": "作品分類",
+  "workCategoryHint": "作品分類を入力してください。",
+  "ageRating": "年齢レーティング",
+  "ageRatingHint": "年齢レーティングを入力してください。",
+  "pageIndicator": "ページ {current} / {total}",
+  "@pageIndicator": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "chapterMeta": "{size} · {chars}文字 · {date}",
+  "@chapterMeta": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "penNameHint": "ペンネームを入力",
+  "bookPreview": "本のプレビュー",
+  "workInfo": "作品情報",
+  "allSettings": "全体設定",
+  "back": "戻る",
+  "coverPhotoAdd": "+ 表紙写真",
+  "example": "例",
+  "settingsPreviewSample": "Build Story\n例文です\n設定を変更してみてください",
+  "calendarEditSchedule": "予定を編集",
+  "calendarNewSchedule": "新規予定",
+  "calendarTitleHint": "タイトルを入力",
+  "calendarStartDate": "開始日",
+  "calendarEndDate": "終了日",
+  "calendarColor": "色",
+  "calendarMemoHint": "メモを入力",
+  "calendarDeleteSchedule": "予定を削除",
+  "calendarDeleteScheduleConfirm": "「{title}」の予定を削除しますか？",
+  "@calendarDeleteScheduleConfirm": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarNoTitle": "無題",
+  "calendarPickDate": "日付を選択",
+  "calendarConfirm": "確認",
+  "calendarWritingDays": "執筆した日",
+  "calendarTodayWritten": "今日の執筆",
+  "calendarTotalChars": "総文字数",
+  "calendarBestRecord": "最高記録",
+  "calendarDaysValue": "{count}日",
+  "@calendarDaysValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCharsValue": "{count}文字",
+  "@calendarCharsValue": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarBestRecordValue": "{chars}文字（{date}）",
+  "@calendarBestRecordValue": {
+    "placeholders": {
+      "chars": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetAll": "すべて初期化",
+  "calendarDeleteAllDataConfirm": "すべてのカレンダーデータを削除しますか？",
+  "calendarDeleteAllDataMessage": "予定 / 今日のタスク / 連載 / 繰り返し設定 / 執筆記録がすべて削除されます。",
+  "calendarDeleteAll": "すべて削除",
+  "calendarResetRecord": "記録を初期化",
+  "calendarDeleteDateRecordConfirm": "{date}の記録を削除しますか？",
+  "@calendarDeleteDateRecordConfirm": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarDeleteDateRecordMessage": "今日のタスク / 連載 / 執筆記録がすべて削除されます。",
+  "calendarNoEvents": "登録された予定がありません。",
+  "calendarTodayTodo": "今日のタスク",
+  "calendarAdd": "追加",
+  "calendarTodoHelper": "今日やる作業を追加しておくと、作業の流れを整理できます。",
+  "calendarReleaseUpload": "連載 [ アップロード ]",
+  "calendarReleaseHelper": "アップロード予定/完了を記録しておくと、連載周期の管理に役立ちます。",
+  "calendarMonthlyStats": "月間統計 [ {month} ]",
+  "@calendarMonthlyStats": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarResetThisDateRecord": "この日の記録を初期化",
+  "calendarResetAllData": "すべてのデータを初期化",
+  "calendarTaskHint": "タスクを入力してください",
+  "calendarZeroChars": "0文字",
+  "calendarUploadTitleHint": "アップロードタイトルを入力してください",
+  "calendarComplete": "完了",
+  "calendarPlan": "予定",
+  "ebookSaveComplete": "保存しました。",
+  "ebookDefaultContent": "作品内容を入力してください",
+  "ebookLatestEpisode": "最新話",
+  "ebookCountValue": "{count}件",
+  "@ebookCountValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookTodayNoRecord": "今日登録された記録はありません。",
+  "ebookTodaySummary": "今日のタスク {doneTasks}/{totalTasks} · アップロード {releaseCount}件 · 予定 {eventCount}件",
+  "@ebookTodaySummary": {
+    "placeholders": {
+      "doneTasks": {
+        "type": "int"
+      },
+      "totalTasks": {
+        "type": "int"
+      },
+      "releaseCount": {
+        "type": "int"
+      },
+      "eventCount": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookMainSquareCreateTitle": "新しい作品を作成",
+  "ebookMainCardCustomizeSaveComplete": "メインカードのカスタマイズを保存しました。",
+  "ebookPreset": "プリセット",
+  "ebookPresetName": "プリセット名",
+  "ebookPresetDefaultName": "プリセット {number}",
+  "@ebookPresetDefaultName": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "ebookPresetNameReplace": "プリセット名を変更",
+  "ebookPresetSaveComplete": "プリセットを保存しました。",
+  "ebookPresetRenameComplete": "プリセット名を変更しました。",
+  "ebookPresetNameHintExample": "例：写真ポスター",
+  "ebookOriginalFileLoadFailed": "元のファイルを読み込めませんでした。",
+  "ebookPhotoLoadFailed": "写真を読み込めませんでした。",
+  "ebookBackgroundImagePickFailed": "背景画像の選択に失敗しました: {error}",
+  "@ebookBackgroundImagePickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ebookBackgroundImageGestureHint": "ドラッグで移動 · 二本指で拡大 · ダブルタップでリセット",
+  "ebookReset": "リセット",
+  "ebookEffect": "効果",
+  "ebookGlassMode": "グラスモード",
+  "ebookGlassModeSubtitle": "やわらかなガラス感とレンズ反射を適用します。",
+  "ebookPresetSectionSubtitle": "現在の組み合わせを保存して、後で再適用できます。",
+  "ebookSaveCurrentPreset": "現在のプリセットを保存",
+  "ebookNoSavedPreset": "保存されたプリセットがありません。",
+  "ebookTextSection": "文言",
+  "ebookMainText": "大きい文言",
+  "ebookSubText": "小さい文言",
+  "ebookOptional": "任意",
+  "ebookMainTextWeight": "大きい文言の太さ",
+  "ebookSubTextWeight": "小さい文言の太さ",
+  "ebookTextPosition": "テキスト位置",
+  "ebookTextIconColor": "文言 / アイコン色",
+  "ebookLightTextModeNotice": "明るい文言モードがオンの場合、写真上では白い文言が優先されます。",
+  "ebookCardStyle": "カードスタイル",
+  "ebookCardRatio": "カード比率",
+  "ebookBackgroundStyle": "背景スタイル",
+  "ebookBorderStyle": "枠線スタイル",
+  "ebookBackgroundImage": "背景画像",
+  "ebookBackgroundImageSubtitle": "写真を入れると、プレビューカード上で位置と拡大率を直接調整できます。",
+  "ebookSelectPhoto": "写真を選択",
+  "ebookDeleteImage": "画像を削除",
+  "ebookResetPosition": "位置をリセット",
+  "ebookDarkPhotoWhiteText": "暗い写真用の白文字",
+  "ebookDarkPhotoWhiteTextSubtitle": "写真背景の上でアイコンと文言を白色で表示します。",
+  "ebookIcon": "アイコン",
+  "ebookShowIcon": "アイコンを表示",
+  "ebookIconShape": "アイコン形状",
+  "ebookIconPosition": "アイコン位置",
+  "ebookSize": "サイズ",
+  "ebookThinness": "細さ",
+  "ebookRatioSquare": "正方形",
+  "ebookRatioPortrait": "縦型",
+  "ebookRatioTall": "長い縦型",
+  "ebookRatioLandscape": "横型",
+  "ebookRatioWide": "ワイド",
+  "ebookStyleNone": "なし",
+  "ebookStyleSky": "澄んだ空",
+  "ebookStyleSoftPink": "ソフトピンク",
+  "ebookStyleLightLavender": "ライトラベンダー",
+  "ebookStyleVanillaCream": "バニラクリーム",
+  "ebookStyleClearMint": "クリアミント",
+  "ebookStyleBrightAurora": "明るいオーロラ",
+  "ebookOptionDefault": "デフォルト",
+  "ebookOptionWriting": "執筆",
+  "ebookOptionBook": "本",
+  "ebookOptionDrawing": "ドローイング",
+  "ebookOptionStar": "星",
+  "ebookOptionHeart": "ハート",
+  "ebookBorderThin": "基本の細い枠線",
+  "ebookBorderThick": "太い枠線",
+  "ebookBorderNone": "枠線なし",
+  "ebookBorderPastel": "パステル枠線",
+  "ebookBorderDashed": "点線風",
+  "ebookPosTopLeft": "上左",
+  "ebookPosTopCenter": "上中央",
+  "ebookPosTopRight": "上右",
+  "ebookPosCenterLeft": "中央左",
+  "ebookPosCenter": "中央",
+  "ebookPosCenterRight": "中央右",
+  "ebookPosBottomLeft": "下左",
+  "ebookPosBottomCenter": "下中央",
+  "ebookPosBottomRight": "下右",
+  "episodesPageTitle": "話",
+  "episodeToggleAll": "すべて",
+  "episodeToggleSelected": "選択",
+  "episodeCountLabel": "{count}話",
+  "@episodeCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "emptySavedEpisodes": "保存された話がありません。",
+  "shareCurrentPage": "現在",
+  "shareAllPages": "すべて",
+  "shareCustomRange": "指定",
+  "shareNoFiles": "共有するファイルがありません。",
+  "shareFailed": "共有に失敗しました。",
+  "shareFailedWithReason": "共有に失敗しました: {error}",
+  "@shareFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfShareComplete": "PDFの共有が完了しました。",
+  "pngShareComplete": "PNGの共有が完了しました。",
+  "jpgShareComplete": "JPGの共有が完了しました。",
+  "pdfOpenFailed": "PDFを開けませんでした: {error}",
+  "@pdfOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfSavedToApp": "アプリに保存しました: {fileName}",
+  "@pdfSavedToApp": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFailedWithReason": "保存に失敗しました: {error}",
+  "@saveFailedWithReason": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveCompletePath": "PNGファイルを保存しました。\n{path}",
+  "@pngSaveCompletePath": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "pngSaveFailed": "PNGファイルの保存に失敗しました。",
+  "simpleMemoTitle": "簡単メモ",
+  "selectMemo": "メモを選択",
+  "selectedMemosCount": "{count}件選択中",
+  "@selectedMemosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectedMemosDeleteMessage": "選択したメモを削除しますか？",
+  "simpleMemoAddTooltip": "新しいメモを追加",
+  "simpleMemoEmptyMain": "保存されたメモがありません。\n右上の+ボタンからジャンルを選択してメモを追加してください。",
+  "simpleMemoEmptyGenre": "保存されたメモがありません。\n右上の+ボタンからメモを追加してください。",
+  "pdfEmptyContent": "（内容なし）",
+
+  "pdfPreviewDialogTitle": "PDFプレビュー",
+  "pdfPreviewConfirm": "プレビュー",
+  "pdfChapterListEmpty": "目次がありません。",
+  "pdfChapterSelectRequired": "話を選択してください。",
+
+  "ebookMainCardCustomize": "メインカードをカスタマイズ",
+
+  "toolbarKeywordHide": "キーワードを隠す",
+  "toolbarKeywordOpen": "キーワードを開く",
+  "toolbarSpeechStop": "音声入力を停止",
+  "toolbarSpeechInput": "音声入力",
+  "toolbarUndo": "元に戻す",
+  "toolbarRedo": "やり直す",
+  "toolbarBold": "太字",
+  "toolbarTextColor": "文字色",
+  "toolbarTextBackgroundColor": "文字背景色",
+  "toolbarHighlight": "ハイライト",
+  "toolbarDividerSolid": "区切り線",
+  "toolbarDividerDashed": "点線の区切り線",
+  "toolbarAlign": "整列",
+  "toolbarItalic": "斜体",
+  "toolbarUnderline": "下線",
+  "toolbarStrikethrough": "取り消し線",
+  "toolbarOrderedList": "番号付きリスト",
+  "toolbarBulletedList": "箇条書きリスト",
+  "toolbarBlockquote": "引用",
+  "toolbarClearFormatting": "書式をクリア",
+  "toolbarImageUpload": "画像をアップロード",
+  "toolbarFontSize": "文字サイズ",
+  "toolbarClearSize": "サイズを解除",
+
+  "emailLoginTitle": "メールログイン",
+  "emailLoginGuide": "メールアドレスとパスワードを入力してください",
+  "password": "パスワード",
+  "showPassword": "表示",
+  "hidePassword": "隠す",
+  "login": "ログイン",
+  "signUp": "会員登録",
+  "emailLoginNotMember": "まだ会員ではありませんか？ ",
+  "emailLoginFailed": "ログインに失敗しました。",
+  "emailLoginInvalidCredentials": "メールアドレスまたはパスワードが正しくありません。",
+  "emailLoginNetworkError": "ネットワーク接続を確認してください。",
+  "unknownErrorOccurred": "不明なエラーが発生しました。",
+  
+  "emailSignupTitle": "メール会員登録",
+  "emailSignupCreateAccount": "新しいアカウントを作成してください",
+  "emailSignupGuide": "メールアドレスとパスワードを入力してください",
+  "emailSignupComplete": "会員登録が完了しました",
+  "emailSignupFailed": "会員登録に失敗しました。",
+  "emailSignupAlreadyHaveAccount": "すでにアカウントをお持ちですか？ "
+}

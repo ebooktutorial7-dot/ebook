@@ -69,6 +69,7 @@ Future<Uint8List> buildBookPdf({
   required List<ChapterItem> chapters,
   bool showChapterTitle = true,
   bool chapterPerPage = true,
+  String emptyContentText = '(내용 없음)',
 }) async {
   final fontKr = pw.Font.ttf(
     await rootBundle.load('lib/assets/fonts/NotoSansKR-Regular.ttf'),
@@ -98,7 +99,7 @@ Future<Uint8List> buildBookPdf({
         build:
             (_) => [
               pw.Text(
-                '(내용 없음)',
+                emptyContentText,
                 style: pw.TextStyle(
                   font: fontKr,
                   fontFallback: [fontJp],
@@ -145,7 +146,7 @@ Future<Uint8List> buildBookPdf({
       if (body.isEmpty) {
         widgets.add(
           pw.Text(
-            '(내용 없음)',
+            emptyContentText,
             style: pw.TextStyle(
               font: fontKr,
               fontFallback: [fontJp],
@@ -200,7 +201,7 @@ Future<Uint8List> buildBookPdf({
     if (body.isEmpty) {
       widgets.add(
         pw.Text(
-          '(내용 없음)',
+          emptyContentText,
           style: pw.TextStyle(
             font: fontKr,
             fontFallback: [fontJp],

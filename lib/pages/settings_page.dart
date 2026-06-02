@@ -1,8 +1,12 @@
+// settings_page.dart
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+import 'package:ebook_tutorial_app/app_locale_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -16,19 +20,19 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _cloudSyncEnabled = false;
   bool _isLinking = false;
 
-  String _providerLabel(User? user) {
+  String _providerLabel(User? user, AppLocalizations l10n) {
     final providers =
         user?.providerData.map((e) => e.providerId).toList() ?? [];
 
-    if (providers.contains('google.com')) return 'Google 계정';
-    if (providers.contains('apple.com')) return 'Apple 계정';
-    if (providers.contains('password')) return '이메일 계정';
-    if (user?.isAnonymous == true) return '비회원 계정';
+    if (providers.contains('google.com')) return l10n.googleAccount;
+    if (providers.contains('apple.com')) return l10n.appleAccount;
+    if (providers.contains('password')) return l10n.emailAccount;
+    if (user?.isAnonymous == true) return l10n.guestAccount;
 
-    return '알 수 없음';
+    return l10n.unknown;
   }
 
-  String _userTitle(User? user) {
+  String _userTitle(User? user, AppLocalizations l10n) {
     if (user?.email != null && user!.email!.isNotEmpty) {
       return user.email!;
     }
@@ -38,10 +42,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     if (user?.isAnonymous == true) {
-      return '비회원 사용자';
+      return l10n.guestUser;
     }
 
-    return '사용자';
+    return l10n.user;
   }
 
   void _showMessage(String message) {
@@ -50,16 +54,71 @@ class _SettingsPageState extends State<SettingsPage> {
     AppToast.show(context, message);
   }
 
+  String _languageLabel(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    switch (appLocaleController.locale.languageCode) {
+      case 'en':
+        return l10n.english;
+      case 'ja':
+        return l10n.japanese;
+      case 'ko':
+      default:
+        return l10n.korean;
+    }
+  }
+
+  Future<void> _openLanguageSheet() async {
+    final l10n = AppLocalizations.of(context);
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) {
+        return CupertinoActionSheet(
+          title: Text(l10n.language),
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(sheetContext);
+                await appLocaleController.setLocale(const Locale('ko'));
+              },
+              child: Text(l10n.korean),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(sheetContext);
+                await appLocaleController.setLocale(const Locale('en'));
+              },
+              child: Text(l10n.english),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(sheetContext);
+                await appLocaleController.setLocale(const Locale('ja'));
+              },
+              child: Text(l10n.japanese),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(sheetContext),
+            child: Text(l10n.close),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openAccountConnectSheet() async {
+    final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      _showMessage('로그인 정보가 없습니다.');
+      _showMessage(l10n.signInInfoNotFound);
       return;
     }
 
     if (!user.isAnonymous) {
-      _showMessage('이미 계정이 연결되어 있습니다.');
+      _showMessage(l10n.accountAlreadyLinked);
       return;
     }
 
@@ -67,35 +126,34 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (sheetContext) {
         return CupertinoActionSheet(
-          title: const Text('계정 연결'),
-          message: const Text('비회원 계정을 로그인 계정으로 연결할 수 있습니다.'),
+          title: Text(l10n.accountConnect),
+          message: Text(l10n.accountConnectMessage),
           actions: [
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _linkWithApple();
               },
-              child: const Text('Apple 계정 연결'),
+              child: Text(l10n.appleAccountConnect),
             ),
-
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _linkWithGoogle();
               },
-              child: const Text('Google 계정 연결'),
+              child: Text(l10n.googleAccountConnect),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _showEmailLinkDialog();
               },
-              child: const Text('이메일 계정 연결'),
+              child: Text(l10n.emailAccountConnect),
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(sheetContext),
-            child: const Text('닫기'),
+            child: Text(l10n.close),
           ),
         );
       },
@@ -103,6 +161,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _showEmailLinkDialog() async {
+    final l10n = AppLocalizations.of(context);
+
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
     final confirmController = TextEditingController();
@@ -123,17 +183,17 @@ class _SettingsPageState extends State<SettingsPage> {
               final confirm = confirmController.text;
 
               if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
-                setDialogState(() => error = '모든 항목을 입력해 주세요.');
+                setDialogState(() => error = l10n.allFieldsRequired);
                 return;
               }
 
               if (password.length < 6) {
-                setDialogState(() => error = '비밀번호는 6자 이상이어야 합니다.');
+                setDialogState(() => error = l10n.passwordMinLength);
                 return;
               }
 
               if (password != confirm) {
-                setDialogState(() => error = '비밀번호가 일치하지 않습니다.');
+                setDialogState(() => error = l10n.passwordMismatch);
                 return;
               }
 
@@ -158,9 +218,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          '이메일 계정 연결',
-                          style: TextStyle(
+                        Text(
+                          l10n.emailAccountConnect,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF111111),
@@ -168,19 +228,16 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-
                         _DialogField(
                           controller: emailController,
-                          hintText: '이메일',
+                          hintText: l10n.email,
                           icon: CupertinoIcons.mail,
                           keyboardType: TextInputType.emailAddress,
                         ),
-
                         const SizedBox(height: 10),
-
                         _DialogField(
                           controller: passwordController,
-                          hintText: '비밀번호 6자 이상',
+                          hintText: l10n.passwordMinLengthHint,
                           icon: CupertinoIcons.lock,
                           obscureText: obscurePassword,
                           suffix: IconButton(
@@ -198,12 +255,10 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 10),
-
                         _DialogField(
                           controller: confirmController,
-                          hintText: '비밀번호 확인',
+                          hintText: l10n.confirmPassword,
                           icon: CupertinoIcons.lock_rotation,
                           obscureText: obscureConfirm,
                           suffix: IconButton(
@@ -222,7 +277,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           onSubmitted: (_) => submit(),
                         ),
-
                         if (error != null) ...[
                           const SizedBox(height: 10),
                           Text(
@@ -235,15 +289,13 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ],
-
                         const SizedBox(height: 16),
-
                         Row(
                           children: [
                             Expanded(
                               child: TextButton(
                                 onPressed: () => Navigator.pop(dialogContext),
-                                child: const Text('닫기'),
+                                child: Text(l10n.close),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -258,7 +310,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                 ),
-                                child: const Text('연결'),
+                                child: Text(l10n.connect),
                               ),
                             ),
                           ],
@@ -283,6 +335,8 @@ class _SettingsPageState extends State<SettingsPage> {
     required String email,
     required String password,
   }) async {
+    final l10n = AppLocalizations.of(context);
+
     if (_isLinking) return;
 
     setState(() => _isLinking = true);
@@ -291,12 +345,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
-        _showMessage('로그인 정보가 없습니다.');
+        _showMessage(l10n.signInInfoNotFound);
         return;
       }
 
       if (!user.isAnonymous) {
-        _showMessage('이미 계정이 연결되어 있습니다.');
+        _showMessage(l10n.accountAlreadyLinked);
         return;
       }
 
@@ -311,20 +365,24 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
 
       setState(() {});
-      _showMessage('이메일 계정이 연결되었습니다.');
+      _showMessage(l10n.emailAccountLinked);
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
       if (e.code == 'email-already-in-use' ||
           e.code == 'credential-already-in-use') {
-        _showMessage('이미 사용 중인 이메일입니다.');
+        _showMessage(l10n.emailAlreadyInUse);
       } else if (e.code == 'invalid-email') {
-        _showMessage('이메일 형식이 올바르지 않습니다.');
+        _showMessage(l10n.invalidEmail);
       } else if (e.code == 'weak-password') {
-        _showMessage('비밀번호가 너무 약합니다.');
+        _showMessage(l10n.weakPassword);
       } else {
-        _showMessage(e.message ?? '계정 연결에 실패했습니다.');
+        _showMessage(e.message ?? l10n.accountConnectFailed);
       }
     } catch (_) {
-      _showMessage('계정 연결에 실패했습니다.');
+      if (!mounted) return;
+
+      _showMessage(l10n.accountConnectFailed);
     } finally {
       if (mounted) {
         setState(() => _isLinking = false);
@@ -333,6 +391,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _linkWithApple() async {
+    final l10n = AppLocalizations.of(context);
+
     if (_isLinking) return;
 
     setState(() => _isLinking = true);
@@ -341,12 +401,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
-        _showMessage('로그인 정보가 없습니다.');
+        _showMessage(l10n.signInInfoNotFound);
         return;
       }
 
       if (!user.isAnonymous) {
-        _showMessage('이미 계정이 연결되어 있습니다.');
+        _showMessage(l10n.accountAlreadyLinked);
         return;
       }
 
@@ -361,19 +421,23 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
 
       setState(() {});
-      _showMessage('Apple 계정이 연결되었습니다.');
+      _showMessage(l10n.appleAccountLinked);
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
       if (e.code == 'credential-already-in-use') {
-        _showMessage('이미 다른 계정에 연결된 Apple 계정입니다.');
+        _showMessage(l10n.appleCredentialAlreadyInUse);
       } else if (e.code == 'provider-already-linked') {
-        _showMessage('이미 Apple 계정이 연결되어 있습니다.');
+        _showMessage(l10n.appleProviderAlreadyLinked);
       } else if (e.code == 'operation-not-allowed') {
-        _showMessage('Firebase에서 Apple 로그인이 활성화되어 있지 않습니다.');
+        _showMessage(l10n.appleLoginNotEnabled);
       } else {
-        _showMessage(e.message ?? 'Apple 계정 연결에 실패했습니다.');
+        _showMessage(e.message ?? l10n.appleAccountConnectFailed);
       }
     } catch (_) {
-      _showMessage('Apple 계정 연결에 실패했습니다.');
+      if (!mounted) return;
+
+      _showMessage(l10n.appleAccountConnectFailed);
     } finally {
       if (mounted) {
         setState(() => _isLinking = false);
@@ -382,6 +446,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _linkWithGoogle() async {
+    final l10n = AppLocalizations.of(context);
+
     if (_isLinking) return;
 
     setState(() => _isLinking = true);
@@ -390,12 +456,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
-        _showMessage('로그인 정보가 없습니다.');
+        _showMessage(l10n.signInInfoNotFound);
         return;
       }
 
       if (!user.isAnonymous) {
-        _showMessage('이미 계정이 연결되어 있습니다.');
+        _showMessage(l10n.accountAlreadyLinked);
         return;
       }
 
@@ -415,15 +481,19 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
 
       setState(() {});
-      _showMessage('Google 계정이 연결되었습니다.');
+      _showMessage(l10n.googleAccountLinked);
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
       if (e.code == 'credential-already-in-use') {
-        _showMessage('이미 다른 계정에 연결된 Google 계정입니다.');
+        _showMessage(l10n.googleCredentialAlreadyInUse);
       } else {
-        _showMessage(e.message ?? 'Google 계정 연결에 실패했습니다.');
+        _showMessage(e.message ?? l10n.googleAccountConnectFailed);
       }
     } catch (_) {
-      _showMessage('Google 계정 연결에 실패했습니다.');
+      if (!mounted) return;
+
+      _showMessage(l10n.googleAccountConnectFailed);
     } finally {
       if (mounted) {
         setState(() => _isLinking = false);
@@ -433,6 +503,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     final user = FirebaseAuth.instance.currentUser;
     final isAnonymous = user?.isAnonymous == true;
 
@@ -441,9 +513,9 @@ class _SettingsPageState extends State<SettingsPage> {
         border: const Border(
           bottom: BorderSide(color: Colors.transparent, width: 0),
         ),
-        middle: const Text(
-          '설정',
-          style: TextStyle(
+        middle: Text(
+          l10n.settings,
+          style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w600,
             color: Color(0xFF111111),
@@ -475,20 +547,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
                   children: [
                     _AccountCard(
-                      title: _userTitle(user),
+                      title: _userTitle(user, l10n),
                       subtitle:
-                          isAnonymous ? '로그인 계정 연결하기' : _providerLabel(user),
+                          isAnonymous
+                              ? l10n.connectLoginAccount
+                              : _providerLabel(user, l10n),
                       onTap: _openAccountConnectSheet,
                     ),
-
                     const SizedBox(height: 24),
-
                     _IosSection(
                       children: [
                         _IosSwitchTile(
                           icon: CupertinoIcons.bell,
                           iconColor: const Color(0xFF5AC8FA),
-                          title: '알림',
+                          title: l10n.notification,
                           value: _notificationEnabled,
                           onChanged: (v) {
                             setState(() => _notificationEnabled = v);
@@ -497,7 +569,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         _IosSwitchTile(
                           icon: CupertinoIcons.cloud,
                           iconColor: const Color(0xFF5AC8FA),
-                          title: '클라우드 동기화',
+                          title: l10n.cloudSync,
                           value: _cloudSyncEnabled,
                           onChanged: (v) {
                             setState(() => _cloudSyncEnabled = v);
@@ -505,39 +577,45 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 26),
-
-                    _IosNavigationTile(
-                      icon: CupertinoIcons.paintbrush,
-                      iconColor: const Color(0xFF5AC8FA),
-                      title: '화면 설정',
-                      subtitle: '기본',
-                      onTap: () {},
+                    _IosSection(
+                      children: [
+                        _IosNavigationTile(
+                          icon: CupertinoIcons.globe,
+                          iconColor: const Color(0xFF5AC8FA),
+                          title: l10n.language,
+                          subtitle: _languageLabel(context),
+                          onTap: _openLanguageSheet,
+                        ),
+                        _IosNavigationTile(
+                          icon: CupertinoIcons.paintbrush,
+                          iconColor: const Color(0xFF5AC8FA),
+                          title: l10n.screenSettings,
+                          subtitle: l10n.defaultValue,
+                          onTap: () {},
+                        ),
+                      ],
                     ),
-
                     const SizedBox(height: 26),
-
                     _IosSection(
                       children: [
                         _IosNavigationTile(
                           icon: CupertinoIcons.info_circle,
                           iconColor: const Color.fromARGB(255, 104, 225, 255),
-                          title: '앱 정보',
-                          subtitle: 'AI 전자책 튜토리얼',
+                          title: l10n.appInfo,
+                          subtitle: l10n.appDescription,
                           onTap: () {},
                         ),
-                        const _IosValueTile(
+                        _IosValueTile(
                           icon: CupertinoIcons.device_phone_portrait,
-                          iconColor: Color.fromARGB(255, 104, 225, 255),
-                          title: '버전',
+                          iconColor: const Color.fromARGB(255, 104, 225, 255),
+                          title: l10n.version,
                           value: '1.0.0',
                         ),
                       ],
                     ),
                   ],
                 ),
-
                 if (_isLinking)
                   const Positioned.fill(
                     child: IgnorePointer(

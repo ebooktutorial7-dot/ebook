@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 class A4MiniCard extends StatelessWidget {
   const A4MiniCard({
@@ -181,7 +182,7 @@ class AddSquareCard extends StatelessWidget {
     super.key,
     required this.onTap,
     this.onCustomizeTap,
-    this.title = '새 작품 만들기',
+    this.title,
     this.subtitle,
     this.icon = Icons.add,
     this.showIcon = true,
@@ -216,7 +217,7 @@ class AddSquareCard extends StatelessWidget {
 
   final VoidCallback onTap;
   final VoidCallback? onCustomizeTap;
-  final String title;
+  final String? title;
   final String? subtitle;
   final IconData icon;
   final bool showIcon;
@@ -258,7 +259,11 @@ class AddSquareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cleanTitle = title.trim().isEmpty ? '새 작품 만들기' : title.trim();
+    final rawTitle = title?.trim();
+    final cleanTitle =
+        rawTitle == null || rawTitle.isEmpty
+            ? AppLocalizations.of(context).ebookMainSquareCreateTitle
+            : rawTitle;
     final cleanSubtitle = _cleanSubtitle;
     final canCustomize = showCustomizeButton && onCustomizeTap != null;
     final safeContentScale = contentScale.clamp(0.55, 1.0).toDouble();
@@ -535,7 +540,7 @@ class AddSquareCard extends StatelessWidget {
             right: 10,
             child: Semantics(
               button: true,
-              label: '메인 카드 꾸미기',
+              label: AppLocalizations.of(context).ebookMainCardCustomize,
               child: _GlassIconButton(
                 liquid: isLiquidGlass,
                 iconColor: resolvedIconColor,
@@ -1198,19 +1203,19 @@ class AddWideCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: _border, width: 1),
           ),
-          child: const Center(
+          child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.add,
                   size: 36,
                   color: Color.fromARGB(221, 83, 129, 159),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
-                  '새 작품 만들기',
-                  style: TextStyle(
+                  AppLocalizations.of(context).ebookMainSquareCreateTitle,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Color.fromARGB(221, 12, 24, 46),

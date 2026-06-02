@@ -17,8 +17,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 import 'dart:collection';
 import 'dart:isolate';
+
+extension _PngL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 const String kBgAlphaKey = 'bgAlpha';
 
@@ -146,9 +151,13 @@ Future<SharePickResult?> showShareOptionsDialog({
   required int currentPage,
   required int pagesCount,
   Color barrierColor = const Color(0xFF0F2238),
-  String dialogTitle = '공유',
-  String confirmLabel = '공유',
+  String? dialogTitle,
+  String? confirmLabel,
 }) async {
+  final l10n = context.l10n;
+  final effectiveDialogTitle = dialogTitle ?? l10n.share;
+  final effectiveConfirmLabel = confirmLabel ?? l10n.share;
+
   ShareFormat format = ShareFormat.png;
   ShareRangeMode rangeMode = ShareRangeMode.all;
 
@@ -386,7 +395,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          dialogTitle,
+                          effectiveDialogTitle,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 17,
@@ -430,7 +439,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                         segPill(
                           children: [
                             segItem(
-                              label: '지금',
+                              label: l10n.shareCurrentPage,
                               selected: rangeMode == ShareRangeMode.current,
                               onTap:
                                   () => setModalState(
@@ -438,7 +447,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                                   ),
                             ),
                             segItem(
-                              label: '전체',
+                              label: l10n.shareAllPages,
                               selected: rangeMode == ShareRangeMode.all,
                               onTap:
                                   () => setModalState(
@@ -446,7 +455,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                                   ),
                             ),
                             segItem(
-                              label: '직접',
+                              label: l10n.shareCustomRange,
                               selected: rangeMode == ShareRangeMode.range,
                               onTap:
                                   () => setModalState(() {
@@ -520,9 +529,9 @@ Future<SharePickResult?> showShareOptionsDialog({
                                   overlayColor: Colors.transparent,
                                   splashFactory: NoSplash.splashFactory,
                                 ),
-                                child: const Text(
-                                  '닫기',
-                                  style: TextStyle(
+                                child: Text(
+                                  l10n.close,
+                                  style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF1F3A56),
@@ -563,9 +572,9 @@ Future<SharePickResult?> showShareOptionsDialog({
                                 ),
 
                                 onPressed: canConfirm() ? confirm : null,
-                                child: const Text(
-                                  '공유',
-                                  style: TextStyle(
+                                child: Text(
+                                  effectiveConfirmLabel,
+                                  style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1804,6 +1813,8 @@ class _PngPageState extends State<PngPage> {
   }
 
   Future<void> _onDownloadTap() async {
+    final l10n = context.l10n;
+
     if (_isLoading) return;
     if (_pages.isEmpty) return;
 
@@ -1832,16 +1843,18 @@ class _PngPageState extends State<PngPage> {
       await _runWithConcurrency<void>(tasks: tasks, concurrency: 2);
 
       if (!mounted) return;
-      AppToast.show(context, '저장 완료\n${folder.path}');
+      AppToast.show(context, l10n.pngSaveCompletePath(folder.path));
     } catch (_) {
       if (!mounted) return;
-      AppToast.show(context, '저장 실패');
+      AppToast.show(context, l10n.pngSaveFailed);
     } finally {
       _decLoading();
     }
   }
 
   Future<void> _onShareTap() async {
+    final l10n = context.l10n;
+
     const int concurrency = 2;
     if (_isLoading) return;
     if (_pages.isEmpty) return;
@@ -1854,8 +1867,8 @@ class _PngPageState extends State<PngPage> {
       context: context,
       currentPage: _page,
       pagesCount: _pagesCount,
-      dialogTitle: '공유',
-      confirmLabel: '공유',
+      dialogTitle: l10n.share,
+      confirmLabel: l10n.share,
     );
     if (pick == null) return;
     if (!mounted) return;
@@ -1869,13 +1882,13 @@ class _PngPageState extends State<PngPage> {
       final String formatLabel;
       switch (pick.format) {
         case ShareFormat.pdf:
-          formatLabel = 'PDF 공유 완료';
+          formatLabel = l10n.pdfShareComplete;
           break;
         case ShareFormat.png:
-          formatLabel = 'PNG 공유 완료';
+          formatLabel = l10n.pngShareComplete;
           break;
         case ShareFormat.jpg:
-          formatLabel = 'JPG 공유 완료';
+          formatLabel = l10n.jpgShareComplete;
           break;
       }
 
@@ -1948,7 +1961,7 @@ class _PngPageState extends State<PngPage> {
 
       if (!mounted) return;
       if (files.isEmpty) {
-        AppToast.show(context, '공유할 파일이 없습니다');
+        AppToast.show(context, l10n.shareNoFiles);
         return;
       }
 
@@ -1958,7 +1971,7 @@ class _PngPageState extends State<PngPage> {
       AppToast.show(context, formatLabel);
     } catch (_) {
       if (!mounted) return;
-      AppToast.show(context, '공유 실패');
+      AppToast.show(context, l10n.shareFailed);
     } finally {
       _decLoading();
     }

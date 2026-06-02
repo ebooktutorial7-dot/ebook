@@ -10,9 +10,8 @@ class GlassTheme {
   final double noiseOpacity;
   final double innerEdgeOpacity;
 
-  // ✅ 추가: 컬러 관련 속성
-  final Color accentColor; // 주요 포인트 (버튼, 체크박스 등)
-  final Color textColor; // 일반 텍스트 색
+  final Color accentColor;
+  final Color textColor;
   final Color cancelColor;
 
   Color get barrierColor => const Color(0xFF0F2238).withValues(alpha: 0.13);

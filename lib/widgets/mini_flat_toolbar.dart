@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:dart_quill_delta/dart_quill_delta.dart' as dq;
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/models/writing_settings.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:image_picker/image_picker.dart';
@@ -113,11 +114,13 @@ void setExclusiveList(quill.QuillController c, {required bool ordered}) {
 void cycleHeader(quill.QuillController c, {required bool clearedRecently}) {
   const size = quill.Attribute.size;
   c.formatSelection(quill.Attribute(size.key, size.scope, null));
+
   if (clearedRecently) {
     c.formatSelection(
       const quill.Attribute('color', quill.AttributeScope.inline, '#000000'),
     );
   }
+
   final cur =
       c.getSelectionStyle().attributes[quill.Attribute.header.key]?.value
           as int?;
@@ -171,6 +174,8 @@ class MiniFlatToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     final ThemeData noSplash = Theme.of(context).copyWith(
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
@@ -216,6 +221,7 @@ class MiniFlatToolbar extends StatelessWidget {
       bool affectLayout = false,
     }) {
       final color = selected ? Colors.black : Colors.black87;
+
       return IconButton(
         onPressed: () {
           onTap();
@@ -248,7 +254,10 @@ class MiniFlatToolbar extends StatelessWidget {
             children: [
               if (onKeywordTap != null) ...[
                 IconButton(
-                  tooltip: keywordActive ? '키워드 숨기기' : '키워드 열기',
+                  tooltip:
+                      keywordActive
+                          ? l10n.toolbarKeywordHide
+                          : l10n.toolbarKeywordOpen,
                   onPressed: onKeywordTap,
                   icon: Icon(
                     keywordActive ? Icons.label : Icons.label_outline,
@@ -274,7 +283,10 @@ class MiniFlatToolbar extends StatelessWidget {
               ],
               if (onMicTap != null) ...[
                 IconButton(
-                  tooltip: isListening ? '음성 입력 중지' : '음성 입력',
+                  tooltip:
+                      isListening
+                          ? l10n.toolbarSpeechStop
+                          : l10n.toolbarSpeechInput,
                   onPressed: onMicTap,
                   icon: Icon(
                     isListening ? Icons.mic : Icons.mic_none,
@@ -294,7 +306,7 @@ class MiniFlatToolbar extends StatelessWidget {
                 ),
                 const SizedBox(width: 7),
                 IconButton(
-                  tooltip: '실행 취소',
+                  tooltip: l10n.toolbarUndo,
                   onPressed:
                       controller.hasUndo
                           ? () {
@@ -319,9 +331,8 @@ class MiniFlatToolbar extends StatelessWidget {
                   highlightColor: Colors.transparent,
                 ),
                 const SizedBox(width: 7),
-
                 IconButton(
-                  tooltip: '다시 실행',
+                  tooltip: l10n.toolbarRedo,
                   onPressed:
                       controller.hasRedo
                           ? () {
@@ -348,9 +359,6 @@ class MiniFlatToolbar extends StatelessWidget {
                 const SizedBox(width: 7),
               ],
 
-              // ----------------------------------------------------
-              // 글자 크기 버튼 (행간/페이지에 영향 → 페이지네이션 필요)
-              // ----------------------------------------------------
               _FontSizeButton(
                 controller: controller,
                 theme: theme,
@@ -358,9 +366,6 @@ class MiniFlatToolbar extends StatelessWidget {
               ),
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 제목(헤더) — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.title),
                 () {
@@ -373,72 +378,54 @@ class MiniFlatToolbar extends StatelessWidget {
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // Bold — 레이아웃 영향 거의 없음
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_bold),
                 () => toggleInlineAttr(controller, quill.Attribute.bold),
                 selected: _hasAttr(controller, quill.Attribute.bold),
                 affectLayout: false,
-                tooltip: '굵게',
+                tooltip: l10n.toolbarBold,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 글자색 — 레이아웃 영향 거의 없음 (필요시만 pagination)
-              // ----------------------------------------------------
               _ColorButton(
                 controller: controller,
                 theme: theme,
                 forBackground: false,
                 icon: Icons.format_color_text,
-                tooltip: '글자 색상',
+                tooltip: l10n.toolbarTextColor,
                 onChanged: () {},
               ),
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 배경색 — 레이아웃 영향 거의 없음
-              // ----------------------------------------------------
               _ColorButton(
                 controller: controller,
                 theme: theme,
                 forBackground: true,
                 icon: Icons.format_color_fill,
-                tooltip: '하이라이트',
+                tooltip: l10n.toolbarHighlight,
                 onChanged: () {},
               ),
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 기본(솔리드) HR — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.horizontal_rule),
                 () => _insertSolidHrNextLine(controller),
                 affectLayout: true,
-                tooltip: '구분선(기본)',
+                tooltip: l10n.toolbarDividerSolid,
               ),
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 점선 HR — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.more_horiz),
                 () => _insertDashedHrNextLine(controller),
                 affectLayout: true,
-                tooltip: '점선 구분선',
+                tooltip: l10n.toolbarDividerDashed,
               ),
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 정렬 — 레이아웃 영향 O
-              // ----------------------------------------------------
               Tooltip(
-                message: '정렬',
+                message: l10n.toolbarAlign,
                 child: _AlignCycleButton(
                   controller: controller,
                   onChanged: () {
@@ -449,22 +436,16 @@ class MiniFlatToolbar extends StatelessWidget {
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // Italic — 영향 거의 없음
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_italic),
                 () => toggleInlineAttr(controller, quill.Attribute.italic),
                 selected: _hasAttr(controller, quill.Attribute.italic),
                 affectLayout: false,
-                tooltip: '기울임',
+                tooltip: l10n.toolbarItalic,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 밑줄 — 영향 거의 없음
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_underline),
                 () => _toggleExclusiveInline(
@@ -473,14 +454,11 @@ class MiniFlatToolbar extends StatelessWidget {
                   other: quill.Attribute.strikeThrough,
                 ),
                 selected: _hasAttr(controller, quill.Attribute.underline),
-                tooltip: '밑줄',
+                tooltip: l10n.toolbarUnderline,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 취소선
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_strikethrough),
                 () => _toggleExclusiveInline(
@@ -489,54 +467,41 @@ class MiniFlatToolbar extends StatelessWidget {
                   other: quill.Attribute.underline,
                 ),
                 selected: _hasAttr(controller, quill.Attribute.strikeThrough),
-                tooltip: '취소선',
+                tooltip: l10n.toolbarStrikethrough,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 번호 목록 — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_list_numbered),
                 () => setExclusiveList(controller, ordered: true),
                 selected: _hasAttr(controller, quill.Attribute.ol),
                 affectLayout: true,
-                tooltip: '번호 목록',
+                tooltip: l10n.toolbarOrderedList,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 글머리 목록 — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_list_bulleted),
                 () => setExclusiveList(controller, ordered: false),
-
                 selected: _hasAttr(controller, quill.Attribute.ul),
                 affectLayout: true,
-                tooltip: '글머리 목록',
+                tooltip: l10n.toolbarBulletedList,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 인용문 — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_quote),
                 () => toggleBlockAttr(controller, quill.Attribute.blockQuote),
                 selected: _hasAttr(controller, quill.Attribute.blockQuote),
                 affectLayout: true,
-                tooltip: '인용문',
+                tooltip: l10n.toolbarBlockquote,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 서식 초기화 — 레이아웃 영향 O
-              // ----------------------------------------------------
               btn(
                 const Icon(Icons.format_clear),
                 () {
@@ -544,18 +509,15 @@ class MiniFlatToolbar extends StatelessWidget {
                   _clearedRecently = true;
                 },
                 affectLayout: true,
-                tooltip: '서식 초기화',
+                tooltip: l10n.toolbarClearFormatting,
               ),
 
               const SizedBox(width: 7),
 
-              // ----------------------------------------------------
-              // 이미지 업로드 — 레이아웃 영향 O
-              // ----------------------------------------------------
               Builder(
                 builder: (buttonContext) {
                   return IconButton(
-                    tooltip: '이미지 업로드',
+                    tooltip: l10n.toolbarImageUpload,
                     onPressed: () => _showImageMenu(buttonContext, controller),
                     icon: const Icon(
                       Icons.add_photo_alternate_outlined,
@@ -616,6 +578,8 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
 
     _entry = OverlayEntry(
       builder: (context) {
+        final l10n = AppLocalizations.of(context);
+
         final bgColor =
             widget.theme.reduceTransparency
                 ? Colors.blueGrey.shade50
@@ -650,11 +614,11 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
                           child: Text(
-                            '글자 크기',
-                            style: TextStyle(
+                            l10n.toolbarFontSize,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
                               color: Colors.black87,
@@ -698,7 +662,7 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
                         _LiteListItem(
                           height: kItemHeight,
                           width: kPopupWidth,
-                          label: '크기 해제',
+                          label: l10n.toolbarClearSize,
                           bgColor: bgColor,
                           borderColor: borderColor,
                           onTap: () {
@@ -744,10 +708,12 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return CompositedTransformTarget(
       link: _link,
       child: IconButton(
-        tooltip: '글자 크기',
+        tooltip: l10n.toolbarFontSize,
         onPressed: _open,
         icon: const Icon(Icons.format_size, size: 18, color: Colors.black87),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -764,6 +730,7 @@ class _FontSizeButtonState extends State<_FontSizeButton> {
 class _ColorButton extends StatelessWidget {
   static Color _lastTextColor = const ui.Color.fromARGB(255, 183, 217, 248);
   static Color _lastBgColor = const ui.Color.fromARGB(255, 183, 217, 248);
+
   final quill.QuillController controller;
   final GlassTheme theme;
   final bool forBackground;
@@ -793,6 +760,7 @@ class _ColorButton extends StatelessWidget {
     if (s.length == 8) {
       return Color(v);
     }
+
     return null;
   }
 
@@ -809,6 +777,7 @@ class _ColorButton extends StatelessWidget {
 
   Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
     BuildContext context, {
+    required AppLocalizations l10n,
     required String title,
     required GlassTheme theme,
     required Color initial,
@@ -905,9 +874,9 @@ class _ColorButton extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          '투명도',
-                          style: TextStyle(
+                        Text(
+                          l10n.transparency,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             color: textStrong,
                           ),
@@ -987,9 +956,9 @@ class _ColorButton extends StatelessWidget {
               onPressed:
                   () => Navigator.pop(ctx, const _ColorSheetResult.clear()),
               icon: const Icon(Icons.block, size: 18),
-              label: const Text(
-                '해제',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              label: Text(
+                l10n.clear,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             const Spacer(),
@@ -1003,9 +972,9 @@ class _ColorButton extends StatelessWidget {
               ),
               onPressed:
                   () => Navigator.pop(ctx, const _ColorSheetResult.cancel()),
-              child: const Text(
-                '취소',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              child: Text(
+                l10n.cancel,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 8),
@@ -1029,9 +998,9 @@ class _ColorButton extends StatelessWidget {
               ),
               onPressed:
                   () => Navigator.pop(ctx, _ColorSheetResult.apply(current)),
-              child: const Text(
-                '적용',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              child: Text(
+                l10n.apply,
+                style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -1096,6 +1065,8 @@ class _ColorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return IconButton(
       icon: Icon(icon, size: 18, color: Colors.black87),
       tooltip: tooltip,
@@ -1129,7 +1100,11 @@ class _ColorButton extends StatelessWidget {
 
         final result = await _showPrettyWheelBottomSheet(
           context,
-          title: forBackground ? '글자 배경 색' : '글자 색',
+          l10n: l10n,
+          title:
+              forBackground
+                  ? l10n.toolbarTextBackgroundColor
+                  : l10n.toolbarTextColor,
           theme: theme,
           initial: curColor ?? fallback,
           wheelSize: 190,
@@ -1160,6 +1135,7 @@ class _ColorButton extends StatelessWidget {
         }
 
         final picked = result.color!;
+
         if (forBackground) {
           _ColorButton._lastBgColor = picked;
         } else {
@@ -1186,6 +1162,7 @@ class _ColorButton extends StatelessWidget {
           );
         } else {
           final hex = _hexFromColor(picked);
+
           controller.formatSelection(
             quill.Attribute(
               quill.Attribute.color.key,
@@ -1215,6 +1192,7 @@ class _ColorSheetResult {
 /// =============================================================
 ///  정렬
 /// =============================================================
+
 class _AlignCycleButton extends StatelessWidget {
   final quill.QuillController controller;
   final VoidCallback? onChanged;
@@ -1297,11 +1275,13 @@ void _clearFormats(quill.QuillController c) {
   for (final a in attrsToCheck) {
     if (m.containsKey(a.key)) unset(a);
   }
+
   if (m.containsKey(kBgAlphaKey)) {
     toUnset.add(
       const quill.Attribute(kBgAlphaKey, quill.AttributeScope.inline, null),
     );
   }
+
   if (m.containsKey('script')) {
     toUnset.add(
       const quill.Attribute('script', quill.AttributeScope.inline, null),
@@ -1476,6 +1456,7 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
   required OverlayState overlay,
   required RelativeRect position,
 }) async {
+  final l10n = AppLocalizations.of(context);
   final completer = Completer<_ImageMenuAction?>();
 
   const bg = Colors.white;
@@ -1582,7 +1563,6 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
               ),
             ),
           ),
-
           Positioned(
             left: left,
             top: top,
@@ -1600,9 +1580,12 @@ Future<_ImageMenuAction?> _showAnchoredImagePopup({
                   children: [
                     Row(children: [const Spacer(), closeX()]),
                     const SizedBox(height: 6),
-                    item(label: '카메라로 촬영', value: _ImageMenuAction.camera),
+                    item(label: l10n.takePhoto, value: _ImageMenuAction.camera),
                     const SizedBox(height: gap),
-                    item(label: '앨범에서 선택', value: _ImageMenuAction.gallery),
+                    item(
+                      label: l10n.chooseFromAlbum,
+                      value: _ImageMenuAction.gallery,
+                    ),
                   ],
                 ),
               ),

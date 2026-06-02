@@ -9,6 +9,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -412,8 +413,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
   }) {
     imageMap['source'] = source;
 
-    // 편집 중에는 custom embed를 쓰더라도,
-    // 저장할 때는 일반 image embed 형태로 정리한다.
     insert.remove('custom');
 
     if (imageMap.containsKey('w')) {
@@ -485,7 +484,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
             final source = sourceRaw.trim();
             final normalizedSource = p.normalize(source);
 
-            // 이미 상대경로면 그대로 유지
             final isAlreadyPortable =
                 !p.isAbsolute(source) && !source.startsWith('/');
 
@@ -500,7 +498,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
               continue;
             }
 
-            // 앱 Documents 안의 절대경로면 상대경로로 변환
             final isInsideDocuments =
                 normalizedSource == normalizedAppDir ||
                 normalizedSource.startsWith(
@@ -521,7 +518,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
               continue;
             }
 
-            // 임시/cache 경로면 Documents/chapter_images/... 로 복사
             final existingMapped = pathMap[source];
             if (existingMapped != null) {
               final mappedFile = await _resolveLocalImageFile(existingMapped);
@@ -687,7 +683,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
         }
       }
 
-      // draft 유무와 상관없이 커서 위치 복원
       final max = _controller.document.toPlainText().length;
       final sel = (_restoredSelection ?? 0).clamp(0, max).toInt();
 
@@ -825,7 +820,10 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       await _initSpeech();
       if (!_speechReady) {
         if (!mounted) return;
-        AppToast.show(context, '음성 인식을 사용할 수 없습니다.');
+        AppToast.show(
+          context,
+          AppLocalizations.of(context).speechRecognitionUnavailable,
+        );
         return;
       }
     }
@@ -900,7 +898,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
     if (exists) {
       _keywordCtrl.clear();
-      _showAppToast('이미 등록된 키워드입니다.');
+      _showAppToast(AppLocalizations.of(context).keywordAlreadyExists);
       return;
     }
 
@@ -1124,7 +1122,9 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       _isListening = false;
     });
 
-    _showErrorToast('음성 인식 오류: ${error.errorMsg}');
+    _showErrorToast(
+      AppLocalizations.of(context).speechRecognitionError(error.errorMsg),
+    );
   }
 
   void _jumpToPagePreview(int page) {
@@ -1629,7 +1629,6 @@ class _ChapterWritePageState extends State<ChapterWritePage>
       await prefs.setInt(dayBaseKey, dayBaseChars);
     }
 
-    // 오늘 순증감
     final todayNet = currentChars - dayBaseChars;
     final safeTodayNet = todayNet < 0 ? 0 : todayNet;
 
@@ -1649,10 +1648,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
     for (final s in log.sessions) {
       final memo = s.memo.trim();
 
-      // 현재 챕터의 오늘 기록은 무조건 제거 후 새 값으로 덮어씀
       if (memo == chapterSessionId) continue;
 
-      // 예전 잘못된 레거시 세션들도 같이 제거
       final legacyChapterPrefix = 'chapter:${widget.documentId}:$_baseKey';
       final legacyTitleMemo = widget.chapterTitle.trim();
 
@@ -1768,6 +1765,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     final bool isImmersive = _isFocusWriting;
     final settings = context.watch<WritingSettingsController>().settings;
     final primary = _textColorFromSettings(settings);
@@ -1924,11 +1923,11 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                           textAlign: TextAlign.start,
                           textInputAction: TextInputAction.done,
                           maxLines: 1,
-                          decoration: const InputDecoration(
-                            hintText: '회차 제목 입력',
+                          decoration: InputDecoration(
+                            hintText: l10n.chapterTitleHint,
                             border: InputBorder.none,
                             isCollapsed: true,
-                            hintStyle: TextStyle(
+                            hintStyle: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w400,
                               color: Color(0x8C000000),
@@ -1946,11 +1945,13 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                         elevation: 0,
                         actions: [
                           Semantics(
-                            label: '집중 글쓰기 모드 토글',
+                            label: l10n.focusWritingModeToggle,
                             button: true,
                             child: IconButton(
                               tooltip:
-                                  _isFocusWriting ? '집중 모드 해제' : '집중 글쓰기 모드',
+                                  _isFocusWriting
+                                      ? l10n.exitFocusMode
+                                      : l10n.focusWritingMode,
                               onPressed: _toggleFocusWriting,
                               icon: Icon(
                                 Icons.fullscreen,
@@ -1964,7 +1965,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                             ),
                           ),
                           Semantics(
-                            label: 'PNG 변환',
+                            label: l10n.convertPng,
                             button: true,
                             child: IconButton(
                               tooltip: 'PNG',
@@ -1990,7 +1991,8 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                                   MaterialPageRoute(
                                     builder:
                                         (_) => PngPage(
-                                          title: ep.isEmpty ? 'PNG 미리보기' : ep,
+                                          title:
+                                              ep.isEmpty ? l10n.pngPreview : ep,
                                           episodeTitle: ep.isEmpty ? null : ep,
                                           deltaJson: mergedForEditor,
                                           revision: _pngRevision,
@@ -2345,6 +2347,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                           onAdd: _addKeyword,
                           onRemove: _removeKeyword,
                           onKeywordTap: _insertTextAtCursor,
+                          keywordHint: l10n.keywordInputHint,
                         ),
                       ),
                     if (_chromeVisible)
@@ -2355,7 +2358,7 @@ class _ChapterWritePageState extends State<ChapterWritePage>
                         child: _PageJumpBar(
                           currentPage: _currentPage,
                           pageCount: _pageCount,
-                          charCount: _getCharCount(),
+                          charCountLabel: l10n.charCountLabel(_getCharCount()),
                           onPageChanged: (p) => _jumpToPage(p),
                           onPagePreviewChanged: (p) => _jumpToPagePreview(p),
                           backgroundColor: Colors.white,
@@ -2402,6 +2405,7 @@ class _KeywordInputLine extends StatefulWidget {
   final VoidCallback onAdd;
   final ValueChanged<String> onRemove;
   final ValueChanged<String> onKeywordTap;
+  final String keywordHint;
 
   const _KeywordInputLine({
     required this.controller,
@@ -2410,6 +2414,7 @@ class _KeywordInputLine extends StatefulWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onKeywordTap,
+    required this.keywordHint,
   });
 
   @override
@@ -2495,7 +2500,7 @@ class _KeywordInputLineState extends State<_KeywordInputLine> {
                   maxLines: 1,
                   textAlignVertical: TextAlignVertical.center,
                   decoration: InputDecoration(
-                    hintText: '키워드 입력',
+                    hintText: widget.keywordHint,
                     hintStyle: const TextStyle(
                       color: Color.fromARGB(221, 90, 114, 141),
                       fontSize: 13,
@@ -2669,7 +2674,7 @@ class _FullScreenSwipeToWorldState extends State<_FullScreenSwipeToWorld> {
 class _PageJumpBar extends StatefulWidget {
   final int currentPage;
   final int pageCount;
-  final int charCount;
+  final String charCountLabel;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<int>? onPagePreviewChanged;
   final Color backgroundColor;
@@ -2677,7 +2682,7 @@ class _PageJumpBar extends StatefulWidget {
   const _PageJumpBar({
     required this.currentPage,
     required this.pageCount,
-    required this.charCount,
+    required this.charCountLabel,
     required this.onPageChanged,
     this.onPagePreviewChanged,
     required this.backgroundColor,
@@ -2717,6 +2722,7 @@ class _PageJumpBarState extends State<_PageJumpBar> {
               child: LayoutBuilder(
                 builder: (context, row) {
                   final double sliderWidth = (row.maxWidth * 0.85) - 36.0;
+
                   return Row(
                     mainAxisSize: MainAxisSize.max,
                     children: [
@@ -2794,12 +2800,11 @@ class _PageJumpBarState extends State<_PageJumpBar> {
             ),
             const SizedBox(height: 2),
             Text(
-              '글자 : ${widget.charCount}',
+              widget.charCountLabel,
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87.withValues(alpha: 0.55),
-                height: 0.5,
               ),
             ),
           ],
@@ -3765,6 +3770,7 @@ extension _OffsetNormalize on Offset {
 // ----------------------
 // 🌞 한낮 하늘 테마용 태양빛 페인터
 // ----------------------
+
 class _SunRayPainter extends CustomPainter {
   const _SunRayPainter();
 

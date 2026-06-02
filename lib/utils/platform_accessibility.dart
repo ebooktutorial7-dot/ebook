@@ -21,9 +21,7 @@ class PlatformAccessibility {
         );
 
         if (result != null) reduce = result;
-      } catch (_) {
-        // 미구현/에러 시 무시
-      }
+      } catch (_) {}
     }
 
     final features =

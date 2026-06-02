@@ -18,6 +18,7 @@ import 'package:path/path.dart' as p;
 import 'package:ebook_tutorial_app/utils/iterable_extensions.dart';
 import 'package:isar/isar.dart';
 import 'package:ebook_tutorial_app/pages/chapter/world_seat_isar.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 bool _isRemoteFactionImage(String value) {
   final s = value.toLowerCase();
@@ -64,17 +65,14 @@ Future<File?> resolveFactionImageFile(String? imageUrl) async {
 
   if (_isRemoteFactionImage(raw)) return null;
 
-  // 1) 절대경로가 아직 살아 있으면 사용
   final direct = File(raw);
   if (await direct.exists()) return direct;
 
   final appDir = await getApplicationDocumentsDirectory();
 
-  // 2) Documents 기준 상대경로 복구
   final fromDocuments = File(p.join(appDir.path, raw));
   if (await fromDocuments.exists()) return fromDocuments;
 
-  // 3) 예전 깨진 절대경로 대비: 파일명으로 faction_images 안에서 검색
   final root = Directory(p.join(appDir.path, 'faction_images'));
   if (await root.exists()) {
     final fileName = p.basename(raw);
@@ -130,6 +128,7 @@ class _GlassTextEditDialogState extends State<_GlassTextEditDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final bool multiline = widget.maxLines > 1;
 
     return Center(
@@ -221,10 +220,10 @@ class _GlassTextEditDialogState extends State<_GlassTextEditDialog> {
                                 width: 1,
                               ),
                             ),
-                            child: const Text(
-                              '취소',
+                            child: Text(
+                              l10n.cancel,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w500,
                                 color: Color.fromARGB(255, 70, 175, 255),
                               ),
@@ -243,10 +242,10 @@ class _GlassTextEditDialogState extends State<_GlassTextEditDialog> {
                               color: const Color(0xFF1F3A56),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Text(
-                              '저장',
+                            child: Text(
+                              l10n.save,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
@@ -306,6 +305,8 @@ class _MinimalEdgeLabelDialogState extends State<_MinimalEdgeLabelDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Center(
       child: Material(
         color: Colors.transparent,
@@ -383,10 +384,10 @@ class _MinimalEdgeLabelDialogState extends State<_MinimalEdgeLabelDialog> {
                                 width: 1,
                               ),
                             ),
-                            child: const Text(
-                              '취소',
+                            child: Text(
+                              l10n.cancel,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w500,
                                 color: Color.fromARGB(255, 70, 175, 255),
                               ),
@@ -405,10 +406,10 @@ class _MinimalEdgeLabelDialogState extends State<_MinimalEdgeLabelDialog> {
                               color: const Color(0xFF1F3A56),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Text(
-                              '저장',
+                            child: Text(
+                              l10n.save,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
@@ -492,6 +493,7 @@ Future<ColorSheetResult> showPrettyWheelBottomSheet(
   double wheelSize = 190,
   bool showAlpha = false,
 }) async {
+  final l10n = AppLocalizations.of(context);
   Color current = initial;
 
   return showModalBottomSheet<ColorSheetResult>(
@@ -557,9 +559,9 @@ Future<ColorSheetResult> showPrettyWheelBottomSheet(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '투명도',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+                      Text(
+                        l10n.transparency,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                       Text('${(v * 100).round()}%'),
                     ],
@@ -614,7 +616,7 @@ Future<ColorSheetResult> showPrettyWheelBottomSheet(
           TextButton(
             onPressed:
                 () => Navigator.pop(ctx, const ColorSheetResult.cancel()),
-            child: const Text('취소'),
+            child: Text(l10n.cancel),
           ),
           const SizedBox(width: 10),
           FilledButton(
@@ -627,9 +629,9 @@ Future<ColorSheetResult> showPrettyWheelBottomSheet(
             ),
             onPressed:
                 () => Navigator.pop(ctx, ColorSheetResult.apply(current)),
-            child: const Text(
-              '적용',
-              style: TextStyle(fontWeight: FontWeight.w500),
+            child: Text(
+              l10n.apply,
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -1196,6 +1198,8 @@ class _GlassActionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Center(
       child: Material(
         color: Colors.transparent,
@@ -1275,10 +1279,10 @@ class _GlassActionDialog extends StatelessWidget {
                           width: 1,
                         ),
                       ),
-                      child: const Text(
-                        '닫기',
+                      child: Text(
+                        l10n.close,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           color: Color.fromARGB(255, 70, 175, 255),
                         ),
@@ -1453,6 +1457,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _openEdgeColorWheel(String edgeId) async {
+    final l10n = AppLocalizations.of(context);
     final e = _getEdge(edgeId);
     if (e == null) return;
 
@@ -1462,7 +1467,7 @@ class _FactionPageState extends State<FactionPage> {
 
     final result = await showPrettyWheelBottomSheet(
       context,
-      title: '선 색상',
+      title: l10n.edgeColor,
       theme: glass,
       initial: Color(e.style.color),
       wheelSize: 190,
@@ -1500,7 +1505,6 @@ class _FactionPageState extends State<FactionPage> {
     if (!mounted) return;
 
     setState(() {
-      // ✅ x.path 직접 저장하지 말고 Documents 기준 상대경로 저장
       n.imageUrl = savedRelativePath;
       _bumpGeom();
     });
@@ -1509,6 +1513,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _openDiagramActionSheet(String diagramId) async {
+    final l10n = AppLocalizations.of(context);
     final n = _getDiagram(diagramId);
     if (n == null) return;
 
@@ -1521,12 +1526,12 @@ class _FactionPageState extends State<FactionPage> {
       items.addAll([
         _GlassActionItem(
           icon: Icons.photo_library_outlined,
-          title: "사진 교체",
+          title: l10n.replacePhoto,
           onTap: () async => await _pickDiagramImage(diagramId),
         ),
         _GlassActionItem(
           icon: Icons.close,
-          title: "사진 삭제",
+          title: l10n.deletePhoto,
           onTap: () {
             setState(() {
               n.imageUrl = null;
@@ -1540,7 +1545,7 @@ class _FactionPageState extends State<FactionPage> {
       items.add(
         _GlassActionItem(
           icon: Icons.add_a_photo,
-          title: "사진 추가",
+          title: l10n.addPhotoToDiagram,
           onTap: () async => await _pickDiagramImage(diagramId),
         ),
       );
@@ -1550,12 +1555,12 @@ class _FactionPageState extends State<FactionPage> {
       items.addAll([
         _GlassActionItem(
           icon: Icons.palette_outlined,
-          title: "색상 교체",
+          title: l10n.replaceColor,
           onTap: () async => await _openDiagramColorSheet(diagramId),
         ),
         _GlassActionItem(
           icon: Icons.close,
-          title: "색상 삭제",
+          title: l10n.deleteColor,
           onTap: () {
             setState(() {
               n.fillColor = null;
@@ -1569,7 +1574,7 @@ class _FactionPageState extends State<FactionPage> {
       items.add(
         _GlassActionItem(
           icon: Icons.format_color_fill,
-          title: "색상 추가",
+          title: l10n.addColor,
           onTap: () async => await _openDiagramColorSheet(diagramId),
         ),
       );
@@ -1578,7 +1583,7 @@ class _FactionPageState extends State<FactionPage> {
     items.add(
       _GlassActionItem(
         icon: Icons.text_fields,
-        title: (n.insideText.trim().isEmpty) ? "텍스트 추가" : "텍스트 교체",
+        title: n.insideText.trim().isEmpty ? l10n.addText : l10n.replaceText,
         onTap: () async => await _editDiagramInsideText(diagramId),
       ),
     );
@@ -1588,13 +1593,16 @@ class _FactionPageState extends State<FactionPage> {
       items.addAll([
         _GlassActionItem(
           icon: Icons.format_color_text,
-          title: (n.insideTextColor == null) ? "텍스트 색상 추가" : "텍스트 색상 교체",
+          title:
+              n.insideTextColor == null
+                  ? l10n.addTextColor
+                  : l10n.replaceTextColor,
           onTap: () async => await _openDiagramInsideTextColorSheet(diagramId),
         ),
         if (n.insideTextColor != null)
           _GlassActionItem(
             icon: Icons.close,
-            title: "텍스트 색상 삭제",
+            title: l10n.deleteTextColor,
             onTap: () {
               setState(() {
                 n.insideTextColor = null;
@@ -1610,7 +1618,7 @@ class _FactionPageState extends State<FactionPage> {
       items.add(
         _GlassActionItem(
           icon: Icons.close,
-          title: "텍스트 삭제",
+          title: l10n.deleteText,
           onTap: () {
             setState(() {
               n.insideText = "";
@@ -1636,6 +1644,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _openDiagramInsideTextColorSheet(String diagramId) async {
+    final l10n = AppLocalizations.of(context);
     final n = _getDiagram(diagramId);
     if (n == null) return;
     if (n.insideText.trim().isEmpty) return;
@@ -1653,7 +1662,7 @@ class _FactionPageState extends State<FactionPage> {
 
     final result = await showPrettyWheelBottomSheet(
       context,
-      title: '텍스트 색상',
+      title: l10n.textColor,
       theme: glass,
       initial: initial,
       wheelSize: 190,
@@ -1671,6 +1680,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _openDiagramColorSheet(String diagramId) async {
+    final l10n = AppLocalizations.of(context);
     final n = _getDiagram(diagramId);
     if (n == null) return;
 
@@ -1683,7 +1693,7 @@ class _FactionPageState extends State<FactionPage> {
 
     final result = await showPrettyWheelBottomSheet(
       context,
-      title: '도형 색상',
+      title: l10n.shapeColor,
       theme: glass,
       initial: initial,
       wheelSize: 190,
@@ -1701,6 +1711,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _editDiagramInsideText(String diagramId) async {
+    final l10n = AppLocalizations.of(context);
     final n = _getDiagram(diagramId);
     if (n == null) return;
 
@@ -1708,9 +1719,9 @@ class _FactionPageState extends State<FactionPage> {
       context: context,
       builder:
           (_) => _GlassTextEditDialog(
-            title: "텍스트 추가",
+            title: l10n.addText,
             initial: n.insideText,
-            hint: "도형 안에 표시할 텍스트",
+            hint: l10n.insideTextHint,
             maxLines: 1,
           ),
     );
@@ -1806,6 +1817,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   void _addDiagram() {
+    final l10n = AppLocalizations.of(context);
     final id = _newId("n");
     const r = 35.0;
 
@@ -1881,7 +1893,7 @@ class _FactionPageState extends State<FactionPage> {
 
     final n = DiagramModel(
       id: id,
-      name: "New",
+      name: l10n.newNode,
       x: spot.dx,
       y: spot.dy,
       r: r,
@@ -1942,6 +1954,8 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<String?> _promptDiagramName({required String initial}) {
+    final l10n = AppLocalizations.of(context);
+
     return showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
@@ -1952,9 +1966,9 @@ class _FactionPageState extends State<FactionPage> {
 
       pageBuilder: (ctx, a1, a2) {
         return _MinimalEdgeLabelDialog(
-          title: "Name",
+          title: l10n.name,
           initial: initial,
-          hint: "이름",
+          hint: l10n.nameHint,
         );
       },
 
@@ -2020,6 +2034,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Future<void> _endLinkDrag(Offset sceneDropPoint) async {
+    final l10n = AppLocalizations.of(context);
     if (tempLink == null) return;
 
     final fromId = tempLink!.fromDiagramId;
@@ -2045,7 +2060,7 @@ class _FactionPageState extends State<FactionPage> {
       to: toDiagram.id,
       fromAnchor: fromAnchor,
       toAnchor: toAnchor,
-      label: "관계",
+      label: l10n.relation,
       curvature: 0.0,
       style: EdgeStyle(
         color:
@@ -2098,6 +2113,8 @@ class _FactionPageState extends State<FactionPage> {
   static const Color barrierBaseColor = Color(0xFF0F2238);
 
   Future<String?> _promptEdgeLabel({required String initial}) {
+    final l10n = AppLocalizations.of(context);
+
     return showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
@@ -2107,9 +2124,9 @@ class _FactionPageState extends State<FactionPage> {
       transitionBuilder: (_, __, ___, child) => child,
       pageBuilder: (ctx, a1, a2) {
         return _MinimalEdgeLabelDialog(
-          title: "관계",
+          title: l10n.relation,
           initial: initial,
-          hint: "예: 동맹, 적대, 가족",
+          hint: l10n.relationHint,
         );
       },
     ).then((v) => v?.trim());
@@ -2300,6 +2317,7 @@ class _FactionPageState extends State<FactionPage> {
   }
 
   Widget _buildScaffold(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final selectedDiagram =
         (selectedDiagramId != null) ? _getDiagram(selectedDiagramId!) : null;
     final selectedEdge =
@@ -2333,9 +2351,9 @@ class _FactionPageState extends State<FactionPage> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Faction',
-                      style: TextStyle(
+                    Text(
+                      l10n.faction,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -2344,7 +2362,7 @@ class _FactionPageState extends State<FactionPage> {
                     const Spacer(),
                     IconButton(
                       onPressed: _addDiagram,
-                      tooltip: '도형 추가',
+                      tooltip: l10n.addShape,
                       icon: const Icon(
                         Icons.add,
                         size: 22,
@@ -2471,6 +2489,8 @@ class _ZoomPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2479,14 +2499,14 @@ class _ZoomPill extends StatelessWidget {
           icon: const Icon(Icons.remove, size: 18),
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           padding: EdgeInsets.zero,
-          tooltip: '축소',
+          tooltip: l10n.zoomOut,
         ),
         IconButton(
           onPressed: onPlus,
           icon: const Icon(Icons.add, size: 18),
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           padding: EdgeInsets.zero,
-          tooltip: '확대',
+          tooltip: l10n.zoomIn,
         ),
       ],
     );
@@ -2668,12 +2688,13 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final info =
         selectedDiagram != null
-            ? 'Name : ${selectedDiagram!.name} [${selectedDiagram!.locked ? "이동 잠금" : "이동 가능"}]'
+            ? '${l10n.name} : ${selectedDiagram!.name} [${selectedDiagram!.locked ? l10n.moveLocked : l10n.moveAvailable}]'
             : (selectedEdge != null
-                ? 'Name : ${selectedEdge!.label.isEmpty ? "관계" : selectedEdge!.label}'
-                : "도형을 탭하거나, 선을 탭해 선택하세요");
+                ? '${l10n.name} : ${selectedEdge!.label.isEmpty ? l10n.relation : selectedEdge!.label}'
+                : l10n.factionSelectionHint);
 
     return _IosSimpleCard(
       padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
@@ -2686,7 +2707,7 @@ class _TopBar extends StatelessWidget {
               Expanded(child: Text(info)),
               if (selectedDiagram != null) ...[
                 Tooltip(
-                  message: "도형 변경",
+                  message: l10n.changeShape,
                   child: IconButton(
                     onPressed: onCycleShape,
                     icon: Icon(
@@ -2697,7 +2718,7 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
                 Tooltip(
-                  message: selectedDiagram!.locked ? "잠금 해제" : "잠금",
+                  message: selectedDiagram!.locked ? l10n.unlock : l10n.lock,
                   child: IconButton(
                     onPressed: onToggleLock,
                     icon: Icon(
@@ -2708,7 +2729,7 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
                 Tooltip(
-                  message: "도형 삭제",
+                  message: l10n.deleteShape,
                   child: IconButton(
                     onPressed: onDeleteDiagram,
                     icon: const Icon(
@@ -2721,7 +2742,7 @@ class _TopBar extends StatelessWidget {
               ],
               if (selectedEdge != null) ...[
                 Tooltip(
-                  message: "선 삭제",
+                  message: l10n.deleteLine,
                   child: IconButton(
                     onPressed: onDeleteEdge,
                     icon: const Icon(
@@ -2738,7 +2759,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(height: 7),
             Row(
               children: [
-                const SizedBox(width: 35, child: Text("크기")),
+                SizedBox(width: 35, child: Text(l10n.size)),
                 Expanded(
                   child: SliderTheme(
                     data: _blueThinSlider(context),
@@ -2760,7 +2781,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(height: 3),
             Row(
               children: [
-                const SizedBox(width: 48, child: Text("곡률")),
+                SizedBox(width: 48, child: Text(l10n.curvature)),
                 Expanded(
                   child: SliderTheme(
                     data: _blueThinSlider(context),
@@ -2779,7 +2800,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                const SizedBox(width: 49, child: Text("선 얇기")),
+                SizedBox(width: 49, child: Text(l10n.lineWidth)),
                 Expanded(
                   child: SliderTheme(
                     data: _blueThinSlider(context),
@@ -2798,7 +2819,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const SizedBox(width: 45, child: Text("선 색상")),
+                SizedBox(width: 45, child: Text(l10n.edgeColor)),
                 const SizedBox(width: 10),
                 InkWell(
                   onTap: onOpenEdgeColorWheel,
@@ -2828,16 +2849,19 @@ class _TopBar extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 5),
-                        const Text(
-                          "색 선택",
-                          style: TextStyle(fontWeight: FontWeight.w400),
+                        Text(
+                          l10n.selectColor,
+                          style: const TextStyle(fontWeight: FontWeight.w400),
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(width: 15),
-                const Text("점선", style: TextStyle(fontWeight: FontWeight.w400)),
+                Text(
+                  l10n.dashedLine,
+                  style: const TextStyle(fontWeight: FontWeight.w400),
+                ),
                 const SizedBox(width: 10),
                 InkWell(
                   borderRadius: BorderRadius.circular(999),
@@ -2872,9 +2896,9 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 15),
-                const Text(
-                  "화살표",
-                  style: TextStyle(fontWeight: FontWeight.w400),
+                Text(
+                  l10n.arrow,
+                  style: const TextStyle(fontWeight: FontWeight.w400),
                 ),
                 const SizedBox(width: 10),
                 _ArrowModeMenuButton(
@@ -2914,16 +2938,18 @@ class _ArrowModeMenuButton extends StatelessWidget {
     }
   }
 
-  String _labelFor(ArrowMode m) {
+  String _labelFor(BuildContext context, ArrowMode m) {
+    final l10n = AppLocalizations.of(context);
+
     switch (m) {
       case ArrowMode.none:
-        return "없음";
+        return l10n.none;
       case ArrowMode.start:
-        return "시작";
+        return l10n.start;
       case ArrowMode.end:
-        return "끝";
+        return l10n.end;
       case ArrowMode.both:
-        return "양끝";
+        return l10n.bothEnds;
     }
   }
 
@@ -2987,7 +3013,7 @@ class _ArrowModeMenuButton extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          _labelFor(m),
+                          _labelFor(context, m),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
@@ -3017,7 +3043,7 @@ class _ArrowModeMenuButton extends StatelessWidget {
               Icon(_iconFor(value), size: 18, color: selectedColor),
               const SizedBox(width: 6),
               Text(
-                _labelFor(value),
+                _labelFor(context, value),
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,

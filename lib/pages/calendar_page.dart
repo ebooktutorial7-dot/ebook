@@ -4,6 +4,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
+extension _CalendarL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 final Color kDialogBarrierColor = const Color(
   0xFF0F2238,
@@ -387,10 +392,10 @@ class _CalendarPageState extends State<CalendarPage>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              const Center(
+                              Center(
                                 child: Text(
-                                  '일정 편집',
-                                  style: TextStyle(
+                                  context.l10n.calendarEditSchedule,
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF1F3A56),
@@ -414,7 +419,7 @@ class _CalendarPageState extends State<CalendarPage>
 
                         TextField(
                           controller: titleC,
-                          decoration: inputDeco('제목 입력'),
+                          decoration: inputDeco(context.l10n.calendarTitleHint),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -427,7 +432,7 @@ class _CalendarPageState extends State<CalendarPage>
                         Row(
                           children: [
                             dateField(
-                              label: '시작일',
+                              label: context.l10n.calendarStartDate,
                               value: fmt(start),
                               onTap: () async {
                                 final pickedD = await _pickDate(ctx2, start);
@@ -448,7 +453,7 @@ class _CalendarPageState extends State<CalendarPage>
                             ),
                             const SizedBox(width: 8),
                             dateField(
-                              label: '종료일',
+                              label: context.l10n.calendarEndDate,
                               value: fmt(end),
                               onTap: () async {
                                 final pickedD = await _pickDate(ctx2, end);
@@ -472,9 +477,9 @@ class _CalendarPageState extends State<CalendarPage>
 
                         const SizedBox(height: 14),
 
-                        const Text(
-                          '색상',
-                          style: TextStyle(
+                        Text(
+                          context.l10n.calendarColor,
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Color(0xFF5F7D9B),
@@ -516,7 +521,7 @@ class _CalendarPageState extends State<CalendarPage>
                         TextField(
                           controller: memoC,
                           maxLines: 3,
-                          decoration: inputDeco('메모 입력'),
+                          decoration: inputDeco(context.l10n.calendarMemoHint),
                           style: const TextStyle(
                             fontSize: 14,
                             height: 1.4,
@@ -560,9 +565,9 @@ class _CalendarPageState extends State<CalendarPage>
                                 ),
                               );
                             },
-                            child: const Text(
-                              '저장',
-                              style: TextStyle(
+                            child: Text(
+                              context.l10n.save,
+                              style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -594,9 +599,9 @@ class _CalendarPageState extends State<CalendarPage>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            child: const Text(
-                              '일정 삭제',
-                              style: TextStyle(
+                            child: Text(
+                              context.l10n.calendarDeleteSchedule,
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -664,10 +669,10 @@ class _CalendarPageState extends State<CalendarPage>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        const Center(
+                        Center(
                           child: Text(
-                            '일정 삭제',
-                            style: TextStyle(
+                            context.l10n.calendarDeleteSchedule,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF1F3A56),
@@ -693,7 +698,11 @@ class _CalendarPageState extends State<CalendarPage>
                   const SizedBox(height: 14),
 
                   Text(
-                    '“${ev.title.isEmpty ? '제목 없음' : ev.title}” 일정을 삭제하시겠습니까?',
+                    context.l10n.calendarDeleteScheduleConfirm(
+                      ev.title.isEmpty
+                          ? context.l10n.calendarNoTitle
+                          : ev.title,
+                    ),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 14,
@@ -722,9 +731,9 @@ class _CalendarPageState extends State<CalendarPage>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        '삭제',
-                        style: TextStyle(
+                      child: Text(
+                        context.l10n.delete,
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -785,10 +794,10 @@ class _CalendarPageState extends State<CalendarPage>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            const Center(
+                            Center(
                               child: Text(
-                                '날짜 선택',
-                                style: TextStyle(
+                                context.l10n.calendarPickDate,
+                                style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF1F3A56),
@@ -878,9 +887,9 @@ class _CalendarPageState extends State<CalendarPage>
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          child: const Text(
-                            '확인',
-                            style: TextStyle(
+                          child: Text(
+                            context.l10n.calendarConfirm,
+                            style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                             ),
@@ -963,6 +972,14 @@ class _CalendarPageState extends State<CalendarPage>
                       values: values,
                       maxValue: maxValue,
                       selectedIndex: selectedIndex,
+                      selectedLabel:
+                          selectedIndex >= 0 && selectedIndex < values.length
+                              ? (values[selectedIndex] > 0
+                                  ? context.l10n.calendarCharsValue(
+                                    _formatInt(values[selectedIndex]),
+                                  )
+                                  : context.l10n.calendarZeroChars)
+                              : '',
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
@@ -1001,13 +1018,21 @@ class _CalendarPageState extends State<CalendarPage>
             },
           ),
           const SizedBox(height: 14),
-          _statLine('집필한 날', '${monthStats.writingDays}일'),
-          _statLine('오늘 작성', '${_formatInt(_log.writtenChars)}자'),
-          _statLine('총 글자수', '${_formatInt(monthStats.totalChars)}자'),
           _statLine(
-            '최고 기록',
+            context.l10n.calendarTodayWritten,
+            context.l10n.calendarCharsValue(_formatInt(_log.writtenChars)),
+          ),
+          _statLine(
+            context.l10n.calendarTotalChars,
+            context.l10n.calendarCharsValue(_formatInt(monthStats.totalChars)),
+          ),
+          _statLine(
+            context.l10n.calendarBestRecord,
             monthStats.bestChars > 0
-                ? '${_formatInt(monthStats.bestChars)}자 (${_prettyDayFromKey(monthStats.bestDayKey)})'
+                ? context.l10n.calendarBestRecordValue(
+                  _formatInt(monthStats.bestChars),
+                  _prettyDayFromKey(monthStats.bestDayKey),
+                )
                 : '—',
           ),
         ],
@@ -1167,10 +1192,10 @@ class _CalendarPageState extends State<CalendarPage>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              const Center(
+                              Center(
                                 child: Text(
-                                  '신규 일정',
-                                  style: TextStyle(
+                                  context.l10n.calendarNewSchedule,
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF1F3A56),
@@ -1192,7 +1217,7 @@ class _CalendarPageState extends State<CalendarPage>
                         const SizedBox(height: 12),
                         TextField(
                           controller: titleC,
-                          decoration: inputDeco('제목 입력'),
+                          decoration: inputDeco(context.l10n.calendarTitleHint),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -1203,7 +1228,7 @@ class _CalendarPageState extends State<CalendarPage>
                         Row(
                           children: [
                             dateField(
-                              label: '시작일',
+                              label: context.l10n.calendarStartDate,
                               value: fmt(start),
                               onTap: () async {
                                 final pickedD = await _pickDate(ctx2, start);
@@ -1220,7 +1245,7 @@ class _CalendarPageState extends State<CalendarPage>
                             ),
                             const SizedBox(width: 8),
                             dateField(
-                              label: '종료일',
+                              label: context.l10n.calendarEndDate,
                               value: fmt(end),
                               onTap: () async {
                                 final pickedD = await _pickDate(ctx2, end);
@@ -1238,9 +1263,9 @@ class _CalendarPageState extends State<CalendarPage>
                           ],
                         ),
                         const SizedBox(height: 14),
-                        const Text(
-                          '색상',
-                          style: TextStyle(
+                        Text(
+                          context.l10n.calendarColor,
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Color(0xFF5F7D9B),
@@ -1277,7 +1302,7 @@ class _CalendarPageState extends State<CalendarPage>
                         TextField(
                           controller: memoC,
                           maxLines: 3,
-                          decoration: inputDeco('메모 입력'),
+                          decoration: inputDeco(context.l10n.calendarMemoHint),
                           style: const TextStyle(
                             fontSize: 14,
                             height: 1.4,
@@ -1320,9 +1345,9 @@ class _CalendarPageState extends State<CalendarPage>
 
                               Navigator.pop(ctx2, ev);
                             },
-                            child: const Text(
-                              '확인',
-                              style: TextStyle(
+                            child: Text(
+                              context.l10n.calendarConfirm,
+                              style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -2253,10 +2278,10 @@ class _CalendarPageState extends State<CalendarPage>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        const Center(
+                        Center(
                           child: Text(
-                            '전체 초기화',
-                            style: TextStyle(
+                            context.l10n.calendarResetAll,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF1F3A56),
@@ -2280,10 +2305,10 @@ class _CalendarPageState extends State<CalendarPage>
 
                   const SizedBox(height: 14),
 
-                  const Text(
-                    '모든 캘린더 데이터를 삭제하시겠습니까?',
+                  Text(
+                    context.l10n.calendarDeleteAllDataConfirm,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       height: 1.45,
                       color: Color(0xFF6F88A3),
@@ -2293,10 +2318,10 @@ class _CalendarPageState extends State<CalendarPage>
 
                   const SizedBox(height: 8),
 
-                  const Text(
-                    '일정 / 오늘 할 일 / 연재 / 반복 설정 / 집필 기록이 모두 삭제됩니다.',
+                  Text(
+                    context.l10n.calendarDeleteAllDataMessage,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.4,
                       color: Color(0xFF6F88A3),
@@ -2323,9 +2348,9 @@ class _CalendarPageState extends State<CalendarPage>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        '전체 삭제',
-                        style: TextStyle(
+                      child: Text(
+                        context.l10n.calendarDeleteAll,
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2431,10 +2456,10 @@ class _CalendarPageState extends State<CalendarPage>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        const Center(
+                        Center(
                           child: Text(
-                            '기록 초기화',
-                            style: TextStyle(
+                            context.l10n.calendarResetRecord,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF1F3A56),
@@ -2460,7 +2485,7 @@ class _CalendarPageState extends State<CalendarPage>
                   const SizedBox(height: 14),
 
                   Text(
-                    '${fmt(day)} 기록을 삭제하시겠습니까?',
+                    context.l10n.calendarDeleteDateRecordConfirm(fmt(day)),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 14,
@@ -2472,10 +2497,10 @@ class _CalendarPageState extends State<CalendarPage>
 
                   const SizedBox(height: 8),
 
-                  const Text(
-                    '오늘 할 일 / 연재 / 집필 기록이 모두 삭제됩니다.',
+                  Text(
+                    context.l10n.calendarDeleteDateRecordMessage,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.4,
                       color: Color(0xFF6F88A3),
@@ -2502,9 +2527,9 @@ class _CalendarPageState extends State<CalendarPage>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        '삭제',
-                        style: TextStyle(
+                      child: Text(
+                        context.l10n.delete,
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2661,7 +2686,9 @@ class _CalendarPageState extends State<CalendarPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          ev.title.isEmpty ? '제목 없음' : ev.title,
+                          ev.title.isEmpty
+                              ? context.l10n.calendarNoTitle
+                              : ev.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -2818,12 +2845,12 @@ class _CalendarPageState extends State<CalendarPage>
                   const SizedBox(height: 12),
 
                   if (dayEvents.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Text(
-                        '등록된 일정이 없습니다.',
+                        context.l10n.calendarNoEvents,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13.5,
                           height: 1.4,
                           color: Color(0xFF6F88A3),
@@ -2978,7 +3005,7 @@ class _CalendarPageState extends State<CalendarPage>
                       ),
 
                       _sectionTitle(
-                        '날짜 선택',
+                        context.l10n.calendarPickDate,
                         trailing: IconButton(
                           onPressed: _openAddRangeEventSheet,
                           icon: const Icon(Icons.add, color: Colors.black),
@@ -3042,7 +3069,7 @@ class _CalendarPageState extends State<CalendarPage>
                       ),
 
                       _sectionTitle(
-                        '오늘 할 일',
+                        context.l10n.calendarTodayTodo,
                         trailing: TextButton.icon(
                           onPressed: _addTaskInline,
                           style: TextButton.styleFrom(
@@ -3052,14 +3079,14 @@ class _CalendarPageState extends State<CalendarPage>
                             surfaceTintColor: Colors.transparent,
                           ),
                           icon: const Icon(Icons.add_task, size: 18),
-                          label: const Text('추가'),
+                          label: Text(context.l10n.calendarAdd),
                         ),
                       ),
                       _log.tasks.isEmpty
                           ? _card(
-                            child: const Text(
-                              '오늘 해야 할 작업을 추가해두면, 작업 흐름이 정리됩니다.',
-                              style: TextStyle(
+                            child: Text(
+                              context.l10n.calendarTodoHelper,
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: Color.fromARGB(221, 83, 129, 159),
                               ),
@@ -3139,7 +3166,7 @@ class _CalendarPageState extends State<CalendarPage>
                       const SizedBox(height: 25),
 
                       _sectionTitle(
-                        '연재 [ 업로드 ]',
+                        context.l10n.calendarReleaseUpload,
                         trailing: TextButton.icon(
                           onPressed: _addReleaseInline,
                           style: TextButton.styleFrom(
@@ -3149,14 +3176,14 @@ class _CalendarPageState extends State<CalendarPage>
                             surfaceTintColor: Colors.transparent,
                           ),
                           icon: const Icon(Icons.upload, size: 18),
-                          label: const Text('추가'),
+                          label: Text(context.l10n.calendarAdd),
                         ),
                       ),
                       _log.releases.isEmpty
                           ? _card(
-                            child: const Text(
-                              '업로드 계획/완료를 기록해두면, 연재 주기 관리에 도움이 됩니다.',
-                              style: TextStyle(
+                            child: Text(
+                              context.l10n.calendarReleaseHelper,
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: Color.fromARGB(221, 83, 129, 159),
                               ),
@@ -3239,7 +3266,9 @@ class _CalendarPageState extends State<CalendarPage>
 
                       const SizedBox(height: 25),
                       _sectionTitle(
-                        '월 통계 [ ${_formatYM(_monthCursor)} ]',
+                        context.l10n.calendarMonthlyStats(
+                          _formatYM(_monthCursor),
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -3330,9 +3359,9 @@ class _CalendarPageState extends State<CalendarPage>
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                         icon: const Icon(Icons.close),
-                        label: const Text(
-                          '이 날짜 기록 초기화',
-                          style: TextStyle(fontWeight: FontWeight.w500),
+                        label: Text(
+                          context.l10n.calendarResetThisDateRecord,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -3361,9 +3390,9 @@ class _CalendarPageState extends State<CalendarPage>
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                         icon: const Icon(Icons.delete_sweep_outlined),
-                        label: const Text(
-                          '전체 데이터 초기화',
-                          style: TextStyle(fontWeight: FontWeight.w500),
+                        label: Text(
+                          context.l10n.calendarResetAllData,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -3795,9 +3824,9 @@ class _TaskSwipeRowState extends State<TaskSwipeRow> {
                                   controller: widget.editController,
                                   focusNode: widget.editFocusNode,
                                   textInputAction: TextInputAction.done,
-                                  decoration: const InputDecoration(
-                                    hintText: '할 일을 입력하세요',
-                                    hintStyle: TextStyle(
+                                  decoration: InputDecoration(
+                                    hintText: context.l10n.calendarTaskHint,
+                                    hintStyle: const TextStyle(
                                       color: Color.fromARGB(255, 157, 177, 198),
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w500,
@@ -3996,11 +4025,13 @@ class _MonthlyCurvePainter extends CustomPainter {
   final List<int> values;
   final int maxValue;
   final int selectedIndex;
+  final String selectedLabel;
 
   _MonthlyCurvePainter({
     required this.values,
     required this.maxValue,
     required this.selectedIndex,
+    required this.selectedLabel,
   });
 
   @override
@@ -4131,7 +4162,7 @@ class _MonthlyCurvePainter extends CustomPainter {
 
       final textPainter = TextPainter(
         text: TextSpan(
-          text: values[selectedIndex] > 0 ? '${values[selectedIndex]}자' : '0자',
+          text: selectedLabel,
           style: const TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
@@ -5411,9 +5442,10 @@ class _ReleaseSwipeRowState extends State<ReleaseSwipeRow> {
                                   controller: widget.editController,
                                   focusNode: widget.editFocusNode,
                                   textInputAction: TextInputAction.done,
-                                  decoration: const InputDecoration(
-                                    hintText: '업로드 제목을 입력하세요',
-                                    hintStyle: TextStyle(
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        context.l10n.calendarUploadTitleHint,
+                                    hintStyle: const TextStyle(
                                       color: Color.fromARGB(255, 157, 177, 198),
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w500,
@@ -5478,7 +5510,9 @@ class _ReleaseSwipeRowState extends State<ReleaseSwipeRow> {
                                   : const Color.fromARGB(20, 117, 148, 188),
                         ),
                         child: Text(
-                          isDone ? '완료' : '계획',
+                          isDone
+                              ? context.l10n.calendarComplete
+                              : context.l10n.calendarPlan,
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,

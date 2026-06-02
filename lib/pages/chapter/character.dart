@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
 enum KeywordInputMode { hashtag, phrase }
 
 enum CharacterKind { protagonist, supporting }
@@ -42,6 +44,10 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
   required String title,
   required GlassTheme theme,
   required Color initial,
+  required String transparencyLabel,
+  required String clearLabel,
+  required String cancelLabel,
+  required String applyLabel,
   double wheelSize = 190,
   bool forBackground = false,
 }) async {
@@ -136,9 +142,9 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '투명도',
-                        style: TextStyle(
+                      Text(
+                        transparencyLabel,
+                        style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           color: textStrong,
                         ),
@@ -215,9 +221,9 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
             onPressed:
                 () => Navigator.pop(ctx, const _ColorSheetResult.clear()),
             icon: const Icon(Icons.block, size: 18),
-            label: const Text(
-              '해제',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            label: Text(
+              clearLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           const Spacer(),
@@ -228,9 +234,9 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
             ),
             onPressed:
                 () => Navigator.pop(ctx, const _ColorSheetResult.cancel()),
-            child: const Text(
-              '취소',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            child: Text(
+              cancelLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 8),
@@ -251,9 +257,9 @@ Future<_ColorSheetResult> _showPrettyWheelBottomSheet(
             ),
             onPressed:
                 () => Navigator.pop(ctx, _ColorSheetResult.apply(current)),
-            child: const Text(
-              '적용',
-              style: TextStyle(fontWeight: FontWeight.w800),
+            child: Text(
+              applyLabel,
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -342,11 +348,13 @@ double scaledCoverRadius(double w) {
 
 class _CoverThumb extends StatelessWidget {
   final String? coverPath;
+  final String addPhotoLabel;
   final VoidCallback onTap;
   final VoidCallback? onLongPressPreview;
 
   const _CoverThumb({
     required this.coverPath,
+    required this.addPhotoLabel,
     required this.onTap,
     this.onLongPressPreview,
   });
@@ -363,10 +371,10 @@ class _CoverThumb extends StatelessWidget {
         final cardH = cardW * _ratio2to3;
         final cardRadius = scaledCoverRadius(cardW);
 
-        const placeholder = Center(
+        final placeholder = Center(
           child: Text(
-            '+ 사진',
-            style: TextStyle(
+            addPhotoLabel,
+            style: const TextStyle(
               fontSize: 14,
               color: Color.fromARGB(255, 171, 193, 217),
               fontWeight: FontWeight.w500,
@@ -496,6 +504,7 @@ class _FrostedKeywordBox extends StatefulWidget {
   final String title;
   final String? helper;
   final String hintText;
+  final String emptyText;
   final KeywordInputMode mode;
 
   final List<String> initialKeywords;
@@ -505,7 +514,8 @@ class _FrostedKeywordBox extends StatefulWidget {
     required this.enableGlass,
     required this.title,
     this.helper,
-    this.hintText = '입력 후 Enter',
+    required this.hintText,
+    required this.emptyText,
     this.mode = KeywordInputMode.phrase,
     required this.initialKeywords,
     required this.onChanged,
@@ -725,9 +735,9 @@ class _FrostedKeywordBoxState extends State<_FrostedKeywordBox> {
               final isSingleLine = widget.mode == KeywordInputMode.phrase;
 
               if (_keywords.isEmpty) {
-                return const Text(
-                  '아직 등록된 항목이 없습니다.',
-                  style: TextStyle(
+                return Text(
+                  widget.emptyText,
+                  style: const TextStyle(
                     fontSize: 12,
                     color: Color.fromARGB(184, 132, 166, 191),
                   ),
@@ -837,17 +847,14 @@ Future<File?> resolveCharacterCoverFile(String? coverPath) async {
   final raw = coverPath?.trim();
   if (raw == null || raw.isEmpty) return null;
 
-  // 1) 절대경로 그대로 존재하면 사용
   final direct = File(raw);
   if (await direct.exists()) return direct;
 
   final appDir = await getApplicationDocumentsDirectory();
 
-  // 2) Documents 기준 상대경로면 사용
   final fromDocuments = File(p.join(appDir.path, raw));
   if (await fromDocuments.exists()) return fromDocuments;
 
-  // 3) 예전 절대경로가 깨졌을 때 파일명만으로 character_covers에서 복구
   final fromCharacterCovers = File(
     p.join(appDir.path, 'character_covers', p.basename(raw)),
   );
@@ -1023,18 +1030,23 @@ class _WorldPageState extends State<WorldPage> {
     if (!mounted) return;
 
     setState(() {
-      // ✅ 절대경로 말고 상대경로 저장
       _coverPath = relativePath;
       _character = _buildCharacterFromControllers();
     });
   }
 
   Future<void> _pickCharacterColor() async {
+    final l10n = AppLocalizations.of(context);
+
     final result = await _showPrettyWheelBottomSheet(
       context,
-      title: '캐릭터 색상',
+      title: l10n.characterColor,
       theme: const GlassTheme(borderOpacity: 0.28),
       initial: _charColor,
+      transparencyLabel: l10n.transparency,
+      clearLabel: l10n.clear,
+      cancelLabel: l10n.cancel,
+      applyLabel: l10n.apply,
       wheelSize: 190,
       forBackground: true,
     );
@@ -1058,6 +1070,8 @@ class _WorldPageState extends State<WorldPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Theme(
       data: Theme.of(context).copyWith(
         splashFactory: NoSplash.splashFactory,
@@ -1079,9 +1093,9 @@ class _WorldPageState extends State<WorldPage> {
       ),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'Character',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          title: Text(
+            l10n.character,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
           elevation: 0,
@@ -1106,9 +1120,8 @@ class _WorldPageState extends State<WorldPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _SectionTitle(title: '캐릭터'),
+                _SectionTitle(title: l10n.character),
                 const SizedBox(height: 8),
-
                 FrostedContainer(
                   enableGlass: true,
                   borderRadius: 10,
@@ -1128,12 +1141,13 @@ class _WorldPageState extends State<WorldPage> {
                           children: [
                             _CoverThumb(
                               coverPath: _coverPath,
+                              addPhotoLabel: l10n.addPhoto,
                               onTap: _pickCoverImage,
                               onLongPressPreview: () {},
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '탭 : 추가/변경',
+                              l10n.tapToAddOrChange,
                               style: Theme.of(
                                 context,
                               ).textTheme.bodySmall?.copyWith(
@@ -1149,37 +1163,37 @@ class _WorldPageState extends State<WorldPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _InlineLabeledField(
-                              label: 'Name',
+                              label: l10n.name,
                               controller: _nameCtrl,
-                              hint: '예) 무무',
+                              hint: l10n.exampleName,
                               onChanged: _syncState,
                             ),
                             const SizedBox(height: 10),
                             _InlineLabeledField(
-                              label: 'Birthday',
+                              label: l10n.birthday,
                               controller: _birthdayCtrl,
-                              hint: '예) 2005-01-01',
+                              hint: l10n.exampleBirthday,
                               onChanged: _syncState,
                             ),
                             const SizedBox(height: 10),
                             _InlineLabeledField(
-                              label: 'Height',
+                              label: l10n.height,
                               controller: _heightCtrl,
-                              hint: '예) 159cm',
+                              hint: l10n.exampleHeight,
                               onChanged: _syncState,
                             ),
                             const SizedBox(height: 10),
                             _InlineLabeledField(
-                              label: 'Blood type',
+                              label: l10n.bloodType,
                               controller: _bloodTypeCtrl,
-                              hint: '예) O+',
+                              hint: l10n.exampleBloodType,
                               onChanged: _syncState,
                             ),
                             const SizedBox(height: 10),
                             _MiniLabeledField(
-                              label: 'Profile',
+                              label: l10n.profile,
                               controller: _specialNoteCtrl,
-                              hint: '예) 낮에는 잠이 많음',
+                              hint: l10n.exampleProfile,
                               maxLines: null,
                               onChanged: _syncState,
                             ),
@@ -1189,10 +1203,8 @@ class _WorldPageState extends State<WorldPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                const _SectionTitle(title: 'color'),
+                _SectionTitle(title: l10n.color),
                 const SizedBox(height: 8),
                 FrostedContainer(
                   enableGlass: true,
@@ -1225,15 +1237,14 @@ class _WorldPageState extends State<WorldPage> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                const _SectionTitle(title: '성격'),
+                _SectionTitle(title: l10n.personality),
                 const SizedBox(height: 8),
                 _FrostedKeywordBox(
                   enableGlass: true,
-                  title: '성격 키워드',
-                  hintText: '키워드 입력 후 Enter',
+                  title: l10n.personalityKeywords,
+                  hintText: l10n.keywordEnterAfterInput,
+                  emptyText: l10n.noRegisteredItems,
                   mode: KeywordInputMode.hashtag,
                   initialKeywords:
                       _personalityCtrls
@@ -1250,10 +1261,8 @@ class _WorldPageState extends State<WorldPage> {
                     _syncState();
                   },
                 ),
-
                 const SizedBox(height: 20),
-
-                const _SectionTitle(title: '좋아/싫어'),
+                _SectionTitle(title: l10n.likesAndDislikes),
                 const SizedBox(height: 8),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1261,8 +1270,9 @@ class _WorldPageState extends State<WorldPage> {
                     Expanded(
                       child: _FrostedKeywordBox(
                         enableGlass: true,
-                        title: '좋아하는 것',
-                        hintText: '입력 후 Enter',
+                        title: l10n.likes,
+                        hintText: l10n.enterAfterInput,
+                        emptyText: l10n.noRegisteredItems,
                         initialKeywords:
                             _likeCtrls
                                 .map((c) => c.text.trim())
@@ -1285,8 +1295,9 @@ class _WorldPageState extends State<WorldPage> {
                     Expanded(
                       child: _FrostedKeywordBox(
                         enableGlass: true,
-                        title: '싫어하는 것',
-                        hintText: '입력 후 Enter',
+                        title: l10n.dislikes,
+                        hintText: l10n.enterAfterInput,
+                        emptyText: l10n.noRegisteredItems,
                         initialKeywords:
                             _dislikeCtrls
                                 .map((c) => c.text.trim())
@@ -1307,16 +1318,15 @@ class _WorldPageState extends State<WorldPage> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
-
-                const _SectionTitle(title: '신체 / 외형'),
+                _SectionTitle(title: l10n.bodyAppearance),
                 const SizedBox(height: 8),
                 _FrostedKeywordBox(
                   enableGlass: true,
-                  title: '신체 / 외형 메모',
-                  helper: '예) 인간형일 때 투명하게 빛나는 귀와 꼬리',
-                  hintText: '메모 입력 후 Enter',
+                  title: l10n.bodyAppearanceMemo,
+                  helper: l10n.exampleBodyAppearanceMemo,
+                  hintText: l10n.memoEnterAfterInput,
+                  emptyText: l10n.noRegisteredItems,
                   mode: KeywordInputMode.phrase,
                   initialKeywords:
                       _physicalNoteCtrls

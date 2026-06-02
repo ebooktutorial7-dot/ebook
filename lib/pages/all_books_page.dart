@@ -12,6 +12,7 @@ import 'package:ebook_tutorial_app/widgets/glass/glass_action_button.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/widgets/card_design.dart';
 import 'package:reorderable_grid_view/reorderable_grid_view.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 class AllBooksPage extends StatefulWidget {
   const AllBooksPage({
@@ -88,7 +89,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
     for (int i = 0; i < _ebooks.length; i++) {
       _ebooks[i]['bookOrder'] ??= i;
 
-      // 이동용 key가 안정적으로 유지되게 documentId도 미리 만들어 둠
       _ebooks[i]['documentId'] ??= _newDocumentId();
     }
   }
@@ -147,12 +147,15 @@ class _AllBooksPageState extends State<AllBooksPage> {
 
   void _deleteSelected() {
     if (_selectedIndices.isEmpty) return;
+
+    final l10n = AppLocalizations.of(context);
+
     showCupertinoModalPopup(
       context: context,
       builder:
           (_) => CupertinoActionSheet(
-            title: const Text('삭제 확인'),
-            message: const Text('선택된 책을 삭제하시겠습니까?'),
+            title: Text(l10n.deleteBooksConfirmTitle),
+            message: Text(l10n.deleteBooksConfirmMessage),
             actions: [
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
@@ -177,12 +180,12 @@ class _AllBooksPageState extends State<AllBooksPage> {
                   Navigator.pop(context);
                   _emitChange();
                 },
-                child: const Text('삭제'),
+                child: Text(l10n.delete),
               ),
             ],
             cancelButton: CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
+              child: Text(l10n.cancel),
             ),
           ),
     );
@@ -190,6 +193,8 @@ class _AllBooksPageState extends State<AllBooksPage> {
 
   void _showMoreDialog() {
     final theme = _glassTheme;
+    final l10n = AppLocalizations.of(context);
+
     showDialog(
       context: context,
       barrierColor: const Color(0xFF0F2238).withValues(alpha: 0.13),
@@ -214,9 +219,9 @@ class _AllBooksPageState extends State<AllBooksPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      '더보기',
-                      style: TextStyle(
+                    Text(
+                      l10n.more,
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
@@ -226,7 +231,7 @@ class _AllBooksPageState extends State<AllBooksPage> {
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.checklist_rtl,
-                      label: '책 선택',
+                      label: l10n.selectBooks,
                       onPressed: () {
                         Navigator.pop(context);
                         _enterSelectionMode();
@@ -236,7 +241,7 @@ class _AllBooksPageState extends State<AllBooksPage> {
                     TextButton(
                       onPressed: () => Navigator.pop(context),
                       child: Text(
-                        '닫기',
+                        l10n.close,
                         style: TextStyle(
                           fontSize: 16,
                           color: theme.accentColor,
@@ -252,6 +257,8 @@ class _AllBooksPageState extends State<AllBooksPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final l10n = AppLocalizations.of(context);
+
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -260,27 +267,29 @@ class _AllBooksPageState extends State<AllBooksPage> {
           _selectionMode
               ? IconButton(
                 icon: const Icon(Icons.close, color: Colors.black87),
-                tooltip: '선택 취소',
+                tooltip: l10n.cancelSelection,
                 onPressed: _exitSelectionMode,
               )
               : null,
       title: Text(
-        _selectionMode ? '${_selectedIndices.length}개 선택됨' : 'book list',
+        _selectionMode
+            ? l10n.selectedBooksCount(_selectedIndices.length)
+            : l10n.bookListTitle,
         style: const TextStyle(color: Colors.black),
       ),
       actions: [
         if (_selectionMode)
           TextButton(
             onPressed: _deleteSelected,
-            child: const Text(
-              'Delete',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
             ),
           )
         else
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black87),
-            tooltip: '더보기',
+            tooltip: l10n.more,
             onPressed: _showMoreDialog,
           ),
       ],
@@ -288,8 +297,10 @@ class _AllBooksPageState extends State<AllBooksPage> {
   }
 
   Widget _buildCardItem({required int index}) {
+    final l10n = AppLocalizations.of(context);
+
     final map = _ebooks[index];
-    final title = (map['title'] as String?) ?? '제목 없음';
+    final title = (map['title'] as String?) ?? l10n.untitledBook;
     final preview = _plainFromDelta(
       (map['delta'] as List?)?.cast<Map<String, dynamic>>() ?? const [],
       maxLen: 30,
@@ -341,7 +352,8 @@ class _AllBooksPageState extends State<AllBooksPage> {
                 builder:
                     (_) => BookBuilderPage(
                       genre: genre,
-                      initialTitle: (book['title'] as String?) ?? '제목을 입력하세요',
+                      initialTitle:
+                          (book['title'] as String?) ?? l10n.enterBookTitle,
                       initialDeltaJson:
                           (book['delta'] as List?)
                               ?.cast<Map<String, dynamic>>() ??
@@ -444,7 +456,6 @@ class _AllBooksPageState extends State<AllBooksPage> {
                 itemCount: _ebooks.length,
                 onReorder: _reorderBooks,
 
-                // 이동 디자인: 그림자 없음, 배경 없음, 살짝 확대
                 dragWidgetBuilderV2: DragWidgetBuilderV2(
                   isScreenshotDragWidget: false,
                   builder: (index, child, screenshot) {

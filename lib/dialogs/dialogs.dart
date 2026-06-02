@@ -1,6 +1,8 @@
 // dialogs/dialogs.dart
 
 import 'package:flutter/material.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
 import '../theme/glass_theme.dart';
 import '../widgets/glass/glass_container.dart';
 import '../widgets/glass/glass_action_button.dart';
@@ -11,15 +13,12 @@ ThemeData fixedLightTheme() {
   return ThemeData(
     brightness: Brightness.light,
     useMaterial3: true,
-
     scaffoldBackgroundColor: Colors.white,
-
     colorScheme: const ColorScheme.light(
       primary: Color(0xFF1F3A56),
       surface: Colors.white,
       onSurface: Color(0xFF111111),
     ),
-
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.white,
       foregroundColor: Color(0xFF111111),
@@ -27,7 +26,6 @@ ThemeData fixedLightTheme() {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
     ),
-
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: const Color(0xFF1F3A56),
@@ -35,7 +33,6 @@ ThemeData fixedLightTheme() {
         splashFactory: NoSplash.splashFactory,
       ),
     ),
-
     elevatedButtonTheme: const ElevatedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStatePropertyAll(
@@ -57,7 +54,16 @@ Future<void> showGenreDialog(
   required GlassTheme theme,
   required GenreTap onTap,
 }) {
-  const genres = ['웹 소설', '소설', '시', '자유 서식', '자기 계발', '과학 책'];
+  final l10n = AppLocalizations.of(context);
+
+  final genres = [
+    l10n.genreWebNovel,
+    l10n.genreNovel,
+    l10n.genrePoetry,
+    l10n.genreFreeForm,
+    l10n.genreSelfImprovement,
+    l10n.genreScienceBook,
+  ];
 
   return showDialog(
     context: context,
@@ -85,17 +91,16 @@ Future<void> showGenreDialog(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        '장르 선택',
+                      Text(
+                        l10n.genreSelect,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF111111),
                         ),
                       ),
                       const SizedBox(height: 14),
-
                       GridView.count(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -104,7 +109,7 @@ Future<void> showGenreDialog(
                         crossAxisSpacing: 8,
                         childAspectRatio: 2.6,
                         children:
-                            genres.map((g) {
+                            genres.map((genre) {
                               return ElevatedButton(
                                 style: ButtonStyle(
                                   backgroundColor: const WidgetStatePropertyAll(
@@ -140,10 +145,10 @@ Future<void> showGenreDialog(
                                 ),
                                 onPressed: () {
                                   Navigator.pop(context);
-                                  onTap(g);
+                                  onTap(genre);
                                 },
                                 child: Text(
-                                  g,
+                                  genre,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     fontSize: 14,
@@ -153,18 +158,16 @@ Future<void> showGenreDialog(
                               );
                             }).toList(),
                       ),
-
                       const SizedBox(height: 12),
-
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         style: TextButton.styleFrom(
                           overlayColor: Colors.transparent,
                           splashFactory: NoSplash.splashFactory,
                         ),
-                        child: const Text(
-                          '닫기',
-                          style: TextStyle(
+                        child: Text(
+                          l10n.close,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF1F3A56),
@@ -188,6 +191,8 @@ Future<void> showMoreDialog({
   required VoidCallback onSettings,
   required VoidCallback onLogout,
 }) {
+  final l10n = AppLocalizations.of(context);
+
   final buttonTheme = theme.copyWith(
     sweepOpacity: 0.0,
     highlightOpacity: 0.0,
@@ -218,9 +223,9 @@ Future<void> showMoreDialog({
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    '더보기',
-                    style: TextStyle(
+                  Text(
+                    l10n.more,
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: Colors.black87,
@@ -230,19 +235,17 @@ Future<void> showMoreDialog({
                   GlassActionButton(
                     theme: buttonTheme,
                     icon: Icons.settings_outlined,
-                    label: '설정',
+                    label: l10n.settings,
                     onPressed: () {
                       Navigator.pop(context);
                       onSettings();
                     },
                   ),
-
                   const SizedBox(height: 8),
-
                   GlassActionButton(
                     theme: buttonTheme,
                     icon: Icons.logout,
-                    label: '로그아웃',
+                    label: l10n.logout,
                     onPressed: () {
                       Navigator.pop(context);
                       onLogout();
@@ -256,7 +259,7 @@ Future<void> showMoreDialog({
                       overlayColor: WidgetStateProperty.all(Colors.transparent),
                     ),
                     child: Text(
-                      '닫기',
+                      l10n.close,
                       style: TextStyle(fontSize: 16, color: theme.accentColor),
                     ),
                   ),

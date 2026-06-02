@@ -11,9 +11,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ebook_tutorial_app/models/genre.dart';
 import 'package:ebook_tutorial_app/controllers/writing_settings_controller.dart';
 import 'package:ebook_tutorial_app/pages/book_builder_page.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+
+extension _EditEpisodesL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 class EditEpisodesPage extends StatefulWidget {
   const EditEpisodesPage({
@@ -70,6 +75,7 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
     for (final item in _items) {
       map.putIfAbsent(item.bookId, () => <GenreEpisodeItem>[]).add(item);
     }
+
     for (final entry in map.entries) {
       entry.value.sort((a, b) {
         final at = a.updatedAt?.millisecondsSinceEpoch ?? 0;
@@ -101,7 +107,9 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                   const Icon(Icons.auto_stories, color: iconColor, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    _groupByBook ? 'all' : 'selected',
+                    _groupByBook
+                        ? context.l10n.episodeToggleAll
+                        : context.l10n.episodeToggleSelected,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
@@ -186,7 +194,7 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                 ),
               ),
               subtitle: Text(
-                '${list.length}개 회차',
+                context.l10n.episodeCountLabel(list.length),
                 style: const TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w400,
@@ -226,6 +234,8 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
   }
 
   Future<List<GenreEpisodeItem>> _loadMergedChapters() async {
+    final untitledBook = context.l10n.untitledBook;
+
     final prefs = await SharedPreferences.getInstance();
     final appDir = await getApplicationDocumentsDirectory();
     final merged = <GenreEpisodeItem>[];
@@ -233,7 +243,8 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
     for (final b in widget.genreBooks) {
       final bookId = (b['documentId'] as String?) ?? '';
       if (bookId.isEmpty) continue;
-      final bookTitle = (b['title'] as String?) ?? '(제목 없음)';
+
+      final bookTitle = (b['title'] as String?) ?? untitledBook;
 
       final bookCoverRaw =
           (prefs.getString('book_cover_$bookId') ??
@@ -252,6 +263,7 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
       for (final e in decoded) {
         if (e is! Map) continue;
         final m = Map<String, dynamic>.from(e);
+
         final coverRaw =
             ((m['cover'] as String?) ??
                     (m['coverPath'] as String?) ??
@@ -318,6 +330,21 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
     return '${(bytes / mb).toStringAsFixed(1)}MB';
   }
 
+  String _formatInt(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+
+    for (int i = 0; i < s.length; i++) {
+      final idxFromEnd = s.length - i;
+      buf.write(s[i]);
+      if (idxFromEnd > 1 && idxFromEnd % 3 == 1) {
+        buf.write(',');
+      }
+    }
+
+    return buf.toString();
+  }
+
   String _formatYMD(DateTime? dt) {
     if (dt == null) return '—';
     final l = dt.toLocal();
@@ -360,11 +387,11 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                 File(path),
                 fit: BoxFit.cover,
                 errorBuilder:
-                    (_, __, ___) => const Center(
+                    (_, __, ___) => Center(
                       child: Text(
-                        '+ 표지 사진',
+                        context.l10n.coverPhotoAdd,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           height: 1.2,
@@ -373,11 +400,11 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                       ),
                     ),
               )
-              : const Center(
+              : Center(
                 child: Text(
-                  '+ 표지 사진',
+                  context.l10n.coverPhotoAdd,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                     height: 1.2,
@@ -391,8 +418,16 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
   Widget _episodeCard(GenreEpisodeItem item) {
     const subColor = Color.fromARGB(221, 83, 129, 159);
 
-    final metaText =
-        '${_formatBytes(item.sizeBytes)} · ${item.charCount ?? 0}자 · ${_formatYMD(item.updatedAt)}';
+    final displayTitle =
+        item.chapterTitle.trim().isEmpty
+            ? context.l10n.untitledBook
+            : item.chapterTitle;
+
+    final metaText = context.l10n.chapterMeta(
+      _formatBytes(item.sizeBytes),
+      _formatInt(item.charCount ?? 0),
+      _formatYMD(item.updatedAt),
+    );
 
     return Material(
       color: Colors.transparent,
@@ -432,7 +467,7 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                           ),
                         Expanded(
                           child: Text(
-                            item.chapterTitle,
+                            displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -492,7 +527,8 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
                   (_) => WritingSettingsController(documentId: docId)..load(),
               child: BookBuilderPage(
                 genre: widget.genre,
-                initialTitle: (book['title'] as String?) ?? '제목을 입력하세요',
+                initialTitle:
+                    (book['title'] as String?) ?? context.l10n.enterBookTitle,
                 initialDeltaJson:
                     ((book['delta'] as List?)?.cast<Map<String, dynamic>>()) ??
                     const [],
@@ -518,19 +554,19 @@ class _EditEpisodesPageState extends State<EditEpisodesPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('episodes'),
+        title: Text(context.l10n.episodesPageTitle),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new),
-          tooltip: '뒤로가기',
+          tooltip: context.l10n.back,
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body:
           _items.isEmpty
-              ? const Center(child: Text('저장된 회차가 없습니다.'))
+              ? Center(child: Text(context.l10n.emptySavedEpisodes))
               : Column(
                 children: [
                   _bookToggleBar(),

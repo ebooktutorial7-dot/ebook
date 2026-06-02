@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'calendar_page.dart';
@@ -30,6 +31,10 @@ import 'all_books_page.dart';
 import 'book_builder_page.dart';
 import 'edit_episodes_page.dart';
 import 'simple_memo_page.dart';
+
+extension _EbookListL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 class EbookListPage extends StatefulWidget {
   const EbookListPage({super.key});
@@ -147,7 +152,8 @@ class _EbookListPageState extends State<EbookListPage>
                       WritingSettingsController(documentId: p.bookId)..load(),
               child: BookBuilderPage(
                 genre: g,
-                initialTitle: (book['title'] as String?) ?? '제목을 입력하세요',
+                initialTitle:
+                    (book['title'] as String?) ?? context.l10n.enterBookTitle,
                 initialDeltaJson:
                     ((book['delta'] as List?)?.cast<Map<String, dynamic>>()) ??
                     const [],
@@ -187,7 +193,7 @@ class _EbookListPageState extends State<EbookListPage>
     await controller.persistEbooks();
 
     if (!mounted) return;
-    AppToast.show(context, '저장 완료');
+    AppToast.show(context, context.l10n.ebookSaveComplete);
     setState(() {});
   }
 
@@ -243,11 +249,11 @@ class _EbookListPageState extends State<EbookListPage>
                 File(path),
                 fit: BoxFit.cover,
                 errorBuilder:
-                    (_, __, ___) => const Center(
+                    (_, __, ___) => Center(
                       child: Text(
-                        '+ 표지 사진',
+                        context.l10n.coverPhotoAdd,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           height: 1.2,
@@ -256,11 +262,11 @@ class _EbookListPageState extends State<EbookListPage>
                       ),
                     ),
               )
-              : const Center(
+              : Center(
                 child: Text(
-                  '+ 표지 사진',
+                  context.l10n.coverPhotoAdd,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                     height: 1.2,
@@ -280,8 +286,11 @@ class _EbookListPageState extends State<EbookListPage>
 
         const subColor = Color.fromARGB(221, 83, 129, 159);
 
-        final metaText =
-            '${_formatBytes(p.sizeBytes)} · ${p.charCount ?? 0}자 · ${_formatYMD(p.updatedAt)}';
+        final metaText = context.l10n.chapterMeta(
+          _formatBytes(p.sizeBytes),
+          (p.charCount ?? 0).toString(),
+          _formatYMD(p.updatedAt),
+        );
 
         final titleLine = _episodeTitleLine(
           bookTitle: p.bookTitle,
@@ -315,9 +324,9 @@ class _EbookListPageState extends State<EbookListPage>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            '최신 회차',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.ebookLatestEpisode,
+                            style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w400,
                               color: Color.fromARGB(221, 109, 173, 215),
@@ -380,6 +389,7 @@ class _EbookListPageState extends State<EbookListPage>
   }
 
   Future<EpisodePreview?> _loadLatestEpisodePreview() async {
+    final l10n = context.l10n;
     final prefs = await SharedPreferences.getInstance();
     final books = _filteredEbooks();
 
@@ -423,7 +433,7 @@ class _EbookListPageState extends State<EbookListPage>
 
         final candidate = EpisodePreview(
           bookId: bookId,
-          bookTitle: (b['title'] as String?) ?? '(제목 없음)',
+          bookTitle: (b['title'] as String?) ?? l10n.untitledBook,
           chapterIndex: chapterIndex,
           chapterTitle: chapterTitle,
           updatedAt: updatedAt,
@@ -516,7 +526,7 @@ class _EbookListPageState extends State<EbookListPage>
   static const String _mainSquareIconPositionPrefsKey =
       'main_square_card_icon_position';
 
-  String _mainSquareTitle = '새 작품 만들기';
+  String _mainSquareTitle = '';
   String _mainSquareSubtitle = '';
   double _mainSquareTitleFontSize = 16;
   double _mainSquareSubtitleFontSize = 12;
@@ -1131,8 +1141,10 @@ class _EbookListPageState extends State<EbookListPage>
                   (_) => WritingSettingsController(documentId: docId)..load(),
               child: BookBuilderPage(
                 genre: genre,
-                initialTitle: '제목을 입력하세요',
-                initialDeltaJson: deltaFromPlain('작품 내용을 입력하세요'),
+                initialTitle: context.l10n.enterBookTitle,
+                initialDeltaJson: deltaFromPlain(
+                  context.l10n.ebookDefaultContent,
+                ),
                 initialDrawingJson: const <Map<String, dynamic>>[],
                 pageIndex: 0,
                 initialPenName: '',
@@ -1145,7 +1157,7 @@ class _EbookListPageState extends State<EbookListPage>
     if (!mounted || result == null) return;
 
     await controller.addFreeForm(
-      title: (result['title'] as String?) ?? '제목을 입력하세요',
+      title: (result['title'] as String?) ?? context.l10n.enterBookTitle,
       delta:
           (result['delta'] as List?)?.cast<Map<String, dynamic>>() ?? const [],
       drawings:
@@ -1163,7 +1175,7 @@ class _EbookListPageState extends State<EbookListPage>
     await controller.persistEbooks();
 
     if (!mounted) return;
-    AppToast.show(context, '저장 완료');
+    AppToast.show(context, context.l10n.ebookSaveComplete);
     setState(() {});
   }
 
@@ -1231,7 +1243,7 @@ class _EbookListPageState extends State<EbookListPage>
 
     await controller.persistEbooks();
     if (!mounted) return;
-    AppToast.show(context, '저장 완료');
+    AppToast.show(context, context.l10n.ebookSaveComplete);
     setState(() {});
   }
 
@@ -1243,11 +1255,11 @@ class _EbookListPageState extends State<EbookListPage>
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        title: const Text('Book'),
+        title: Text(context.l10n.bookListTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.black87),
-            tooltip: '장르 선택',
+            tooltip: context.l10n.genreSelect,
             onPressed:
                 () => showGenreDialog(
                   context,
@@ -1260,7 +1272,7 @@ class _EbookListPageState extends State<EbookListPage>
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black87),
-            tooltip: '더보기',
+            tooltip: context.l10n.more,
             onPressed:
                 () => showMoreDialog(
                   context: context,
@@ -1315,7 +1327,12 @@ class _EbookListPageState extends State<EbookListPage>
                               child: AddSquareCard(
                                 onTap: _handleCreateTap,
                                 onCustomizeTap: _openMainSquareCustomizeSheet,
-                                title: _mainSquareTitle,
+                                title:
+                                    _mainSquareTitle.trim().isEmpty
+                                        ? context
+                                            .l10n
+                                            .ebookMainSquareCreateTitle
+                                        : _mainSquareTitle,
                                 subtitle: _mainSquareSubtitle,
                                 icon: _mainSquareIcon.icon,
                                 showIcon: _mainSquareShowIcon,
@@ -1786,7 +1803,9 @@ class _EbookListPageState extends State<EbookListPage>
     _MainSquareCardSettings settings,
   ) async {
     final title =
-        settings.title.trim().isEmpty ? '새 작품 만들기' : settings.title.trim();
+        settings.title.trim().isEmpty
+            ? context.l10n.ebookMainSquareCreateTitle
+            : settings.title.trim();
     final subtitle = settings.subtitle.trim();
 
     final resolvedBackgroundImage = await _resolvePersistedMainSquareImagePath(
@@ -1900,7 +1919,7 @@ class _EbookListPageState extends State<EbookListPage>
       _mainSquareThreeDGlassMode = settings.threeDGlassMode;
     });
 
-    AppToast.show(context, '메인 카드 꾸미기 저장 완료');
+    AppToast.show(context, context.l10n.ebookMainCardCustomizeSaveComplete);
   }
 
   void _openMainSquareCustomizeSheet() {
@@ -1919,7 +1938,10 @@ class _EbookListPageState extends State<EbookListPage>
           borders: _mainSquareBorders,
           contentPositions: _mainSquareContentPositions,
           initialSettings: _MainSquareCardSettings(
-            title: _mainSquareTitle,
+            title:
+                _mainSquareTitle.trim().isEmpty
+                    ? context.l10n.ebookMainSquareCreateTitle
+                    : _mainSquareTitle,
             subtitle: _mainSquareSubtitle,
             titleFontSize: _mainSquareTitleFontSize,
             subtitleFontSize: _mainSquareSubtitleFontSize,
@@ -2127,7 +2149,7 @@ class _EbookListPageState extends State<EbookListPage>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '$releaseCount개',
+                            context.l10n.ebookCountValue(releaseCount),
                             style: const TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
@@ -2144,7 +2166,7 @@ class _EbookListPageState extends State<EbookListPage>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${data.todayEventCount}개',
+                            context.l10n.ebookCountValue(data.todayEventCount),
                             style: const TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
@@ -2165,8 +2187,13 @@ class _EbookListPageState extends State<EbookListPage>
                         totalTasks == 0 &&
                                 releaseCount == 0 &&
                                 data.todayEventCount == 0
-                            ? '오늘 등록된 기록이 없습니다.'
-                            : '오늘 할 일 $doneTasks/$totalTasks · 업로드 $releaseCount개 · 일정 ${data.todayEventCount}개',
+                            ? context.l10n.ebookTodayNoRecord
+                            : context.l10n.ebookTodaySummary(
+                              doneTasks,
+                              totalTasks,
+                              releaseCount,
+                              data.todayEventCount,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -2280,16 +2307,20 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
       backgroundColor: Colors.white,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: Colors.white,
-        middle: Text(widget.initialText == null ? 'New Memo' : 'Edit Memo'),
+        middle: Text(
+          widget.initialText == null
+              ? context.l10n.memoAdd
+              : context.l10n.memoEdit,
+        ),
         leading: const CupertinoNavigationBarBackButton(
           color: Color.fromARGB(255, 52, 96, 143),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _save,
-          child: const Text(
-            '저장',
-            style: TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
+          child: Text(
+            context.l10n.save,
+            style: const TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
           ),
         ),
         border: null,
@@ -2302,7 +2333,7 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
             child: CupertinoTextField(
               controller: _controller,
               focusNode: _focus,
-              placeholder: '메모를 입력하세요',
+              placeholder: context.l10n.memoHint,
               autofocus: false,
               scrollPadding: EdgeInsets.zero,
               maxLines: null,
@@ -2471,7 +2502,7 @@ class _MainSquareCardSettings {
 
   factory _MainSquareCardSettings.fromMap(Map<String, dynamic> map) {
     return _MainSquareCardSettings(
-      title: (map['title'] as String?) ?? '새 작품 만들기',
+      title: (map['title'] as String?) ?? '',
       subtitle: (map['subtitle'] as String?) ?? '',
       titleFontSize:
           ((map['titleFontSize'] as num?)?.toDouble() ?? 16)
@@ -2549,7 +2580,7 @@ class _MainSquareCardPreset {
       id:
           (map['id'] as String?) ??
           'preset_${DateTime.now().millisecondsSinceEpoch}',
-      name: (map['name'] as String?) ?? '프리셋',
+      name: (map['name'] as String?) ?? 'Preset',
       settings: _MainSquareCardSettings.fromMap(
         rawSettings is Map
             ? Map<String, dynamic>.from(rawSettings)
@@ -2743,6 +2774,100 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
   static const Color _blue = Color(0xFF77BCEB);
   static const Color _blueDark = Color(0xFF4E94C5);
   static const Color _danger = Color(0xFFE15F7A);
+
+  String _ratioLabel(_MainSquareCardRatioOption option) {
+    switch (option.id) {
+      case 'square':
+        return context.l10n.ebookRatioSquare;
+      case 'portrait':
+        return context.l10n.ebookRatioPortrait;
+      case 'tall':
+        return context.l10n.ebookRatioTall;
+      case 'landscape':
+        return context.l10n.ebookRatioLandscape;
+      case 'wide':
+        return context.l10n.ebookRatioWide;
+    }
+    return option.label;
+  }
+
+  String _styleLabel(_MainSquareStyleOption option) {
+    switch (option.id) {
+      case 'white':
+        return context.l10n.ebookStyleNone;
+      case 'sky':
+        return context.l10n.ebookStyleSky;
+      case 'pink':
+        return context.l10n.ebookStyleSoftPink;
+      case 'lavender':
+        return context.l10n.ebookStyleLightLavender;
+      case 'cream':
+        return context.l10n.ebookStyleVanillaCream;
+      case 'mint':
+        return context.l10n.ebookStyleClearMint;
+      case 'aurora_gradient':
+        return context.l10n.ebookStyleBrightAurora;
+    }
+    return option.label;
+  }
+
+  String _iconLabel(_MainSquareIconOption option) {
+    switch (option.id) {
+      case 'add':
+        return context.l10n.ebookOptionDefault;
+      case 'edit_note':
+        return context.l10n.ebookOptionWriting;
+      case 'auto_stories':
+        return context.l10n.ebookOptionBook;
+      case 'draw':
+        return context.l10n.ebookOptionDrawing;
+      case 'star':
+        return context.l10n.ebookOptionStar;
+      case 'favorite':
+        return context.l10n.ebookOptionHeart;
+    }
+    return option.label;
+  }
+
+  String _borderLabel(_MainSquareBorderOption option) {
+    switch (option.id) {
+      case 'thin':
+        return context.l10n.ebookBorderThin;
+      case 'thick':
+        return context.l10n.ebookBorderThick;
+      case 'none':
+        return context.l10n.ebookBorderNone;
+      case 'pastel':
+        return context.l10n.ebookBorderPastel;
+      case 'dashed':
+        return context.l10n.ebookBorderDashed;
+    }
+    return option.label;
+  }
+
+  String _contentPositionLabel(_MainSquareContentPositionOption option) {
+    switch (option.id) {
+      case 'topLeft':
+        return context.l10n.ebookPosTopLeft;
+      case 'topCenter':
+        return context.l10n.ebookPosTopCenter;
+      case 'topRight':
+        return context.l10n.ebookPosTopRight;
+      case 'centerLeft':
+        return context.l10n.ebookPosCenterLeft;
+      case 'center':
+        return context.l10n.ebookPosCenter;
+      case 'centerRight':
+        return context.l10n.ebookPosCenterRight;
+      case 'bottomLeft':
+        return context.l10n.ebookPosBottomLeft;
+      case 'bottomCenter':
+        return context.l10n.ebookPosBottomCenter;
+      case 'bottomRight':
+        return context.l10n.ebookPosBottomRight;
+    }
+    return option.label;
+  }
 
   _MainSquareStyleOption get _selectedStyle => widget.styles.firstWhere(
     (e) => e.id == _styleId,
@@ -2978,13 +3103,13 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Future<String?> _askPresetName({
     String? initialName,
-    String dialogTitle = '프리셋 이름',
+    String? dialogTitle,
   }) async {
     final baseName = initialName?.trim();
 
     var draftName =
         (baseName == null || baseName.isEmpty)
-            ? '프리셋 ${_savedPresets.length + 1}'
+            ? context.l10n.ebookPresetDefaultName(_savedPresets.length + 1)
             : baseName;
 
     final result = await showDialog<String>(
@@ -3000,7 +3125,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           buttonPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           title: Center(
             child: Text(
-              dialogTitle,
+              dialogTitle ?? context.l10n.ebookPresetName,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 17,
@@ -3015,7 +3140,10 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             autofocus: true,
             maxLength: 16,
             textAlign: TextAlign.center,
-            decoration: _inputDecoration(label: '이름', hint: '예: 사진 포스터'),
+            decoration: _inputDecoration(
+              label: context.l10n.name,
+              hint: context.l10n.ebookPresetNameHintExample,
+            ),
             onChanged: (value) => draftName = value,
             onFieldSubmitted: (value) {
               Navigator.of(dialogContext).pop(value.trim());
@@ -3024,13 +3152,13 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('취소'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(draftName.trim());
               },
-              child: const Text('저장'),
+              child: Text(context.l10n.save),
             ),
           ],
         );
@@ -3064,13 +3192,13 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     await _persistSavedPresets();
 
     if (!mounted) return;
-    AppToast.show(context, '프리셋 저장 완료');
+    AppToast.show(context, context.l10n.ebookPresetSaveComplete);
   }
 
   Future<void> _renamePreset(_MainSquareCardPreset preset) async {
     final name = await _askPresetName(
       initialName: preset.name,
-      dialogTitle: '프리셋 이름 교체',
+      dialogTitle: context.l10n.ebookPresetNameReplace,
     );
 
     if (!mounted || name == null) return;
@@ -3094,7 +3222,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     await _persistSavedPresets();
 
     if (!mounted) return;
-    AppToast.show(context, '프리셋 이름 교체 완료');
+    AppToast.show(context, context.l10n.ebookPresetRenameComplete);
   }
 
   Future<void> _deletePreset(String id) async {
@@ -3171,7 +3299,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   void _reset() {
     setState(() {
-      _titleController.text = '새 작품 만들기';
+      _titleController.text = context.l10n.ebookMainSquareCreateTitle;
       _subtitleController.text = '';
       _titleFontSize = 16;
       _subtitleFontSize = 12;
@@ -3216,7 +3344,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
       if (sourceFile == null || !await sourceFile.exists()) {
         if (!mounted) return;
-        AppToast.show(context, '원본 파일을 불러오지 못했습니다');
+        AppToast.show(context, context.l10n.ebookOriginalFileLoadFailed);
         return;
       }
 
@@ -3248,10 +3376,10 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
         _backgroundImageOffsetY = 0;
       });
     } catch (e) {
-      debugPrint('배경 이미지 선택 실패: $e');
+      debugPrint(context.l10n.ebookBackgroundImagePickFailed(e.toString()));
 
       if (!mounted) return;
-      AppToast.show(context, '사진을 불러오지 못했습니다');
+      AppToast.show(context, context.l10n.ebookPhotoLoadFailed);
     }
   }
 
@@ -3717,7 +3845,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '드래그 이동 · 두 손가락 확대 · 더블 탭 초기화',
+                                context.l10n.ebookBackgroundImageGestureHint,
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -3774,7 +3902,11 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                   ),
                 ),
               ),
-              _simpleButton(text: '초기화', icon: Icons.refresh, onTap: _reset),
+              _simpleButton(
+                text: context.l10n.ebookReset,
+                icon: Icons.refresh,
+                onTap: _reset,
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -3787,11 +3919,11 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Widget _effectSection() {
     return _section(
-      title: '효과',
+      title: context.l10n.ebookEffect,
       icon: Icons.blur_on_rounded,
       child: _switchRow(
-        title: '글라스 모드',
-        subtitle: '부드러운 유리감과 렌즈 반사를 적용합니다.',
+        title: context.l10n.ebookGlassMode,
+        subtitle: context.l10n.ebookGlassModeSubtitle,
         icon: Icons.water_drop_outlined,
         value: _threeDGlassMode,
         onChanged: (value) {
@@ -3809,22 +3941,22 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Widget _presetSection() {
     return _section(
-      title: '프리셋',
+      title: context.l10n.ebookPreset,
       icon: Icons.bookmark_border,
-      subtitle: '현재 조합을 저장해두고 나중에 다시 적용할 수 있습니다.',
+      subtitle: context.l10n.ebookPresetSectionSubtitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _simpleButton(
-            text: '현재 프리셋 저장',
+            text: context.l10n.ebookSaveCurrentPreset,
             icon: Icons.add_rounded,
             onTap: _saveCurrentAsPreset,
           ),
           const SizedBox(height: 10),
           if (_savedPresets.isEmpty)
-            const Text(
-              '저장된 프리셋이 없습니다.',
-              style: TextStyle(fontSize: 12, color: _muted),
+            Text(
+              context.l10n.ebookNoSavedPreset,
+              style: const TextStyle(fontSize: 12, color: _muted),
             )
           else
             Theme(
@@ -3861,7 +3993,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
     );
 
     return _section(
-      title: '문구',
+      title: context.l10n.ebookTextSection,
       icon: Icons.text_fields_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3871,7 +4003,10 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             maxLength: 23,
             style: fieldStyle,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDecoration(label: '큰 문구', hint: '새 작품 만들기'),
+            decoration: _inputDecoration(
+              label: context.l10n.ebookMainText,
+              hint: context.l10n.ebookMainSquareCreateTitle,
+            ),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -3879,11 +4014,14 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             maxLength: 40,
             style: fieldStyle,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDecoration(label: '작은 문구', hint: '선택 사항'),
+            decoration: _inputDecoration(
+              label: context.l10n.ebookSubText,
+              hint: context.l10n.ebookOptional,
+            ),
           ),
           const SizedBox(height: 22),
           _sliderRow(
-            title: '큰 문구',
+            title: context.l10n.ebookMainText,
             value: _titleFontSize,
             min: 10,
             max: 28,
@@ -3897,7 +4035,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           ),
           const SizedBox(height: 8),
           _sliderRow(
-            title: '작은 문구',
+            title: context.l10n.ebookSubText,
             value: _subtitleFontSize,
             min: 8,
             max: 22,
@@ -3911,7 +4049,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           ),
           const SizedBox(height: 14),
           _sliderRow(
-            title: '큰 문구 두께',
+            title: context.l10n.ebookMainTextWeight,
             value: _titleFontWeight,
             min: 100,
             max: 900,
@@ -3925,7 +4063,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
           ),
           const SizedBox(height: 8),
           _sliderRow(
-            title: '작은 문구 두께',
+            title: context.l10n.ebookSubTextWeight,
             value: _subtitleFontWeight,
             min: 100,
             max: 900,
@@ -3938,19 +4076,19 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             },
           ),
           const SizedBox(height: 22),
-          _miniLabel('텍스트 위치'),
+          _miniLabel(context.l10n.ebookTextPosition),
           _positionChoices(
             selectedId: _textPositionId,
             onChanged: (id) => setState(() => _textPositionId = id),
           ),
           const SizedBox(height: 22),
-          _miniLabel('문구 아이콘 색상'),
+          _miniLabel(context.l10n.ebookTextIconColor),
           _inlineTextIconColorWheel(),
           if (_hasBackgroundImage && _useLightContentOnImage) ...[
             const SizedBox(height: 14),
-            const Text(
-              '밝은 문구 모드가 켜져 있으면 사진 위에서는 흰색 문구가 우선 적용됩니다.',
-              style: TextStyle(
+            Text(
+              context.l10n.ebookLightTextModeNotice,
+              style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w400,
                 color: _subInk,
@@ -4030,7 +4168,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
         const SizedBox(height: 27),
 
         _sliderRow(
-          title: '투명도',
+          title: context.l10n.transparency,
           value: alpha,
           min: 0,
           max: 1,
@@ -4047,12 +4185,12 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Widget _cardStyleSection() {
     return _section(
-      title: '카드 스타일',
+      title: context.l10n.ebookCardStyle,
       icon: Icons.dashboard_customize_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _miniLabel('카드 비율'),
+          _miniLabel(context.l10n.ebookCardRatio),
           _wrap(
             widget.cardRatios.map((option) {
               final selected = _cardRatioId == option.id;
@@ -4071,13 +4209,13 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                     ),
                   ),
                 ),
-                label: Text('${option.label} ${option.description}'),
+                label: Text('${_ratioLabel(option)} ${option.description}'),
                 onTap: () => setState(() => _cardRatioId = option.id),
               );
             }).toList(),
           ),
           const SizedBox(height: 18),
-          _miniLabel('배경 스타일'),
+          _miniLabel(context.l10n.ebookBackgroundStyle),
           _wrap(
             widget.styles.map((style) {
               final selected = _styleId == style.id;
@@ -4095,13 +4233,13 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                     border: Border.all(color: style.borderColor),
                   ),
                 ),
-                label: Text(style.label),
+                label: Text(_styleLabel(style)),
                 onTap: () => setState(() => _styleId = style.id),
               );
             }).toList(),
           ),
           const SizedBox(height: 18),
-          _miniLabel('테두리 스타일'),
+          _miniLabel(context.l10n.ebookBorderStyle),
           _wrap(
             widget.borders.map((option) {
               final selected = _borderId == option.id;
@@ -4138,7 +4276,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                           )
                           : null,
                 ),
-                label: Text(option.label),
+                label: Text(_borderLabel(option)),
                 onTap: () => setState(() => _borderId = option.id),
               );
             }).toList(),
@@ -4191,7 +4329,9 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                 ),
               ),
               child: Text(
-                selected ? '${option.label} ✓' : option.label,
+                selected
+                    ? '${_contentPositionLabel(option)} ✓'
+                    : _contentPositionLabel(option),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -4211,9 +4351,9 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Widget _backgroundImageSection() {
     return _section(
-      title: '배경 이미지',
+      title: context.l10n.ebookBackgroundImage,
       icon: Icons.image_outlined,
-      subtitle: '사진을 넣으면 미리보기 카드에서 직접 위치와 확대를 조절할 수 있습니다.',
+      subtitle: context.l10n.ebookBackgroundImageSubtitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4222,20 +4362,20 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             runSpacing: 8,
             children: [
               _simpleButton(
-                text: '사진 선택',
+                text: context.l10n.ebookSelectPhoto,
                 icon: Icons.photo_library_outlined,
                 onTap: _pickBackgroundImage,
               ),
               if (_hasBackgroundImage)
                 _simpleButton(
-                  text: '이미지 삭제',
+                  text: context.l10n.ebookDeleteImage,
                   icon: Icons.delete_outline,
                   onTap: _clearBackgroundImage,
                   destructive: true,
                 ),
               if (_hasBackgroundImage)
                 _simpleButton(
-                  text: '위치 초기화',
+                  text: context.l10n.ebookResetPosition,
                   icon: Icons.center_focus_strong,
                   onTap: _resetBackgroundImagePosition,
                 ),
@@ -4263,7 +4403,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             ),
             const SizedBox(height: 27),
             _sliderRow(
-              title: '투명도',
+              title: context.l10n.transparency,
               value: _backgroundImageTransparency,
               min: 0,
               max: 1,
@@ -4278,8 +4418,8 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             ),
             const SizedBox(height: 10),
             _switchRow(
-              title: '어두운 사진용 흰 글자',
-              subtitle: '사진 배경 위에서 아이콘과 문구를 흰색으로 보여줍니다.',
+              title: context.l10n.ebookDarkPhotoWhiteText,
+              subtitle: context.l10n.ebookDarkPhotoWhiteTextSubtitle,
               icon: Icons.contrast,
               value: _useLightContentOnImage,
               onChanged: (value) {
@@ -4294,20 +4434,20 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
 
   Widget _iconSection() {
     return _section(
-      title: '아이콘',
+      title: context.l10n.ebookIcon,
       icon: Icons.add_circle_outline_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _switchRow(
-            title: '아이콘 보이기',
+            title: context.l10n.ebookShowIcon,
             icon: Icons.visibility_outlined,
             value: _showIcon,
             onChanged: (value) => setState(() => _showIcon = value),
           ),
           if (_showIcon) ...[
             const SizedBox(height: 16),
-            _miniLabel('아이콘 모양'),
+            _miniLabel(context.l10n.ebookIconShape),
             _wrap(
               widget.icons.map((option) {
                 final selected = _iconId == option.id;
@@ -4319,20 +4459,20 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                     size: 17,
                     color: selected ? _blueDark : _subInk,
                   ),
-                  label: Text(option.label),
+                  label: Text(_iconLabel(option)),
                   onTap: () => setState(() => _iconId = option.id),
                 );
               }).toList(),
             ),
             const SizedBox(height: 18),
-            _miniLabel('아이콘 위치'),
+            _miniLabel(context.l10n.ebookIconPosition),
             _positionChoices(
               selectedId: _iconPositionId,
               onChanged: (id) => setState(() => _iconPositionId = id),
             ),
             const SizedBox(height: 16),
             _sliderRow(
-              title: '크기',
+              title: context.l10n.ebookSize,
               value: _iconSize,
               min: 20,
               max: 72,
@@ -4346,7 +4486,7 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
             ),
             const SizedBox(height: 10),
             _sliderRow(
-              title: '얇기',
+              title: context.l10n.ebookThinness,
               value: _iconThinness,
               min: 0,
               max: 100,
@@ -4423,11 +4563,11 @@ class _MainSquareCustomizeSheetState extends State<_MainSquareCustomizeSheet> {
                             color: tooltipInk,
                           ),
                         )
-                        : const Text(
-                          '저장',
+                        : Text(
+                          context.l10n.save,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: tooltipInk,
                             fontSize: 13.5,
                             fontWeight: FontWeight.w400,

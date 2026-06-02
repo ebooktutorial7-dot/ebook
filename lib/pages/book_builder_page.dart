@@ -44,6 +44,11 @@ import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
 import 'package:ebook_tutorial_app/models/writing_settings.dart';
 import 'package:ebook_tutorial_app/widgets/card_design.dart'
     show MemoSquareCard;
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
+
+extension _L10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 enum ChapterSort { oldestFirst, newestFirst }
 
@@ -770,7 +775,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     final others = _chapters.where((c) => c.index != base.index).toList();
 
     if (others.isEmpty) {
-      AppToast.show(context, '같이 편집할 다른 회차가 없습니다');
+      AppToast.show(context, context.l10n.noOtherChapterToSplitEdit);
       return;
     }
 
@@ -779,7 +784,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       builder: (ctx) {
         return CupertinoActionSheet(
           title: Text(
-            '${base.title}와 같이 편집할 회차 선택',
+            context.l10n.splitSelectChapterTitle(base.title),
             style: const TextStyle(
               color: Color.fromARGB(255, 26, 64, 97),
               fontSize: 13,
@@ -801,9 +806,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               }).toList(),
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              '취소',
-              style: TextStyle(
+            child: Text(
+              context.l10n.cancel,
+              style: const TextStyle(
                 color: Color.fromARGB(255, 26, 64, 97),
                 fontWeight: FontWeight.w300,
               ),
@@ -857,7 +862,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     await _clearChapterEditorDraft(bottom.index);
 
     if (!mounted) return;
-    AppToast.show(context, '분할 편집 저장 완료');
+    AppToast.show(context, context.l10n.splitEditSaveComplete);
   }
 
   void _applySplitChapterResult(int chapterIndex, Map<String, dynamic> result) {
@@ -1117,6 +1122,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   Future<void> _exportPdfPagesAsZipWithCover() async {
     final ctx = context;
+    final l10n = ctx.l10n;
 
     _hideEpubSubmenu();
     _hidePdfSubmenu();
@@ -1136,12 +1142,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ];
 
     if (!ctx.mounted) return;
-    AppToast.show(ctx, 'PDF를 준비 중입니다');
+    AppToast.show(ctx, context.l10n.preparingPdf);
 
     try {
       final pdfBytes = await buildBookPdf(
         chapters: chapters,
         showChapterTitle: true,
+        chapterPerPage: true,
+        emptyContentText: context.l10n.pdfEmptyContent,
       );
 
       final pagesCount = await pdfPageCountFromBytes(pdfBytes);
@@ -1154,7 +1162,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
         context: ctx,
         currentPage: currentPage,
         pagesCount: pagesCount,
-        dialogTitle: 'ZIP 공유',
+        dialogTitle: l10n.zipShare,
         confirmLabel: 'ZIP',
         barrierColor: kDialogBarrierColor,
       );
@@ -1162,7 +1170,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       if (pick == null) return;
 
       if (!ctx.mounted) return;
-      AppToast.show(ctx, 'ZIP 파일을 만드는 중입니다');
+      AppToast.show(ctx, l10n.creatingZipFile);
 
       final pickedFiles = await createPickedPdfFilesForZip(
         title: title,
@@ -1173,7 +1181,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       if (!ctx.mounted) return;
 
       if (pickedFiles.isEmpty) {
-        AppToast.show(ctx, 'ZIP에 넣을 파일이 없습니다');
+        AppToast.show(ctx, l10n.zipNoFiles);
         return;
       }
 
@@ -1203,10 +1211,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       );
 
       if (!ctx.mounted) return;
-      AppToast.show(ctx, 'ZIP 공유 완료');
+      AppToast.show(ctx, l10n.zipShareComplete);
     } catch (e) {
       if (!ctx.mounted) return;
-      AppToast.show(ctx, 'ZIP 공유 실패: $e');
+      AppToast.show(ctx, l10n.zipShareFailed(e.toString()));
     }
   }
 
@@ -1621,9 +1629,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               fontWeight: FontWeight.w500,
             ),
           ),
-          message: const Text(
-            '이 회차 표지로 사용할 이미지를 선택하세요.',
-            style: TextStyle(
+          message: Text(
+            context.l10n.selectChapterCoverMessage,
+            style: const TextStyle(
               color: Color.fromARGB(221, 111, 131, 176),
               fontSize: 11,
             ),
@@ -1631,9 +1639,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           actions: [
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(ctx, ImageSource.camera),
-              child: const Text(
-                '카메라로 촬영',
-                style: TextStyle(
+              child: Text(
+                context.l10n.takePhoto,
+                style: const TextStyle(
                   color: Color.fromARGB(255, 26, 64, 97),
                   fontWeight: FontWeight.w400,
                 ),
@@ -1641,9 +1649,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ),
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
-              child: const Text(
-                '앨범에서 선택',
-                style: TextStyle(
+              child: Text(
+                context.l10n.chooseFromAlbum,
+                style: const TextStyle(
                   color: Color.fromARGB(255, 26, 64, 97),
                   fontWeight: FontWeight.w400,
                 ),
@@ -1653,10 +1661,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 onPressed: () => Navigator.pop(ctx, 'delete'),
-                child: const Text(
-                  '사진 삭제',
+                child: Text(
+                  context.l10n.deletePhoto,
 
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color.fromARGB(255, 26, 64, 97),
                     fontWeight: FontWeight.w300,
                   ),
@@ -1665,9 +1673,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           ],
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text(
-              '취소',
-              style: TextStyle(
+            child: Text(
+              context.l10n.cancel,
+              style: const TextStyle(
                 color: Color.fromARGB(255, 26, 64, 97),
                 fontSize: 15,
                 fontWeight: FontWeight.w300,
@@ -1689,7 +1697,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       });
       await _persistChapters();
       if (!mounted) return;
-      AppToast.show(context, '이 회차 표지가 삭제되었습니다');
+      AppToast.show(context, context.l10n.chapterCoverDeleted);
       return;
     }
 
@@ -1716,7 +1724,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     });
     await _persistChapters();
     if (!mounted) return;
-    AppToast.show(context, '회차 표지가 설정되었습니다');
+    AppToast.show(context, context.l10n.chapterCoverSet);
   }
 
   void _showCoverPreview() {
@@ -1724,7 +1732,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (path == null || path.isEmpty) return;
     final file = File(path);
     if (!file.existsSync()) {
-      AppToast.show(context, '표지 파일을 찾을 수 없습니다');
+      AppToast.show(context, context.l10n.coverFileNotFound);
       return;
     }
     showDialog(
@@ -1762,17 +1770,17 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       builder: (ctx) {
         final hasCover = _coverPath != null && _coverPath!.isNotEmpty;
         return CupertinoActionSheet(
-          title: const Text(
-            '표지 사진 선택',
-            style: TextStyle(
+          title: Text(
+            context.l10n.selectCoverPhoto,
+            style: const TextStyle(
               color: Color.fromARGB(255, 26, 64, 97),
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
           ),
-          message: const Text(
-            '책 표지로 사용할 이미지를 선택하세요.',
-            style: TextStyle(
+          message: Text(
+            context.l10n.selectBookCoverMessage,
+            style: const TextStyle(
               color: Color.fromARGB(221, 111, 131, 176),
               fontSize: 11,
             ),
@@ -1780,9 +1788,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           actions: [
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(ctx, ImageSource.camera),
-              child: const Text(
-                '카메라로 촬영',
-                style: TextStyle(
+              child: Text(
+                context.l10n.takePhoto,
+                style: const TextStyle(
                   color: Color.fromARGB(255, 26, 64, 97),
                   fontWeight: FontWeight.w400,
                 ),
@@ -1790,9 +1798,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
             ),
             CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
-              child: const Text(
-                '앨범에서 선택',
-                style: TextStyle(
+              child: Text(
+                context.l10n.chooseFromAlbum,
+                style: const TextStyle(
                   color: Color.fromARGB(255, 26, 64, 97),
                   fontWeight: FontWeight.w400,
                 ),
@@ -1802,9 +1810,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 onPressed: () => Navigator.pop(ctx, 'delete'),
-                child: const Text(
-                  '사진 삭제',
-                  style: TextStyle(
+                child: Text(
+                  context.l10n.deletePhoto,
+                  style: const TextStyle(
                     color: Color.fromARGB(255, 26, 64, 97),
                     fontWeight: FontWeight.w300,
                   ),
@@ -1813,9 +1821,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           ],
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text(
-              '취소',
-              style: TextStyle(
+            child: Text(
+              context.l10n.cancel,
+              style: const TextStyle(
                 color: Color.fromARGB(255, 26, 64, 97),
                 fontSize: 15,
                 fontWeight: FontWeight.w300,
@@ -1837,7 +1845,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       if (!mounted) return;
       await _persistCoverPath(null);
       if (!mounted) return;
-      AppToast.show(context, '표지 사진이 삭제되었습니다');
+      AppToast.show(context, context.l10n.coverPhotoDeleted);
       return;
     }
 
@@ -1866,7 +1874,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     if (!mounted) return;
     await _persistCoverPath(savedFile.path);
     if (!mounted) return;
-    AppToast.show(context, '표지 사진이 설정되었습니다');
+    AppToast.show(context, context.l10n.coverPhotoSet);
   }
 
   Future<void> _loadPersistedMeta() async {
@@ -2242,8 +2250,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   Future<void> _exportCurrentBookToFilesApp() async {
     _hideCloudSubmenu();
 
+    final l10n = context.l10n;
+
     if (!mounted) return;
-    AppToast.show(context, '백업 ZIP 파일을 준비 중입니다');
+    AppToast.show(context, l10n.preparingBackupZip);
 
     final box = context.findRenderObject() as RenderBox?;
     final sharePositionOrigin =
@@ -2258,16 +2268,16 @@ class _BookBuilderPageState extends State<BookBuilderPage>
           files: [
             XFile(zipFile.path, name: fileName, mimeType: 'application/zip'),
           ],
-          text: '책 백업 파일입니다.',
+          text: l10n.bookBackupDescription,
           sharePositionOrigin: sharePositionOrigin,
         ),
       );
 
       if (!mounted) return;
-      AppToast.show(context, '공유 화면에서 iCloud Drive 또는 파일 앱을 선택하세요');
+      AppToast.show(context, context.l10n.shareBackupInstruction);
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, '백업 파일 내보내기 실패: $e');
+      AppToast.show(context, context.l10n.backupExportFailed(e.toString()));
     }
   }
 
@@ -2275,7 +2285,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _hideCloudSubmenu();
 
     if (!mounted) return;
-    AppToast.show(context, '백업 ZIP 파일을 선택하세요');
+    AppToast.show(context, context.l10n.selectBackupZipFile);
 
     try {
       final result = await fp.FilePicker.pickFiles(
@@ -2295,7 +2305,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
       if (bytes == null) {
         if (!mounted) return;
-        AppToast.show(context, '백업 파일을 읽을 수 없습니다');
+        AppToast.show(context, context.l10n.backupFileReadFailed);
         return;
       }
 
@@ -2307,10 +2317,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       await _restoreBookFromBackupZipBytes(bytes);
 
       if (!mounted) return;
-      AppToast.show(context, '백업 불러오기 완료');
+      AppToast.show(context, context.l10n.backupRestoreComplete);
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, '백업 불러오기 실패: $e');
+      AppToast.show(context, context.l10n.backupRestoreFailed(e.toString()));
     }
   }
 
@@ -2492,7 +2502,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _hideCloudSubmenu();
 
     if (!mounted) return;
-    AppToast.show(context, 'Google Drive에 ZIP 백업 저장 중입니다');
+    AppToast.show(context, context.l10n.googleDriveSavingZipBackup);
 
     try {
       final zipFile = await _createBookBackupZipFile();
@@ -2505,10 +2515,10 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       if (!mounted) return;
 
       final savedName = result.name ?? p.basename(zipFile.path);
-      AppToast.show(context, 'Google Drive 저장 완료: $savedName');
+      AppToast.show(context, context.l10n.googleDriveSaveComplete(savedName));
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, 'Google Drive 저장 실패: $e');
+      AppToast.show(context, context.l10n.googleDriveSaveFailed(e.toString()));
     }
   }
 
@@ -2517,7 +2527,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   ) async {
     if (files.isEmpty) {
       if (!mounted) return null;
-      AppToast.show(context, 'Google Drive 백업 파일이 없습니다');
+      AppToast.show(context, context.l10n.googleDriveNoBackupFiles);
       return null;
     }
 
@@ -2525,8 +2535,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       context: context,
       builder: (ctx) {
         return CupertinoActionSheet(
-          title: const Text('Google Drive 불러오기'),
-          message: const Text('불러올 백업 파일을 선택하세요.'),
+          title: Text(context.l10n.googleDriveImport),
+          message: Text(context.l10n.selectBackupFileMessage),
           actions:
               files.map((file) {
                 final dateText =
@@ -2574,7 +2584,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
               }).toList(),
           cancelButton: CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('취소'),
+            child: Text(context.l10n.cancel),
           ),
         );
       },
@@ -2586,19 +2596,17 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       context: context,
       builder: (ctx) {
         return CupertinoAlertDialog(
-          title: const Text('백업 불러오기'),
-          content: const Text(
-            '현재 화면의 책 내용이 Google Drive 백업 내용으로 교체됩니다. 계속하시겠습니까?',
-          ),
+          title: Text(context.l10n.backupImport),
+          content: Text(context.l10n.googleDriveBackupReplaceConfirm),
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('취소'),
+              child: Text(context.l10n.cancel),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('불러오기'),
+              child: Text(context.l10n.restore),
             ),
           ],
         );
@@ -2663,6 +2671,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   }
 
   Future<void> _restoreBookFromBackupZipBytes(List<int> zipBytes) async {
+    final restoredChapterTitle = context.l10n.restoredChapter;
     final archive = ZipDecoder().decodeBytes(zipBytes);
 
     ArchiveFile? backupJsonFile;
@@ -2676,7 +2685,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     }
 
     if (backupJsonFile == null) {
-      throw Exception('book_backup.json을 찾을 수 없습니다');
+      throw Exception(context.l10n.bookBackupJsonNotFound);
     }
 
     final backupJsonBytes = List<int>.from(backupJsonFile.content as List);
@@ -2772,7 +2781,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
         restoredChapters.add(
           ChapterItem(
-            title: (m['title'] as String?) ?? '복원된 회차',
+            title: (m['title'] as String?) ?? restoredChapterTitle,
             index:
                 ((m['index'] as num?) ?? (restoredChapters.length + 1)).toInt(),
             coverPath: _restoreAssetPath(
@@ -2844,7 +2853,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     _hideCloudSubmenu();
 
     if (!mounted) return;
-    AppToast.show(context, 'Google Drive 백업 목록을 불러오는 중입니다');
+    AppToast.show(context, context.l10n.googleDriveBackupListLoading);
 
     try {
       final files = await _googleDriveBackupService.listBackupZipFiles();
@@ -2860,7 +2869,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       if (!ok) return;
 
       if (!mounted) return;
-      AppToast.show(context, 'Google Drive 백업을 다운로드 중입니다');
+      AppToast.show(context, context.l10n.googleDriveBackupDownloading);
 
       final bytes = await _googleDriveBackupService.downloadFileBytes(
         fileId: selected.id,
@@ -2869,10 +2878,13 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       await _restoreBookFromBackupZipBytes(bytes);
 
       if (!mounted) return;
-      AppToast.show(context, 'Google Drive 백업 불러오기 완료');
+      AppToast.show(context, context.l10n.googleDriveBackupRestoreComplete);
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, 'Google Drive 불러오기 실패: $e');
+      AppToast.show(
+        context,
+        context.l10n.googleDriveRestoreFailed(e.toString()),
+      );
     }
   }
 
@@ -2903,9 +2915,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
   void _addChapter() {
     final title =
-        (_titleCtrl.text.trim().isEmpty) ? '책 제목' : _titleCtrl.text.trim();
+        (_titleCtrl.text.trim().isEmpty)
+            ? context.l10n.defaultBookTitle
+            : _titleCtrl.text.trim();
     final next = _nextChapterIndex();
-    final label = '$title $next화';
+    final label = context.l10n.chapterAutoTitle(title, next);
     setState(() {
       _chapters.add(
         ChapterItem(title: label, index: next, delta: _emptyDelta()),
@@ -2985,7 +2999,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
     });
     _persistChapters();
     if (!mounted) return;
-    AppToast.show(context, '회차 저장 완료');
+    AppToast.show(context, context.l10n.chapterSaveComplete);
   }
 
   void _enterReorderMode() {
@@ -3020,8 +3034,12 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       context: context,
       builder:
           (_) => CupertinoActionSheet(
-            title: const Text('삭제 확인'),
-            message: Text('‘${_shortTitle(c.title, max: 24)}’ 회차를 삭제하시겠습니까?'),
+            title: Text(context.l10n.chapterDeleteConfirmTitle),
+            message: Text(
+              context.l10n.chapterDeleteConfirmMessage(
+                _shortTitle(c.title, max: 24),
+              ),
+            ),
             actions: [
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
@@ -3033,14 +3051,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                   Navigator.pop(context);
                   _refreshPreviewFromChapters();
                   _persistChapters();
-                  AppToast.show(context, '삭제되었습니다');
+                  AppToast.show(context, context.l10n.deletedComplete);
                 },
-                child: const Text('삭제'),
+                child: Text(context.l10n.delete),
               ),
             ],
             cancelButton: CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
+              child: Text(context.l10n.cancel),
             ),
           ),
     );
@@ -3054,9 +3072,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
   Future<ShareFormat?> showShareFormatOnlyDialog({
     required BuildContext context,
     Color barrierColor = const Color(0xFF0F2238),
-    String dialogTitle = '공유',
-    String confirmLabel = '공유',
+    String? dialogTitle,
+    String? confirmLabel,
   }) async {
+    dialogTitle ??= context.l10n.share;
+    confirmLabel ??= context.l10n.share;
     ShareFormat format = ShareFormat.pdf;
 
     final result = await showDialog<ShareFormat>(
@@ -3138,7 +3158,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          dialogTitle,
+                          dialogTitle!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 17,
@@ -3185,9 +3205,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                   overlayColor: Colors.transparent,
                                   splashFactory: NoSplash.splashFactory,
                                 ),
-                                child: const Text(
-                                  '닫기',
-                                  style: TextStyle(
+                                child: Text(
+                                  context.l10n.close,
+                                  style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF1F3A56),
@@ -3228,7 +3248,7 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                                 ),
                                 onPressed: confirm,
                                 child: Text(
-                                  confirmLabel,
+                                  confirmLabel!,
                                   style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w600,
@@ -3279,11 +3299,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
-                      '더보기',
+                    Text(
+                      context.l10n.more,
 
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
@@ -3293,18 +3313,18 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.swap_vert,
-                      label: '회차 이동',
+                      label: context.l10n.chapterReorder,
                       onPressed: () {
                         Navigator.pop(context);
                         _enterReorderMode();
-                        AppToast.show(context, '이동 모드입니다. 드래그하여 순서를 바꾸세요');
+                        AppToast.show(context, context.l10n.reorderModeMessage);
                       },
                     ),
                     const SizedBox(height: 8),
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.splitscreen,
-                      label: '분할 편집',
+                      label: context.l10n.splitEdit,
                       onPressed: () {
                         Navigator.pop(context);
                         _openSplitChapterPicker(c);
@@ -3314,7 +3334,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.ios_share,
-                      label: '‘${_shortTitle(c.title)}’ 공유',
+                      label: context.l10n.chapterShareLabel(
+                        _shortTitle(c.title),
+                      ),
                       onPressed: () async {
                         Navigator.pop(context);
                         final bytes = await buildBookPdf(
@@ -3326,8 +3348,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                         if (!mounted) return;
                         final format = await showShareFormatOnlyDialog(
                           context: context,
-                          dialogTitle: '공유',
-                          confirmLabel: '공유',
+                          dialogTitle: context.l10n.share,
+                          confirmLabel: context.l10n.share,
                         );
                         if (!mounted || format == null) return;
 
@@ -3356,7 +3378,9 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     GlassActionButton(
                       theme: theme,
                       icon: Icons.delete_outline,
-                      label: '‘${_shortTitle(c.title)}’ 삭제',
+                      label: context.l10n.chapterDeleteLabel(
+                        _shortTitle(c.title),
+                      ),
                       onPressed: () {
                         Navigator.pop(context);
                         _confirmDeleteChapter(c);
@@ -3365,9 +3389,12 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        '닫기',
-                        style: TextStyle(fontSize: 16, color: Colors.blue),
+                      child: Text(
+                        context.l10n.close,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.blue,
+                        ),
                       ),
                     ),
                   ],
@@ -3415,8 +3442,8 @@ class _BookBuilderPageState extends State<BookBuilderPage>
       context: context,
       builder:
           (_) => CupertinoActionSheet(
-            title: const Text('메모 삭제'),
-            message: const Text('이 메모를 삭제하시겠습니까?'),
+            title: Text(context.l10n.memoDeleteTitle),
+            message: Text(context.l10n.memoDeleteMessage),
             actions: [
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
@@ -3427,14 +3454,14 @@ class _BookBuilderPageState extends State<BookBuilderPage>
                   Navigator.pop(context);
                   await _persistMemos();
                   if (!mounted) return;
-                  AppToast.show(context, '메모가 삭제되었습니다');
+                  AppToast.show(context, context.l10n.memoDeletedComplete);
                 },
-                child: const Text('삭제'),
+                child: Text(context.l10n.delete),
               ),
             ],
             cancelButton: CupertinoActionSheetAction(
               onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
+              child: Text(context.l10n.cancel),
             ),
           ),
     );
@@ -3521,7 +3548,11 @@ class _BookBuilderPageState extends State<BookBuilderPage>
 
           paragraphs.add(
             _DocxParagraph(
-              runs: [_DocxRun(text: '[이미지: ${p.basename(imagePath)}]')],
+              runs: [
+                _DocxRun(
+                  text: context.l10n.docxImageAlt(p.basename(imagePath)),
+                ),
+              ],
             ),
           );
           continue;
@@ -4000,7 +4031,7 @@ $coverRel
 
     if (!mounted) return;
 
-    AppToast.show(context, 'MS Word 파일을 준비 중입니다');
+    AppToast.show(context, context.l10n.preparingWordFile);
 
     final box = context.findRenderObject() as RenderBox?;
     final sharePositionOrigin =
@@ -4031,10 +4062,10 @@ $coverRel
       );
 
       if (!mounted) return;
-      AppToast.show(context, 'MS Word 파일 공유를 열었습니다');
+      AppToast.show(context, context.l10n.wordShareOpened);
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, 'MS Word 파일 생성 실패: $e');
+      AppToast.show(context, context.l10n.wordCreateFailed(e.toString()));
     }
   }
 
@@ -4057,7 +4088,7 @@ $coverRel
 
         final imagePath = insert['image'];
         if (imagePath is String && imagePath.trim().isNotEmpty) {
-          buffer.writeln('[이미지: ${p.basename(imagePath)}]');
+          buffer.writeln(context.l10n.docxImageAlt(p.basename(imagePath)));
           continue;
         }
       }
@@ -4140,7 +4171,7 @@ $coverRel
 
     if (!mounted) return;
 
-    AppToast.show(context, 'TXT 파일을 준비 중입니다');
+    AppToast.show(context, context.l10n.preparingTxtFile);
 
     final box = context.findRenderObject() as RenderBox?;
     final sharePositionOrigin =
@@ -4164,10 +4195,10 @@ $coverRel
       );
 
       if (!mounted) return;
-      AppToast.show(context, 'TXT 파일 공유를 열었습니다');
+      AppToast.show(context, context.l10n.txtShareOpened);
     } catch (e) {
       if (!mounted) return;
-      AppToast.show(context, 'TXT 파일 생성 실패: $e');
+      AppToast.show(context, context.l10n.txtCreateFailed(e.toString()));
     }
   }
 
@@ -4254,11 +4285,11 @@ $coverRel
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Expanded(
+                              Expanded(
                                 child: Text(
-                                  '로컬 / 클라우드',
+                                  context.l10n.localCloud,
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 16.5,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.black87,
@@ -4279,7 +4310,7 @@ $coverRel
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.cloud_download_outlined,
-                            label: 'iCloud 불러오기',
+                            label: context.l10n.iCloudImport,
                             onTap: () {
                               unawaited(_importBookBackupFromFilesApp());
                             },
@@ -4295,7 +4326,7 @@ $coverRel
                           const SizedBox(height: 6),
                           _PdfPopupItem(
                             icon: Icons.cloud_download_outlined,
-                            label: 'Google Drive 불러오기',
+                            label: context.l10n.googleDriveImport,
                             onTap: () {
                               unawaited(_loadCurrentBookFromGoogleDrive());
                             },
@@ -4574,7 +4605,7 @@ $coverRel
                             const SizedBox(height: 10),
                             _PdfPopupItem(
                               icon: Icons.menu_book_outlined,
-                              label: '전체 회차',
+                              label: context.l10n.allChapters,
                               fontSize: 15.5,
                               onTap: () async {
                                 setState(() {
@@ -4594,7 +4625,7 @@ $coverRel
                                   MaterialPageRoute(
                                     builder:
                                         (_) => CustomPdfPreviewPage(
-                                          title: '전체 회차',
+                                          title: context.l10n.allChapters,
                                           pdfBytes: bytes,
                                           chapters: _chapters,
                                           reduceTransparency:
@@ -4607,7 +4638,7 @@ $coverRel
                             const SizedBox(height: 6),
                             _PdfPopupItem(
                               icon: Icons.checklist_outlined,
-                              label: '선택 회차',
+                              label: context.l10n.selectedChapters,
                               fontSize: 15.5,
                               onTap: () async {
                                 _hidePdfSubmenu();
@@ -4629,7 +4660,10 @@ $coverRel
                                             .toList(growable: false);
                                 if (targetChapters.isEmpty) {
                                   if (!mounted) return;
-                                  AppToast.show(context, '선택된 회차가 없습니다');
+                                  AppToast.show(
+                                    context,
+                                    context.l10n.noSelectedChapters,
+                                  );
                                   return;
                                 }
                                 try {
@@ -4645,7 +4679,8 @@ $coverRel
                                     MaterialPageRoute(
                                       builder:
                                           (_) => CustomPdfPreviewPage(
-                                            title: '선택 회차',
+                                            title:
+                                                context.l10n.selectedChapters,
                                             pdfBytes: bytes,
                                             chapters: allChapters,
                                             reduceTransparency:
@@ -4655,7 +4690,10 @@ $coverRel
                                   );
                                 } catch (e) {
                                   if (!mounted) return;
-                                  AppToast.show(context, 'PDF 생성 실패: $e');
+                                  AppToast.show(
+                                    context,
+                                    context.l10n.pdfCreateFailed(e.toString()),
+                                  );
                                 }
                               },
                             ),
@@ -4676,7 +4714,7 @@ $coverRel
 
   void _showPreviewChapterSelector() {
     if (_chapters.isEmpty) {
-      AppToast.show(context, '먼저 회차를 추가해 주세요');
+      AppToast.show(context, context.l10n.addChapterFirst);
       return;
     }
     final theme = _glassTheme;
@@ -4720,10 +4758,10 @@ $coverRel
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        '책 미리보기',
+                      Text(
+                        context.l10n.bookPreview,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 18.5,
                           fontWeight: FontWeight.w700,
                           color: Colors.black87,
@@ -4754,7 +4792,7 @@ $coverRel
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    '모든 회차',
+                                    context.l10n.allChaptersOption,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 14,
@@ -4789,7 +4827,7 @@ $coverRel
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    '선택 회차',
+                                    context.l10n.selectedChapters,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 14,
@@ -4849,9 +4887,9 @@ $coverRel
                           Expanded(
                             child: TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text(
-                                '닫기',
-                                style: TextStyle(
+                              child: Text(
+                                context.l10n.close,
+                                style: const TextStyle(
                                   color: Color(0xFF1F3A56),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
@@ -4881,7 +4919,7 @@ $coverRel
                                 ),
                               ),
                               onPressed: applyAndClose,
-                              child: const Text('적용'),
+                              child: Text(context.l10n.apply),
                             ),
                           ),
                         ],
@@ -4914,7 +4952,7 @@ $coverRel
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(
                   children: [
-                    const Text('테마', style: labelStyle),
+                    Text(context.l10n.theme, style: labelStyle),
                     const Spacer(),
                     Row(
                       children: [
@@ -4989,12 +5027,12 @@ $coverRel
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(
                   children: [
-                    const Text('폰트', style: labelStyle),
+                    Text(context.l10n.font, style: labelStyle),
                     const Spacer(),
                     Row(
                       children: [
                         _FontChip(
-                          label: '기본체',
+                          label: context.l10n.defaultFont,
                           selected: settings.fontFamily == 'system',
                           onTap: () {
                             context
@@ -5004,7 +5042,7 @@ $coverRel
                         ),
                         const SizedBox(width: 8),
                         _FontChip(
-                          label: '바탕체',
+                          label: context.l10n.batangFont,
                           selected: settings.fontFamily == 'batang',
                           onTap: () {
                             context
@@ -5014,7 +5052,7 @@ $coverRel
                         ),
                         const SizedBox(width: 8),
                         _FontChip(
-                          label: '고딕체',
+                          label: context.l10n.gothicFont,
                           selected: settings.fontFamily == 'Inter',
                           onTap: () {
                             context
@@ -5028,7 +5066,7 @@ $coverRel
                 ),
               ),
               _SettingsStepperRow(
-                label: '줄 간격',
+                label: context.l10n.lineSpacing,
                 valueText: settings.lineHeight.toStringAsFixed(1),
                 onMinus: () {
                   final newH = (settings.lineHeight - 0.5).clamp(1.0, 3.0);
@@ -5045,7 +5083,7 @@ $coverRel
               ),
               _settingsDivider(silver),
               _SettingsStepperRow(
-                label: '글 간격',
+                label: context.l10n.letterSpacing,
                 valueText: settings.letterSpacing.toStringAsFixed(1),
                 onMinus: () {
                   final newLs = (settings.letterSpacing - 0.1).clamp(0.0, 1.0);
@@ -5062,7 +5100,7 @@ $coverRel
               ),
               _settingsDivider(silver),
               _SettingsStepperRow(
-                label: '여백',
+                label: context.l10n.margin,
                 valueText: settings.horizontalMargin.round().toString(),
                 onMinus: () {
                   final newM = (settings.horizontalMargin - 5).clamp(0.0, 30.0);
@@ -5131,7 +5169,7 @@ $coverRel
             const Icon(Icons.push_pin, color: Colors.white, size: 24),
             const SizedBox(width: 8),
             Text(
-              c.pinned ? '고정 해제' : '회차 고정',
+              c.pinned ? context.l10n.unpinChapter : context.l10n.pinChapter,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -5150,7 +5188,10 @@ $coverRel
             _persistChapters();
           }
         });
-        AppToast.show(context, c.pinned ? '고정 해제됨' : '회차 고정됨');
+        AppToast.show(
+          context,
+          c.pinned ? context.l10n.unpinned : context.l10n.chapterPinned,
+        );
         return false;
       },
       child: InkWell(
@@ -5209,7 +5250,11 @@ $coverRel
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${_formatBytes(safeSize)} · ${NumberFormat.decimalPattern().format(safeChars)}자 · ${_formatYMD(safeUpdatedAt)}',
+                      context.l10n.chapterMeta(
+                        _formatBytes(safeSize),
+                        NumberFormat.decimalPattern().format(safeChars),
+                        _formatYMD(safeUpdatedAt),
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -5389,7 +5434,9 @@ $coverRel
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
                   child: Text(
-                    _reorderMode ? '회차 이동 중' : '전체 ${_chapters.length}회',
+                    _reorderMode
+                        ? context.l10n.chapterReordering
+                        : context.l10n.totalChapterCount(_chapters.length),
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -5438,18 +5485,18 @@ $coverRel
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child:
               _chapters.isEmpty
-                  ? const Column(
+                  ? Column(
                     children: [
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text(
-                        '우측 상단의 + 버튼을 눌러 회차를 추가하세요.',
-                        style: TextStyle(
+                        context.l10n.addChapterHint,
+                        style: const TextStyle(
                           color: Color.fromARGB(221, 83, 129, 159),
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                     ],
                   )
                   : _reorderMode
@@ -5512,9 +5559,9 @@ $coverRel
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  '책 메모',
-                  style: TextStyle(
+                Text(
+                  context.l10n.bookMemo,
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -5542,18 +5589,18 @@ $coverRel
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child:
               _memos.isEmpty
-                  ? const Column(
+                  ? Column(
                     children: [
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text(
-                        '+ 이 책과 관련된 메모를 추가해 보세요.',
+                        context.l10n.bookMemoEmptyHint,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Color.fromARGB(221, 83, 129, 159),
                           fontSize: 13,
                         ),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                     ],
                   )
                   : _buildMemoSections(),
@@ -5592,16 +5639,16 @@ $coverRel
                   crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
-                    Text('작품 소개', style: labelStyle),
+                    Text(context.l10n.workIntro, style: labelStyle),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _summaryCtrl,
                       maxLines: 50,
                       minLines: 1,
                       onChanged: (_) => _persistMeta(),
-                      decoration: const InputDecoration(
-                        hintText: '작품의 분위기, 줄거리, 세계관 등을 간단히 소개해 주세요.',
-                        hintStyle: TextStyle(
+                      decoration: InputDecoration(
+                        hintText: context.l10n.workIntroHint,
+                        hintStyle: const TextStyle(
                           color: Color.fromARGB(221, 83, 129, 159),
                           fontSize: 12,
                           height: 1.35,
@@ -5629,11 +5676,11 @@ $coverRel
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('키워드', style: labelStyle),
+                    Text(context.l10n.keywords, style: labelStyle),
                     const SizedBox(height: 4),
-                    const Text(
-                      '#로맨스 #성장물 #판타지 처럼 자유롭게 추가하세요.',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.keywordsHelper,
+                      style: const TextStyle(
                         fontSize: 12,
                         color: Color.fromARGB(221, 83, 129, 159),
                       ),
@@ -5677,9 +5724,9 @@ $coverRel
                             ),
                           ),
                         if (_keywords.isEmpty)
-                          const Text(
-                            '아직 등록된 키워드가 없습니다.',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.emptyKeywords,
+                            style: const TextStyle(
                               fontSize: 12,
                               color: Color.fromARGB(184, 132, 166, 191),
                             ),
@@ -5694,8 +5741,8 @@ $coverRel
                             controller: _keywordInputCtrl,
                             textInputAction: TextInputAction.done,
                             onSubmitted: _addKeyword,
-                            decoration: const InputDecoration(
-                              hintText: '키워드 입력 후 Enter',
+                            decoration: InputDecoration(
+                              hintText: context.l10n.keywordEnterAfterInput,
                               border: InputBorder.none,
                               isCollapsed: true,
                             ),
@@ -5735,26 +5782,26 @@ $coverRel
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('상세 정보', style: labelStyle),
+                    Text(context.l10n.detailInfo, style: labelStyle),
                     const SizedBox(height: 8),
                     _MetaTextFieldRow(
-                      label: '글 / 원작',
+                      label: context.l10n.authorOriginal,
                       controller: _workTypeCtrl,
-                      hintText: '글 / 원작 정보를 입력하세요.',
+                      hintText: context.l10n.authorOriginalHint,
                       onChanged: (_) => _persistMeta(),
                     ),
                     const SizedBox(height: 8),
                     _MetaTextFieldRow(
-                      label: '작품 분류',
+                      label: context.l10n.workCategory,
                       controller: _categoryCtrl,
-                      hintText: '작품 분류를 입력하세요.',
+                      hintText: context.l10n.workCategoryHint,
                       onChanged: (_) => _persistMeta(),
                     ),
                     const SizedBox(height: 8),
                     _MetaTextFieldRow(
-                      label: '연령 등급',
+                      label: context.l10n.ageRating,
                       controller: _ageRatingCtrl,
-                      hintText: '연령 등급을 입력하세요.',
+                      hintText: context.l10n.ageRatingHint,
                       onChanged: (_) => _persistMeta(),
                     ),
                   ],
@@ -5875,120 +5922,109 @@ $coverRel
               SizedBox(
                 width: cardW,
                 height: cardH,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: const Color.fromARGB(255, 138, 176, 201),
-                        width: 0.4,
-                      ),
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  foregroundDecoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color:
+                          isLightSky
+                              ? const Color.fromARGB(255, 118, 172, 213)
+                              : const Color.fromARGB(255, 138, 176, 201),
+                      width: isLightSky ? 0.1 : 0.4,
                     ),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child:
-                              (isSpace || isLightSky)
-                                  ? DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient:
-                                          isSpace
-                                              ? const LinearGradient(
-                                                begin: Alignment.topCenter,
-                                                end: Alignment.bottomCenter,
-                                                colors: [
-                                                  Color.fromARGB(
-                                                    255,
-                                                    6,
-                                                    10,
-                                                    38,
-                                                  ),
-                                                  Color.fromARGB(
-                                                    255,
-                                                    20,
-                                                    27,
-                                                    69,
-                                                  ),
-                                                  Color.fromARGB(
-                                                    246,
-                                                    33,
-                                                    23,
-                                                    38,
-                                                  ),
-                                                ],
-                                              )
-                                              : const LinearGradient(
-                                                begin: Alignment.topCenter,
-                                                end: Alignment.bottomCenter,
-                                                colors: [
-                                                  Color.fromARGB(
-                                                    255,
-                                                    241,
-                                                    249,
-                                                    255,
-                                                  ),
-                                                  Color.fromARGB(
-                                                    255,
-                                                    180,
-                                                    225,
-                                                    255,
-                                                  ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child:
+                            (isSpace || isLightSky)
+                                ? DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient:
+                                        isSpace
+                                            ? const LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color.fromARGB(255, 6, 10, 38),
+                                                Color.fromARGB(255, 20, 27, 69),
+                                                Color.fromARGB(246, 33, 23, 38),
+                                              ],
+                                            )
+                                            : const LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color.fromARGB(
+                                                  255,
+                                                  241,
+                                                  249,
+                                                  255,
+                                                ),
+                                                Color.fromARGB(
+                                                  255,
+                                                  180,
+                                                  225,
+                                                  255,
+                                                ),
 
-                                                  Color.fromARGB(
-                                                    255,
-                                                    241,
-                                                    249,
-                                                    255,
-                                                  ),
-                                                ],
-                                              ),
-                                    ),
-                                  )
-                                  : ColoredBox(color: pageBg),
-                        ),
-                        if (isSpace) ...[
-                          const Positioned.fill(
-                            child: _AnimatedStarField(starCount: 260),
-                          ),
-                          const Positioned.fill(
-                            child: IgnorePointer(child: _ShootingStarLayer()),
-                          ),
-                        ] else if (isLightSky) ...[
-                          const Positioned.fill(
-                            child: CustomPaint(painter: _SunRayPainter()),
-                          ),
-                        ],
-                        Positioned.fill(
-                          child: FutureBuilder<ui.Image?>(
-                            future: _renderImageForPage(index + 1),
-                            builder: (context, snap) {
-                              final img = snap.data;
-                              if (img == null) return const SizedBox.expand();
-
-                              return FittedBox(
-                                fit: BoxFit.contain,
-                                child: SizedBox(
-                                  width: img.width.toDouble(),
-                                  height: img.height.toDouble(),
-                                  child: RawImage(
-                                    image: img,
-                                    filterQuality: FilterQuality.high,
+                                                Color.fromARGB(
+                                                  255,
+                                                  241,
+                                                  249,
+                                                  255,
+                                                ),
+                                              ],
+                                            ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                )
+                                : ColoredBox(color: pageBg),
+                      ),
+                      if (isSpace) ...[
+                        const Positioned.fill(
+                          child: _AnimatedStarField(starCount: 260),
+                        ),
+                        const Positioned.fill(
+                          child: IgnorePointer(child: _ShootingStarLayer()),
+                        ),
+                      ] else if (isLightSky) ...[
+                        const Positioned.fill(
+                          child: CustomPaint(painter: _SunRayPainter()),
                         ),
                       ],
-                    ),
+                      Positioned.fill(
+                        child: FutureBuilder<ui.Image?>(
+                          future: _renderImageForPage(index + 1),
+                          builder: (context, snap) {
+                            final img = snap.data;
+                            if (img == null) return const SizedBox.expand();
+
+                            return FittedBox(
+                              fit: BoxFit.contain,
+                              child: SizedBox(
+                                width: img.width.toDouble(),
+                                height: img.height.toDouble(),
+                                child: RawImage(
+                                  image: img,
+                                  filterQuality: FilterQuality.high,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                '페이지 ${index + 1} / $_pageCount',
+                context.l10n.pageIndicator(index + 1, _pageCount),
                 style: const TextStyle(
                   fontSize: 14,
                   color: Color.fromARGB(255, 152, 171, 195),
@@ -6071,7 +6107,7 @@ $coverRel
                                   link: _cloudLink,
                                   child: _PdfPopupItem(
                                     icon: Icons.download_outlined,
-                                    label: '로컬 / 클라우드',
+                                    label: context.l10n.localCloud,
                                     onTap: _showCloudSubmenu,
                                   ),
                                 ),
@@ -6080,7 +6116,7 @@ $coverRel
                                   link: _epubLink,
                                   child: _PdfPopupItem(
                                     icon: Icons.auto_stories_outlined,
-                                    label: 'ePub 전자책용',
+                                    label: context.l10n.epubForEbook,
                                     onTap: _showEpubSubmenu,
                                   ),
                                 ),
@@ -6160,7 +6196,7 @@ $coverRel
                         children: [
                           Semantics(
                             button: true,
-                            label: '공유',
+                            label: context.l10n.share,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () {
@@ -6184,7 +6220,7 @@ $coverRel
 
                           Semantics(
                             button: true,
-                            label: '저장',
+                            label: context.l10n.save,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: _save,
@@ -6263,7 +6299,7 @@ $coverRel
                         textAlignVertical: TextAlignVertical.center,
                         onChanged: _persistTitle,
                         decoration: InputDecoration(
-                          hintText: '제목을 입력하세요',
+                          hintText: context.l10n.enterBookTitle,
                           border: InputBorder.none,
                           isCollapsed: true,
                           hintStyle: refinedHintStyle(hintColor),
@@ -6283,11 +6319,11 @@ $coverRel
                         textInputAction: TextInputAction.done,
                         maxLines: 1,
                         onChanged: _persistPenName,
-                        decoration: const InputDecoration(
-                          hintText: '필명 작성',
+                        decoration: InputDecoration(
+                          hintText: context.l10n.penNameHint,
                           border: InputBorder.none,
                           isCollapsed: true,
-                          hintStyle: TextStyle(
+                          hintStyle: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.2,
@@ -6334,12 +6370,12 @@ $coverRel
                 unselectedLabelStyle: const TextStyle(
                   fontWeight: FontWeight.w400,
                 ),
-                tabs: const [
-                  Tab(text: '책 미리보기'),
-                  Tab(text: '회차'),
-                  Tab(text: '메모'),
-                  Tab(text: '작품 정보'),
-                  Tab(text: '전체 설정'),
+                tabs: [
+                  Tab(text: context.l10n.bookPreview),
+                  Tab(text: context.l10n.chapters),
+                  Tab(text: context.l10n.memo),
+                  Tab(text: context.l10n.workInfo),
+                  Tab(text: context.l10n.allSettings),
                 ],
                 onTap: (i) {
                   _tabCtrl.animateTo(
@@ -6441,7 +6477,7 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
           elevation: 0,
           leading: Semantics(
             button: true,
-            label: '뒤로가기',
+            label: context.l10n.back,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _save,
@@ -6458,9 +6494,9 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
               ),
             ),
           ),
-          title: const Text(
-            '분할 편집',
-            style: TextStyle(
+          title: Text(
+            context.l10n.splitEdit,
+            style: const TextStyle(
               color: Colors.black87,
               fontSize: 17,
               fontWeight: FontWeight.w500,
@@ -6487,7 +6523,7 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   key: _topKey,
                   chapter: widget.topChapter,
                   enableGlass: widget.enableGlass,
-                  label: '위쪽',
+                  label: context.l10n.top,
                   onOpenWorldSeat: _openWorldSeat,
                   persistentKey: _chapterEditorStableKey(
                     widget.topChapter.index,
@@ -6500,7 +6536,7 @@ class _SplitChapterEditPageState extends State<SplitChapterEditPage> {
                   key: _bottomKey,
                   chapter: widget.bottomChapter,
                   enableGlass: widget.enableGlass,
-                  label: '아래쪽',
+                  label: context.l10n.bottom,
                   onOpenWorldSeat: _openWorldSeat,
                   persistentKey: _chapterEditorStableKey(
                     widget.bottomChapter.index,
@@ -7402,7 +7438,7 @@ class _KeywordInputLineState extends State<_KeywordInputLine> {
                   maxLines: 1,
                   textAlignVertical: TextAlignVertical.center,
                   decoration: InputDecoration(
-                    hintText: '키워드 입력',
+                    hintText: context.l10n.keywordInput,
                     hintStyle: const TextStyle(
                       color: Color.fromARGB(221, 90, 114, 141),
                       fontSize: 13,
@@ -7550,7 +7586,7 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
 
     if (exists) {
       _keywordCtrl.clear();
-      AppToast.show(context, '이미 등록된 키워드입니다.');
+      AppToast.show(context, context.l10n.keywordAlreadyExists);
       return;
     }
 
@@ -7695,10 +7731,10 @@ class _SplitChapterPaneState extends State<_SplitChapterPane> {
                 child: TextField(
                   controller: _titleCtrl,
                   maxLines: 1,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     isCollapsed: true,
-                    hintText: '회차 제목 입력',
+                    hintText: context.l10n.chapterTitleInput,
                   ),
                   style: const TextStyle(
                     fontSize: 15,
@@ -7824,10 +7860,10 @@ class _A4PortraitCoverCard extends StatelessWidget {
           }
         }
 
-        const placeholder = Center(
+        final placeholder = Center(
           child: Text(
-            '+ 표지 사진',
-            style: TextStyle(
+            context.l10n.coverPhotoAdd,
+            style: const TextStyle(
               fontSize: 15,
               color: Color.fromARGB(255, 171, 193, 217),
               fontWeight: FontWeight.w500,
@@ -7934,11 +7970,11 @@ class _MiniCoverCard extends StatelessWidget {
                     File(resolvedPath),
                     fit: BoxFit.cover,
                     errorBuilder:
-                        (_, __, ___) => const Center(
+                        (_, __, ___) => Center(
                           child: Text(
-                            '+ 표지 사진',
+                            context.l10n.coverPhotoAdd,
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                               height: 1.2,
@@ -7947,11 +7983,11 @@ class _MiniCoverCard extends StatelessWidget {
                           ),
                         ),
                   )
-                  : const Center(
+                  : Center(
                     child: Text(
-                      '+ 표지 사진',
+                      context.l10n.coverPhotoAdd,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         height: 1.2,
@@ -8031,7 +8067,10 @@ class _ChapterSortToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final oldestFirst = sortOrder == ChapterSort.oldestFirst;
-    final label = oldestFirst ? '첫화부터' : '마지막화부터';
+    final label =
+        oldestFirst
+            ? context.l10n.sortOldestFirst
+            : context.l10n.sortNewestFirst;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -8288,11 +8327,11 @@ class _MiniReadingPreview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 6, top: 3),
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 6, top: 3),
           child: Text(
-            '예시',
-            style: TextStyle(
+            context.l10n.example,
+            style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: Color.fromARGB(137, 43, 84, 124),
@@ -8361,7 +8400,7 @@ class _MiniReadingPreview extends StatelessWidget {
                           horizontal: settings.horizontalMargin / 2,
                           vertical: 0,
                         ),
-                        child: _buildPreviewText(colors.text),
+                        child: _buildPreviewText(context, colors.text),
                       ),
                     ],
                   )
@@ -8370,15 +8409,15 @@ class _MiniReadingPreview extends StatelessWidget {
                       horizontal: settings.horizontalMargin / 2,
                       vertical: 0,
                     ),
-                    child: _buildPreviewText(colors.text),
+                    child: _buildPreviewText(context, colors.text),
                   ),
         ),
       ],
     );
   }
 
-  Widget _buildPreviewText(Color textColor) {
-    const sample = 'Build Story\n예시 글 입니다\n설정을 바꿔보세요';
+  Widget _buildPreviewText(BuildContext context, Color textColor) {
+    final sample = context.l10n.settingsPreviewSample;
     final textStyle = TextStyle(
       fontSize: 15.0,
       height: settings.lineHeight,
@@ -8498,8 +8537,8 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
         backgroundColor: Colors.white,
         middle: Text(
           widget.initialText == null || widget.initialText!.isEmpty
-              ? '새 메모'
-              : '메모 편집',
+              ? context.l10n.memoAdd
+              : context.l10n.memoEdit,
         ),
         leading: const CupertinoNavigationBarBackButton(
           color: Color.fromARGB(255, 52, 96, 143),
@@ -8507,9 +8546,9 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _save,
-          child: const Text(
-            '저장',
-            style: TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
+          child: Text(
+            context.l10n.save,
+            style: const TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
           ),
         ),
         border: null,
@@ -8522,7 +8561,7 @@ class _InlineMemoEditorState extends State<_InlineMemoEditor> {
             child: CupertinoTextField(
               controller: _controller,
               focusNode: _focus,
-              placeholder: '메모를 입력하세요',
+              placeholder: context.l10n.memoHint,
               style: const TextStyle(color: Color.fromARGB(255, 52, 96, 143)),
               autofocus: false,
               scrollPadding: EdgeInsets.zero,

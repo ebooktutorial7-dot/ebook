@@ -26,8 +26,13 @@ import 'package:ebook_tutorial_app/pdf/book_pdf_builder.dart' show buildBookPdf;
 
 import 'package:ebook_tutorial_app/theme/glass_theme.dart';
 import 'package:ebook_tutorial_app/widgets/common/app_toast.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 import 'package:ebook_tutorial_app/widgets/pdf/pdf_chapter_picker_dialog.dart';
+
+extension _PdfPreviewL10nContextX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 const _loaderColor = ui.Color.fromARGB(255, 150, 194, 224);
 const _topIconColor = ui.Color.fromARGB(255, 71, 95, 121);
@@ -54,9 +59,13 @@ Future<SharePickResult?> showShareOptionsDialog({
   required int currentPage,
   required int pagesCount,
   Color barrierColor = const Color(0xFF0F2238),
-  String dialogTitle = '공유',
-  String confirmLabel = '공유',
+  String? dialogTitle,
+  String? confirmLabel,
 }) async {
+  final l10n = context.l10n;
+  final titleText = dialogTitle ?? l10n.share;
+  final confirmText = confirmLabel ?? l10n.share;
+
   ShareFormat format = ShareFormat.pdf;
   ShareRangeMode rangeMode = ShareRangeMode.all;
   int start = 1;
@@ -277,7 +286,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        dialogTitle,
+                        titleText,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 17,
@@ -318,7 +327,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                       segPill(
                         children: [
                           segItem(
-                            label: '지금',
+                            label: l10n.shareCurrentPage,
                             selected: rangeMode == ShareRangeMode.current,
                             onTap:
                                 () => setModalState(
@@ -326,7 +335,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                                 ),
                           ),
                           segItem(
-                            label: '전체',
+                            label: l10n.shareAllPages,
                             selected: rangeMode == ShareRangeMode.all,
                             onTap:
                                 () => setModalState(
@@ -334,7 +343,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                                 ),
                           ),
                           segItem(
-                            label: '직접',
+                            label: l10n.shareCustomRange,
                             selected: rangeMode == ShareRangeMode.range,
                             onTap:
                                 () => setModalState(() {
@@ -404,9 +413,9 @@ Future<SharePickResult?> showShareOptionsDialog({
                                 overlayColor: Colors.transparent,
                                 splashFactory: NoSplash.splashFactory,
                               ),
-                              child: const Text(
-                                '닫기',
-                                style: TextStyle(
+                              child: Text(
+                                l10n.close,
+                                style: const TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF1F3A56),
@@ -446,7 +455,7 @@ Future<SharePickResult?> showShareOptionsDialog({
                               ),
                               onPressed: canConfirm() ? confirm : null,
                               child: Text(
-                                confirmLabel,
+                                confirmText,
                                 style: const TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
@@ -824,6 +833,8 @@ Future<void> sharePdfBytesWithPick({
   required Uint8List pdfBytes,
   required SharePickResult pick,
   required void Function(String msg) toast,
+  String? emptyShareMessage,
+  String Function(Object error)? shareFailedMessageBuilder,
   Rect? sharePositionOrigin,
 }) async {
   PdfDocument? doc;
@@ -869,7 +880,7 @@ Future<void> sharePdfBytesWithPick({
       );
 
       if (outBytes.isEmpty) {
-        toast('공유할 파일이 없습니다');
+        toast(emptyShareMessage ?? 'No files to share.');
         return;
       }
 
@@ -923,7 +934,7 @@ Future<void> sharePdfBytesWithPick({
         .toList(growable: false);
 
     if (xfiles.isEmpty) {
-      toast('공유할 파일이 없습니다');
+      toast(emptyShareMessage ?? 'No files to share.');
       return;
     }
 
@@ -939,7 +950,7 @@ Future<void> sharePdfBytesWithPick({
       } catch (_) {}
     }
   } catch (e) {
-    toast('공유 실패: $e');
+    toast(shareFailedMessageBuilder?.call(e) ?? 'Sharing failed: $e');
   } finally {
     try {
       doc?.dispose();
@@ -1440,16 +1451,16 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
   String _shareDoneToast(ShareFormat f) {
     switch (f) {
       case ShareFormat.pdf:
-        return 'PDF 공유 완료';
+        return context.l10n.pdfShareComplete;
       case ShareFormat.png:
-        return 'PNG 공유 완료';
+        return context.l10n.pngShareComplete;
       case ShareFormat.jpg:
-        return 'JPG 공유 완료';
+        return context.l10n.jpgShareComplete;
     }
   }
 
-  String get _shareEmptyToast => '공유할 파일이 없습니다';
-  String get _shareFailToast => '공유 실패';
+  String get _shareEmptyToast => context.l10n.shareNoFiles;
+  String get _shareFailToast => context.l10n.shareFailed;
 
   @override
   void initState() {
@@ -1584,7 +1595,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       _enqueuePageImagePrefetchNear(1, [1, 2, 3]);
     } catch (e) {
       if (!mounted || mySession != _pdfSession) return;
-      _toast('PDF 열기 실패: $e');
+      _toast(context.l10n.pdfOpenFailed(e.toString()));
     } finally {
       _decLoading();
     }
@@ -1817,7 +1828,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
 
   Future<void> _rebuildPreviewPdf(List<ChapterItem> chapters) async {
     if (chapters.isEmpty) {
-      _toast('선택된 회차가 없습니다');
+      _toast(context.l10n.noSelectedChapters);
       return;
     }
 
@@ -1839,7 +1850,7 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       setState(() => _page = 1);
     } catch (e) {
       if (!mounted) return;
-      _toast('PDF 생성 실패: $e');
+      _toast(context.l10n.pdfCreateFailed(e.toString()));
     } finally {
       _decLoading();
     }
@@ -2152,10 +2163,10 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
     try {
       final file = await _writePdfToDocuments(fileNameBase: widget.title);
       if (!mounted) return;
-      _toast('앱에 저장 완료: ${p.basename(file.path)}');
+      _toast(context.l10n.pdfSavedToApp(p.basename(file.path)));
     } catch (e) {
       if (!mounted) return;
-      _toast('저장 실패: $e');
+      _toast(context.l10n.saveFailedWithReason(e.toString()));
     } finally {
       _decLoading();
     }
@@ -2168,8 +2179,8 @@ class _CustomPdfPreviewPageState extends State<CustomPdfPreviewPage> {
       context: context,
       currentPage: _page,
       pagesCount: _pagesCount,
-      dialogTitle: '공유',
-      confirmLabel: '공유',
+      dialogTitle: context.l10n.share,
+      confirmLabel: context.l10n.share,
     );
     if (pick == null) return;
     if (!mounted) return;

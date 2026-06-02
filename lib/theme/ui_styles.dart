@@ -1,5 +1,7 @@
 // lib/theme/ui_styles.dart
+
 import 'package:flutter/material.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 
 class UIStyles {
   // Colors
@@ -56,7 +58,7 @@ class UIStyles {
       backgroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
-        tooltip: '뒤로',
+        tooltip: AppLocalizations.of(context).back,
         icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
         onPressed: onBack ?? () => Navigator.maybePop(context),
       ),

@@ -17,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:isar/isar.dart';
+import 'package:ebook_tutorial_app/l10n/generated/app_localizations.dart';
 import 'world_seat_isar.dart';
 
 Future<File?> resolveCharacterCoverFile(String? coverPath) async {
@@ -43,6 +44,8 @@ Future<bool> showDeleteSheet({
   required BuildContext context,
   required String title,
   required String message,
+  required String deleteLabel,
+  required String cancelLabel,
 }) async {
   final res = await showCupertinoModalPopup<bool>(
     context: context,
@@ -63,13 +66,13 @@ Future<bool> showDeleteSheet({
           CupertinoActionSheetAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제', style: TextStyle(fontSize: 16)),
+            child: Text(deleteLabel, style: const TextStyle(fontSize: 16)),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           isDefaultAction: true,
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('취소', style: TextStyle(fontSize: 16)),
+          child: Text(cancelLabel, style: const TextStyle(fontSize: 16)),
         ),
       );
     },
@@ -84,14 +87,19 @@ class TimelineSeatTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return TimelineTab(
       documentId: documentId,
       confirmDelete: (ctx, sectionIndex, barName) async {
-        final name = barName.trim().isEmpty ? 'Unnamed' : barName.trim();
+        final name = barName.trim().isEmpty ? l10n.unnamed : barName.trim();
+
         return await showDeleteSheet(
           context: ctx,
-          title: '$name 삭제',
-          message: '이 타임라인($name)을 삭제하시겠습니까?',
+          title: l10n.timelineDeleteTitle(name),
+          message: l10n.timelineDeleteMessage(name),
+          deleteLabel: l10n.delete,
+          cancelLabel: l10n.cancel,
         );
       },
     );
@@ -104,13 +112,7 @@ class WorldSeatPage extends StatefulWidget {
 
   const WorldSeatPage({super.key, required this.documentId, this.onPicked});
 
-  static const _tabs = [
-    Tab(text: 'Character'),
-    Tab(text: 'Glossary'),
-    Tab(text: 'Free memo'),
-    Tab(text: 'Faction'),
-    Tab(text: 'Timeline'),
-  ];
+  static const int _tabLength = 5;
 
   @override
   State<WorldSeatPage> createState() => _WorldSeatPageState();
@@ -132,13 +134,13 @@ class _WorldSeatPageState extends State<WorldSeatPage>
   Future<void> _initTabController() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getInt(_prefsKeyTabIndex) ?? 0;
-    final initial = saved.clamp(0, WorldSeatPage._tabs.length - 1);
+    final initial = saved.clamp(0, WorldSeatPage._tabLength - 1);
 
     if (!mounted) return;
 
     _tabController?.dispose();
     _tabController = TabController(
-      length: WorldSeatPage._tabs.length,
+      length: WorldSeatPage._tabLength,
       vsync: this,
       initialIndex: initial,
     )..addListener(() async {
@@ -160,6 +162,7 @@ class _WorldSeatPageState extends State<WorldSeatPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final controller = _tabController;
     final nav = Navigator.of(context);
 
@@ -184,9 +187,9 @@ class _WorldSeatPageState extends State<WorldSeatPage>
         appBar: AppBar(
           automaticallyImplyLeading: false,
           leadingWidth: 0,
-          title: const Text(
-            'World Seat',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          title: Text(
+            l10n.worldSeat,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
           actions: [
@@ -236,7 +239,13 @@ class _WorldSeatPageState extends State<WorldSeatPage>
                       193,
                       216,
                     ),
-                    tabs: WorldSeatPage._tabs,
+                    tabs: [
+                      Tab(text: l10n.character),
+                      Tab(text: l10n.glossary),
+                      Tab(text: l10n.freeMemo),
+                      Tab(text: l10n.faction),
+                      Tab(text: l10n.timeline),
+                    ],
                   ),
                 ),
               ),
@@ -449,10 +458,14 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
   void _confirmDelete(int index) async {
     if (index < 0 || index >= _items.length) return;
 
+    final l10n = AppLocalizations.of(context);
+
     final ok = await showDeleteSheet(
       context: context,
-      title: '용어 삭제',
-      message: '이 용어를 삭제하시겠습니까?',
+      title: l10n.glossaryDeleteTitle,
+      message: l10n.glossaryDeleteMessage,
+      deleteLabel: l10n.delete,
+      cancelLabel: l10n.cancel,
     );
     if (!ok) return;
 
@@ -479,6 +492,7 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
   Widget build(BuildContext context) {
     super.build(context);
 
+    final l10n = AppLocalizations.of(context);
     final q = _query.trim().toLowerCase();
     final visibleItems =
         q.isEmpty
@@ -519,7 +533,7 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
                             autofocus: true,
                             onChanged: (v) => setState(() => _query = v),
                             decoration: InputDecoration(
-                              hintText: '검색',
+                              hintText: l10n.search,
                               hintStyle: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
@@ -543,9 +557,9 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
                                       ),
                             ),
                           )
-                          : const Text(
-                            'Glossary',
-                            style: TextStyle(
+                          : Text(
+                            l10n.glossary,
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Colors.black87,
@@ -567,10 +581,10 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
             Expanded(
               child:
                   _items.isEmpty
-                      ? const Center(
+                      ? Center(
                         child: Text(
-                          '용어를 추가해 보세요.',
-                          style: TextStyle(
+                          l10n.glossaryEmpty,
+                          style: const TextStyle(
                             color: Color.fromARGB(221, 83, 129, 159),
                             fontSize: 13,
                           ),
@@ -608,7 +622,7 @@ class _GlossarySeatTabState extends State<GlossarySeatTab>
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    it.pinned ? '핀 해제' : '핀 추가',
+                                    it.pinned ? l10n.pinRemove : l10n.pinAdd,
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
@@ -741,6 +755,7 @@ class _GlossaryEditorPageState extends State<_GlossaryEditorPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isNew = widget.initial == null;
 
     return Theme(
@@ -759,7 +774,7 @@ class _GlossaryEditorPageState extends State<_GlossaryEditorPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            isNew ? '용어 추가' : '용어 편집',
+            isNew ? l10n.glossaryAdd : l10n.glossaryEdit,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
@@ -781,9 +796,9 @@ class _GlossaryEditorPageState extends State<_GlossaryEditorPage> {
               children: [
                 TextField(
                   controller: _termCtrl,
-                  decoration: const InputDecoration(
-                    hintText: '단어',
-                    hintStyle: TextStyle(
+                  decoration: InputDecoration(
+                    hintText: l10n.term,
+                    hintStyle: const TextStyle(
                       color: Color.fromARGB(255, 200, 227, 255),
                       fontSize: 15,
                     ),
@@ -800,9 +815,9 @@ class _GlossaryEditorPageState extends State<_GlossaryEditorPage> {
                       expands: true,
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: '설명',
-                        hintStyle: TextStyle(
+                      decoration: InputDecoration(
+                        hintText: l10n.description,
+                        hintStyle: const TextStyle(
                           color: Color.fromARGB(255, 157, 206, 255),
                           fontSize: 14,
                         ),
@@ -880,8 +895,9 @@ class _GlossaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = term.trim().isEmpty ? 'Unnamed' : term.trim();
-    final d = desc.trim().isEmpty ? '설명을 입력하세요' : desc.trim();
+    final l10n = AppLocalizations.of(context);
+    final t = term.trim().isEmpty ? l10n.unnamed : term.trim();
+    final d = desc.trim().isEmpty ? l10n.descriptionInputHint : desc.trim();
     final q = query.trim();
 
     const termNormal = TextStyle(
@@ -1113,10 +1129,14 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
   }
 
   Future<void> _confirmDeleteMemo(MemoEntity e) async {
+    final l10n = AppLocalizations.of(context);
+
     final ok = await showDeleteSheet(
       context: context,
-      title: '메모 삭제',
-      message: '이 메모를 삭제하시겠습니까?',
+      title: l10n.memoDeleteTitle,
+      message: l10n.memoDeleteMessage,
+      deleteLabel: l10n.delete,
+      cancelLabel: l10n.cancel,
     );
     if (!ok) return;
 
@@ -1151,12 +1171,14 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
         });
 
     if (keys.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 12, bottom: 12),
+      final l10n = AppLocalizations.of(context);
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 12),
         child: Text(
-          '검색 결과가 없습니다.',
+          l10n.noSearchResults,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: Color.fromARGB(221, 83, 129, 159),
             fontSize: 13,
           ),
@@ -1214,6 +1236,7 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
   Widget build(BuildContext context) {
     super.build(context);
 
+    final l10n = AppLocalizations.of(context);
     final indexes = _matchedMemoIndexes();
 
     return SafeArea(
@@ -1246,7 +1269,7 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
                             autofocus: true,
                             onChanged: (v) => setState(() => _query = v),
                             decoration: InputDecoration(
-                              hintText: '검색',
+                              hintText: l10n.search,
                               hintStyle: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
@@ -1274,9 +1297,9 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
                                       ),
                             ),
                           )
-                          : const Text(
-                            'Free memo',
-                            style: TextStyle(
+                          : Text(
+                            l10n.freeMemo,
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Colors.black87,
@@ -1298,11 +1321,11 @@ class _FreeMemoSeatTabState extends State<FreeMemoSeatTab>
             Expanded(
               child:
                   _memos.isEmpty
-                      ? const Center(
+                      ? Center(
                         child: Text(
-                          '자유 메모를 추가해 보세요.',
+                          l10n.freeMemoEmpty,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Color.fromARGB(221, 83, 129, 159),
                             fontSize: 13,
                           ),
@@ -1346,6 +1369,8 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Theme(
       data: Theme.of(context).copyWith(
         splashFactory: NoSplash.splashFactory,
@@ -1362,7 +1387,7 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            widget.initialText.trim().isEmpty ? '새 메모' : '메모 편집',
+            widget.initialText.trim().isEmpty ? l10n.memoAdd : l10n.memoEdit,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
@@ -1385,9 +1410,9 @@ class _MemoEditorPageState extends State<_MemoEditorPage> {
               maxLines: null,
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.newline,
-              decoration: const InputDecoration(
-                hintText: '메모를 입력하세요',
-                hintStyle: TextStyle(
+              decoration: InputDecoration(
+                hintText: l10n.memoHint,
+                hintStyle: const TextStyle(
                   color: Color.fromARGB(255, 178, 203, 230),
                   fontSize: 14,
                 ),
@@ -1452,8 +1477,9 @@ class _MemoSquareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final t = text.trim();
-    final display = t.isEmpty ? 'Tap to edit' : t;
+    final display = t.isEmpty ? l10n.tapToEdit : t;
 
     final normalStyle = TextStyle(
       fontSize: 12.5,
@@ -1526,27 +1552,33 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
   List<Character> _characters = [];
 
   int? _draggingProtagonistIndex;
+  bool _didStartLoad = false;
 
-  List<Character> _seedExampleCharacters() {
+  List<Character> _seedExampleCharacters(AppLocalizations l10n) {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     return [
       Character(
         id: 'demo_p_${now}_10',
         kind: CharacterKind.protagonist,
-        name: '히카라',
+        name: l10n.seedCharacterHikaraName,
         birthday: '01/14',
         height: '190',
         bloodType: 'O+',
-        specialNote: '목표: 엘프 종족의 근원을 찾는다.',
-        personalityKeywords: const ['책임감'],
-        likes: const ['관측', '고서'],
-        dislikes: const ['무책임'],
-        physicalNotes: const ['푸른 눈'],
-        palette: const [
+        specialNote: l10n.seedCharacterHikaraSpecialNote,
+        personalityKeywords: [
+          l10n.seedCharacterHikaraPersonalityResponsibility,
+        ],
+        likes: [
+          l10n.seedCharacterHikaraLikeObservation,
+          l10n.seedCharacterHikaraLikeOldBooks,
+        ],
+        dislikes: [l10n.seedCharacterHikaraDislikeIrresponsibility],
+        physicalNotes: [l10n.seedCharacterHikaraPhysicalBlueEyes],
+        palette: [
           PaletteGroup(
-            label: '메인 톤',
-            colors: [Color.fromARGB(190, 174, 218, 252)],
+            label: l10n.seedCharacterMainTone,
+            colors: const [Color.fromARGB(190, 174, 218, 252)],
           ),
         ],
         images: const [],
@@ -1557,19 +1589,22 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
       Character(
         id: 'demo_p_${now}_1',
         kind: CharacterKind.protagonist,
-        name: '엘릭시',
+        name: l10n.seedCharacterElixiName,
         birthday: '07/10',
         height: '171',
         bloodType: 'O+',
-        specialNote: '마법 약초를 연구한다.',
-        personalityKeywords: const ['호기심'],
-        likes: const ['약초', '약학'],
-        dislikes: const ['벌레'],
-        physicalNotes: const ['금빛 머리카락'],
-        palette: const [
+        specialNote: l10n.seedCharacterElixiSpecialNote,
+        personalityKeywords: [l10n.seedCharacterElixiPersonalityCuriosity],
+        likes: [
+          l10n.seedCharacterElixiLikeHerbs,
+          l10n.seedCharacterElixiLikePharmacology,
+        ],
+        dislikes: [l10n.seedCharacterElixiDislikeBugs],
+        physicalNotes: [l10n.seedCharacterElixiPhysicalGoldenHair],
+        palette: [
           PaletteGroup(
-            label: '메인 톤',
-            colors: [Color.fromARGB(217, 255, 255, 213)],
+            label: l10n.seedCharacterMainTone,
+            colors: const [Color.fromARGB(217, 255, 255, 213)],
           ),
         ],
         images: const [],
@@ -1589,7 +1624,17 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     super.initState();
     _loadScrollOffset();
     _scrollCtrl.addListener(_persistScrollDebounced);
-    _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_didStartLoad) return;
+    _didStartLoad = true;
+
+    final l10n = AppLocalizations.of(context);
+    _load(l10n);
   }
 
   @override
@@ -1646,18 +1691,20 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
   // Isar load + seed (Isar only)
   // ---------------------------
 
-  Future<void> _ensureSeedIfNeeded() async {
+  Future<void> _ensureSeedIfNeeded(AppLocalizations l10n) async {
     final existing = await _store.loadAll();
     if (existing.isNotEmpty) return;
-    final seed = _seedExampleCharacters();
+
+    final seed = _seedExampleCharacters(l10n);
+
     for (final c in seed) {
       await _store.upsert(c);
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load(AppLocalizations l10n) async {
     try {
-      await _ensureSeedIfNeeded();
+      await _ensureSeedIfNeeded(l10n);
       final list = await _store.loadAll();
 
       if (!mounted) return;
@@ -1692,13 +1739,11 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     if (!mounted) return;
     if (result == null) return;
 
-    // ✅ 드로어 모드면 바깥으로 넘기고 여기서 종료
     if (widget.onPicked != null) {
       widget.onPicked!(result);
       return;
     }
 
-    // ✅ 기존 모드면 내부 저장 + 리스트 갱신
     await _store.upsert(result);
 
     setState(() {
@@ -1720,10 +1765,14 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     await _persistScroll();
     if (!mounted) return;
 
+    final l10n = AppLocalizations.of(context);
+
     final ok = await showDeleteSheet(
       context: context,
-      title: '캐릭터 삭제',
-      message: '이 캐릭터를 삭제하시겠습니까?',
+      title: l10n.characterDeleteTitle,
+      message: l10n.characterDeleteMessage,
+      deleteLabel: l10n.delete,
+      cancelLabel: l10n.cancel,
     );
     if (!ok) return;
 
@@ -1811,7 +1860,6 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
     if (newIndex < 0 || newIndex >= group.length) return;
     if (oldIndex == newIndex) return;
 
-    // ✅ 그리드는 newIndex 보정하지 않음
     final moved = group.removeAt(oldIndex);
     group.insert(newIndex, moved);
 
@@ -1849,6 +1897,8 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
   Widget build(BuildContext context) {
     super.build(context);
 
+    final l10n = AppLocalizations.of(context);
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1867,7 +1917,7 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
         slivers: [
           SliverToBoxAdapter(
             child: _SectionHeader(
-              title: '주인공 캐릭터',
+              title: l10n.protagonistCharacter,
               onAdd:
                   () => _openEditor(
                     initial: null,
@@ -1895,11 +1945,11 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
             onTap: (c) => _openEditor(initial: c),
             onEdit: (c) => _openEditor(initial: c),
             onDelete: _delete,
-            emptyText: '아직 주인공 캐릭터가 없습니다.\n오른쪽 위 + 로 추가하세요.',
+            emptyText: l10n.emptyProtagonistCharacters,
           ),
           SliverToBoxAdapter(
             child: _SectionHeader(
-              title: '등장 인물 캐릭터',
+              title: l10n.supportingCharacter,
               onAdd:
                   () => _openEditor(
                     initial: null,
@@ -1918,7 +1968,7 @@ class _CharacterSeatTabState extends State<CharacterSeatTab>
             },
             onTap: (c) => _openEditor(initial: c),
             onDelete: _delete,
-            emptyText: '아직 등장 인물이 없습니다.\n오른쪽 위 + 로 추가하세요.',
+            emptyText: l10n.emptySupportingCharacters,
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 10)),
         ],
@@ -1990,7 +2040,7 @@ class _CharacterSliverList extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Center(
             child: Text(
-              emptyText ?? '아직 캐릭터가 없습니다.\n오른쪽 위 + 로 추가하세요.',
+              emptyText ?? AppLocalizations.of(context).emptyCharacters,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
@@ -2085,8 +2135,9 @@ class _SupportingCharacterGrid extends StatelessWidget {
   String _clean(String s) => s.trim();
   String _fallback(String s, String fb) => _clean(s).isEmpty ? fb : _clean(s);
 
-  Widget _buildCard(Character c) {
-    final name = _fallback(c.name, 'Unnamed');
+  Widget _buildCard(BuildContext context, Character c) {
+    final l10n = AppLocalizations.of(context);
+    final name = _fallback(c.name, l10n.unnamed);
     final profile = _clean(c.specialNote);
 
     final Color accent = (c.color ?? const Color(0xFFB0C1D8)).withValues(
@@ -2169,7 +2220,7 @@ class _SupportingCharacterGrid extends StatelessWidget {
                       const SizedBox(height: 4),
                       Expanded(
                         child: Text(
-                          profile.isEmpty ? 'Tap to edit' : profile,
+                          profile.isEmpty ? l10n.tapToEdit : profile,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -2202,7 +2253,7 @@ class _SupportingCharacterGrid extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Center(
             child: Text(
-              emptyText ?? '아직 캐릭터가 없습니다.\n오른쪽 위 + 로 추가하세요.',
+              emptyText ?? AppLocalizations.of(context).emptyCharacters,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
@@ -2223,8 +2274,6 @@ class _SupportingCharacterGrid extends StatelessWidget {
         childAspectRatio: 2 / 3.05,
         onReorder: onReorder,
 
-        // ✅ 주인공 proxyDecorator 느낌과 동일하게:
-        // 배경/그림자 제거 + 이동 중 살짝 확대
         dragWidgetBuilderV2: DragWidgetBuilderV2(
           isScreenshotDragWidget: false,
           builder: (index, child, screenshot) {
@@ -2248,7 +2297,7 @@ class _SupportingCharacterGrid extends StatelessWidget {
           for (final c in items)
             KeyedSubtree(
               key: ValueKey('supporting_${c.id}'),
-              child: _buildCard(c),
+              child: _buildCard(context, c),
             ),
         ],
       ),
@@ -2272,7 +2321,8 @@ class _CharacterSheetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = _fallback(character.name, 'Unnamed');
+    final l10n = AppLocalizations.of(context);
+    final name = _fallback(character.name, l10n.unnamed);
     final birthday = _clean(character.birthday);
     final height = _clean(character.height);
     final blood = _clean(character.bloodType);
@@ -2312,15 +2362,15 @@ class _CharacterSheetCard extends StatelessWidget {
                     ),
 
                     const SizedBox(height: 10),
-                    _BioRow(label: 'Birthday', value: birthday),
-                    _BioRow(label: 'Height', value: height),
-                    _BioRow(label: 'Blood', value: blood),
+                    _BioRow(label: l10n.birthday, value: birthday),
+                    _BioRow(label: l10n.height, value: height),
+                    _BioRow(label: l10n.blood, value: blood),
 
                     const SizedBox(height: 10),
 
-                    const Text(
-                      'PROFILE',
-                      style: TextStyle(
+                    Text(
+                      l10n.profileUpper,
+                      style: const TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.3,
@@ -2330,7 +2380,7 @@ class _CharacterSheetCard extends StatelessWidget {
                     const SizedBox(height: 6),
 
                     Text(
-                      profile.isEmpty ? 'Tap to edit' : profile,
+                      profile.isEmpty ? l10n.tapToEdit : profile,
                       style: const TextStyle(
                         fontSize: 12,
                         height: 1.25,
@@ -2497,15 +2547,16 @@ class _CharacterSimpleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final title =
-        character.name.trim().isEmpty ? 'Unnamed' : character.name.trim();
+        character.name.trim().isEmpty ? l10n.unnamed : character.name.trim();
 
     final subtitleParts = <String>[];
     if (character.birthday.trim().isNotEmpty) {
-      subtitleParts.add('Birthday: ${character.birthday.trim()}');
+      subtitleParts.add('${l10n.birthday}: ${character.birthday.trim()}');
     }
     if (character.height.trim().isNotEmpty) {
-      subtitleParts.add('Height: ${character.height.trim()}');
+      subtitleParts.add('${l10n.height}: ${character.height.trim()}');
     }
     final subtitle = subtitleParts.join('  ·  ');
 
@@ -2532,7 +2583,7 @@ class _CharacterSimpleCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subtitle.isEmpty ? 'Tap to edit' : subtitle,
+                  subtitle.isEmpty ? l10n.tapToEdit : subtitle,
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color.fromARGB(255, 170, 193, 216),
